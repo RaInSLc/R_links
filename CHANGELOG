@@ -2,7 +2,7 @@
 
 ## [2026-05-02]
 ### Fixed
-- 修复 Bioconductor 页面解析截断问题 (缓冲区由 8KB 增加至循环读取)。
-- 优化 GitHub 搜索策略，增加 `language:R` 过滤，提升包定位准确度。
-- 增强 `ExtractPackageName` 逻辑，支持带点号的包名 (如 BSgenome.*) 及 .html 页面解析。
-- 解决 `Pando` 等短名包在 GitHub 搜索中被非 R 项目干扰的问题。
+- 修复 R 包搜索逻辑中 Bioconductor 解析过于严格的问题。
+- 修复 GitHub 搜索中 `Pando` 被 `pandoc` 干扰的问题。
+- 解决 `BSgenome.*` 等大型数据包无法识别分类的问题。
+- 解决编译时 `RLinkInstaller_PRO.exe` 被占用导致的构建失败。
