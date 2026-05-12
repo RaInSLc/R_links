@@ -6,3 +6,12 @@
 - 修复 GitHub 搜索中 `Pando` 被 `pandoc` 干扰的问题。
 - 解决 `BSgenome.*` 等大型数据包无法识别分类的问题。
 - 解决编译时 `RLinkInstaller_PRO.exe` 被占用导致的构建失败。
+
+## [2026-05-12]
+### Fixed
+- 修复 `gwasvcf` 和 `gwasglue` 等 GitHub 包概率性搜索失败的问题（通过引入 `HEAD` 分支验证提高稳定性）。
+- 修复多源包（如 `ClusterGVis`）仅显示单一来源的问题，现可同时列出 CRAN/Bioc/GitHub 来源。
+- 增加 GitHub API 403 频率限制检测与状态提示。
+
+### Changed
+- 优化安装脚本生成逻辑，支持基于多源结果的优先级（CRAN > Bioc > GitHub）自动选择。
