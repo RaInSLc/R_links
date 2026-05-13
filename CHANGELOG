@@ -12,7 +12,8 @@
 - 修复 `gwasvcf` 和 `gwasglue` 等 GitHub 包概率性搜索失败的问题（通过引入 `HEAD` 分支验证提高稳定性）。
 - 修复多源包（如 `ClusterGVis`）仅显示单一来源的问题，现可同时列出 CRAN/Bioc/GitHub 来源。
 - 支持列出同一个包在 GitHub 上的多个维护仓库（如 `CellChat` 等多版本维护场景），解决因早停逻辑导致的漏报问题。
-- 在“体检报告”页面新增“详细搜索日志”窗口，实时显示检索步骤（如：正在检查 CRAN... 尝试 GitHub 分支... 等），增强透明度。
+- 在“体检报告”页面新增“详细搜索日志”窗口，实时显示检索步骤，增强透明度。
+- 新增“自动安装依赖 (Dependencies)”选项，可在生成指令时动态控制 `dependencies = TRUE/FALSE`。
 - 增加 GitHub API 403 频率限制检测与状态提示。
 
 ### Changed
