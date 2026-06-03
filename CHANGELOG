@@ -5,6 +5,11 @@
 - 生成 C++ 源码逻辑审计与安全性评估报告，详细分析了跨线程数据竞争、Use-After-Free 隐患、网络 HTML 解析越界崩溃以及文件定位错误等逻辑缺陷。
 - 2026-06-03 21:16:38 +08:00：新增 `cpp_src` 逻辑与设计复核分析文档，结合既有源码审计与 BiocGit 实现补全报告，补充 BiocGit 版本范围、回退语义、线程生命周期、UI 控件状态和解析接口一致性问题。
 
+### Fixed
+- 修复 `app_window.cpp` 线程内部大括号嵌套不匹配导致的编译语法错误。
+- 修复在 GCC MinGW 64 环境中 `std::wofstream` 和 `std::wifstream` 由于不支持 `std::wstring` 参数引起的兼容性编译错误，通过 `WStringToAnsi` 转换包装解决。
+- 增加 R 包搜索的包名大小写自动纠正与二次重试检索机制。当包名存在大小写拼写差异（例如 `gsva`），利用 r-universe 命中的正确包名（如 `GSVA`）自动规范化大小写，并重新在 CRAN 和 Bioconductor 中发起历史版本与分支推断，彻底解决例如输入 `gsva 1.50` 无法在 Bioconductor 匹配历史分支安装指令的问题。
+
 ## [2026-05-02]
 ### Fixed
 - 修复 R 包搜索逻辑中 Bioconductor 解析过于严格的问题。
