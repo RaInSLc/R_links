@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [2026-06-06]
+
+### Added
+- **新增一键 Chrome 搜索功能**：
+  - 在 `resources\resource.h` 中新增按钮 ID `IDC_BTN_CHROME_SEARCH` (222)。
+  - 在 `app_window.hpp` 中包含 `<shellapi.h>`。
+  - 在 `app_window.cpp` 中新增 “Chrome 搜索” 按钮（IDC_BTN_CHROME_SEARCH），支持提取输入框内的包名，去重后在 Chrome 中一键搜索该包名及 `R package + 包名`。当打开标签页较多（超过10个）时提供防卡死弹窗二次确认。
+
+### Fixed
+- **GitHub 模糊匹配精度修复**：
+  - 在 `app_window.cpp` 的 `UpdateGeneratedCommand` 函数中，重构了同源（主要是 GitHub）下的最佳匹配选择逻辑，增加 `isExactGithubRepo` 完全相等性判定。当包名与 GitHub 仓库名（不区分大小写）完全相等的仓库存在时，优先匹配该精确仓库（如 `data2intelligence/SpaCET`），不再被 Star 数更多但仅包含包名关键字的候选仓库（如 `edzer/spacetime`）干扰。
+
 ## [2026-06-03]
 
 ### C++ 原生桌面工具稳定性增强与功能优化
