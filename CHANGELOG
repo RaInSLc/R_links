@@ -6,7 +6,7 @@
 - **新增一键 Chrome 搜索功能**：
   - 在 `resources\resource.h` 中新增按钮 ID `IDC_BTN_CHROME_SEARCH` (222)。
   - 在 `app_window.hpp` 中包含 `<shellapi.h>`。
-  - 在 `app_window.cpp` 中新增 “Chrome 搜索” 按钮（IDC_BTN_CHROME_SEARCH），支持提取输入框内的包名，去重后在 Chrome 中一键搜索该包名及 `R package + 包名`。当打开标签页较多（超过10个）时提供防卡死弹窗二次确认。
+  - 在 `app_window.cpp` 中新增 “Chrome 搜索” 按钮（IDC_BTN_CHROME_SEARCH），支持提取输入框内的包名，去重后在 Chrome 中一键精准搜索 `R package + 包名`。当打开标签页较多（超过10个）时提供防卡死弹窗二次确认。
   - 修复连续拉起浏览器进程导致标签页丢失的并发冲突问题。通过启用 detached 后台线程并引入 200 毫秒打开延时，确保所有搜索页面均能被稳定加载，且消除了 UI 主线程卡顿隐患。
 
 ### Fixed
