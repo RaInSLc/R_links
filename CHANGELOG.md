@@ -14,6 +14,8 @@
   - 在 `app_window.cpp` 的 `UpdateGeneratedCommand` 函数中，重构了同源（主要是 GitHub）下的最佳匹配选择逻辑，增加 `isExactGithubRepo` 完全相等性判定。当包名与 GitHub 仓库名（不区分大小写）完全相等的仓库存在时，优先匹配该精确仓库（如 `data2intelligence/SpaCET`），不再被 Star 数更多但仅包含包名关键字的候选仓库（如 `edzer/spacetime`）干扰。
   - 修复了因为 `r-universe` 大小写纠正导致原始大写包名在生成指令时失效的问题（如输入大写 `CARD` 却因为纠正为小写 `card` 而在主线程中字符串区分大小写比对失败，导致无法匹配并退回 CRAN 安装）。在 `SearchProgressInfo` 结构体中新增 `realName` 真实包名与 `origPkgName` 原始输入包名，并将“大小写完全严格精确匹配”作为最高优先级判别权重，使得即便 CRAN 存在模糊大小写同名包（如 `card`），工具也能正确匹配并下载到 GitHub 上严格对应大小写的唯一包（如 `YMa-lab/CARD`）。
   - 修复了大小写纠正重试机制由于错误的 `break` 语句导致直接跳出 `while(retrySearch)` 状态机重试循环并直接截断后续检索的 Bug。将 `break` 改为 `continue`，保证大小写纠正后能正确二次触发完整的重试检索。
+  - 修复了 GitHub API 发生 403 限流时会针对同一个包向窗口重复投递两遍失败结果（限流提示与未找到提示）的 Bug。在 403 响应投递后将 `anyFound` 置为 `true` 阻断后续兜底投递，确保消息投递的单包原子性。
+  - 增加空包名前置过滤防御。在 `SearchWorkerThread` 循环头部加入 `pkgName.empty()` 判定拦截空行，防止无效空请求消耗网络资源。
 
 ## [2026-06-03]
 
