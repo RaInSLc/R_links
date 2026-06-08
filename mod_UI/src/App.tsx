@@ -185,19 +185,21 @@ function App() {
 
   useEffect(() => {
     const unlistenLog = listen<SearchLogEvent>("search-log", (event) => {
-      if (event.payload.runId !== activeSearchRunId.current) {
+      const payload = asRecord(event.payload);
+      if (safeRunId(payload.runId) !== activeSearchRunId.current) {
         return;
       }
-      setLogs((current) => appendBounded(current, safeStatusText(event.payload.message), MAX_SEARCH_LOGS));
+      setLogs((current) => appendBounded(current, safeStatusText(payload.message), MAX_SEARCH_LOGS));
     });
     const unlistenProgress = listen<SearchProgressEvent>(
       "search-progress",
       (event) => {
-        if (event.payload.runId !== activeSearchRunId.current) {
+        const payload = asRecord(event.payload);
+        if (safeRunId(payload.runId) !== activeSearchRunId.current) {
           return;
         }
         setResults((current) =>
-          appendBounded(current, sanitizeSearchResult(event.payload.result), MAX_SEARCH_RESULTS),
+          appendBounded(current, sanitizeSearchResult(payload.result), MAX_SEARCH_RESULTS),
         );
       },
     );
@@ -274,14 +276,14 @@ function App() {
         input,
         settings,
       });
-      if (response.runId !== activeSearchRunId.current) {
+      const cleanResponse = sanitizeSearchResponse(response);
+      if (cleanResponse.runId !== activeSearchRunId.current) {
         return;
       }
-      const stopped = safeBoolean(response.stopped);
-      setResults(takeBounded(asArray(response.results).map(sanitizeSearchResult), MAX_SEARCH_RESULTS));
-      setLogs(takeBounded(asArray(response.logs).map(safeStatusText), MAX_SEARCH_LOGS));
-      setStatus(stopped ? "检索任务已停止" : "检索完成，脚本已自动刷新");
-      if (!stopped) {
+      setResults(cleanResponse.results);
+      setLogs(cleanResponse.logs);
+      setStatus(cleanResponse.stopped ? "检索任务已停止" : "检索完成，脚本已自动刷新");
+      if (!cleanResponse.stopped) {
         setMethod("auto");
       }
     } catch (error) {
@@ -855,6 +857,16 @@ function safeBoolean(value: unknown) {
   return value === true;
 }
 
+function safeRunId(value: unknown) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
 function safeSource(value: unknown) {
   const source = safeText(value, MAX_SOURCE_CHARS);
   return Object.prototype.hasOwnProperty.call(sourceNames, source) ? source : "none";
@@ -865,7 +877,7 @@ function asArray<T>(value: T[] | unknown): T[] {
 }
 
 function sanitizeSearchResult(value: unknown): SearchResult {
-  const result = value as Partial<SearchResult>;
+  const result = asRecord(value);
   return {
     package: safeText(result.package, MAX_RESULT_FIELD_CHARS),
     requestedVersion: safeText(result.requestedVersion, MAX_VERSION_CHARS),
@@ -878,8 +890,18 @@ function sanitizeSearchResult(value: unknown): SearchResult {
   };
 }
 
+function sanitizeSearchResponse(value: unknown): SearchResponse {
+  const response = asRecord(value);
+  return {
+    runId: safeRunId(response.runId),
+    results: takeBounded(asArray(response.results).map(sanitizeSearchResult), MAX_SEARCH_RESULTS),
+    logs: takeBounded(asArray(response.logs).map(safeStatusText), MAX_SEARCH_LOGS),
+    stopped: safeBoolean(response.stopped),
+  };
+}
+
 function sanitizePublicSettings(value: unknown): PublicSettings {
-  const settings = value as Partial<PublicSettings>;
+  const settings = asRecord(value);
   return {
     proxy: safeText(settings.proxy, MAX_RESULT_FIELD_CHARS),
     githubTokenConfigured: safeBoolean(settings.githubTokenConfigured),
@@ -889,7 +911,7 @@ function sanitizePublicSettings(value: unknown): PublicSettings {
 }
 
 function sanitizeHistoryRecord(value: unknown): HistoryRecord {
-  const record = value as Partial<HistoryRecord>;
+  const record = asRecord(value);
   return {
     id: safeText(record.id, 64),
     command: safeText(record.command, MAX_HISTORY_FIELD_CHARS),
