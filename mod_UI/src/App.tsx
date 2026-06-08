@@ -83,6 +83,10 @@ const MAX_SCRIPT_CHARS = 1_000_000;
 const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
 const MAX_SEARCH_LOGS = 1_000;
 const MAX_STATUS_CHARS = 512;
+const MAX_RESULT_FIELD_CHARS = 2_048;
+const MAX_VERSION_CHARS = 64;
+const MAX_SOURCE_CHARS = 16;
+const MAX_HISTORY_FIELD_CHARS = 8_000;
 
 const methods: Array<{
   id: Method;
@@ -171,7 +175,7 @@ function App() {
           fullSearch: savedSettings.fullSearch,
         });
         setTokenConfigured(savedSettings.githubTokenConfigured);
-        setHistory(savedHistory);
+        setHistory(takeBounded(asArray(savedHistory).map(sanitizeHistoryRecord), 100));
       })
       .catch((error) => setStatus(`初始化失败: ${formatError(error)}`));
   }, []);
@@ -181,7 +185,7 @@ function App() {
       if (event.payload.runId !== activeSearchRunId.current) {
         return;
       }
-      setLogs((current) => appendBounded(current, event.payload.message, MAX_SEARCH_LOGS));
+      setLogs((current) => appendBounded(current, safeStatusText(event.payload.message), MAX_SEARCH_LOGS));
     });
     const unlistenProgress = listen<SearchProgressEvent>(
       "search-progress",
@@ -189,7 +193,9 @@ function App() {
         if (event.payload.runId !== activeSearchRunId.current) {
           return;
         }
-        setResults((current) => appendBounded(current, event.payload.result, MAX_SEARCH_RESULTS));
+        setResults((current) =>
+          appendBounded(current, sanitizeSearchResult(event.payload.result), MAX_SEARCH_RESULTS),
+        );
       },
     );
     return () => {
@@ -268,8 +274,8 @@ function App() {
       if (response.runId !== activeSearchRunId.current) {
         return;
       }
-      setResults(takeBounded(response.results, MAX_SEARCH_RESULTS));
-      setLogs(takeBounded(response.logs, MAX_SEARCH_LOGS));
+      setResults(takeBounded(asArray(response.results).map(sanitizeSearchResult), MAX_SEARCH_RESULTS));
+      setLogs(takeBounded(asArray(response.logs).map(safeStatusText), MAX_SEARCH_LOGS));
       setStatus(response.stopped ? "检索任务已停止" : "检索完成，脚本已自动刷新");
       if (!response.stopped) {
         setMethod("auto");
@@ -312,9 +318,10 @@ function App() {
       const records = await invoke<HistoryRecord[]>("build_history_records", {
         script,
       });
-      const commands = new Set(records.map((record) => record.command));
+      const cleanRecords = records.map(sanitizeHistoryRecord);
+      const commands = new Set(cleanRecords.map((record) => record.command));
       const merged = [
-        ...records,
+        ...cleanRecords,
         ...history.filter((record) => !commands.has(record.command)),
       ].slice(0, 100);
       setHistory(merged);
@@ -404,7 +411,7 @@ function App() {
   }
 
   async function deleteHistoryRecord(id: string) {
-    const next = history.filter((record) => record.id !== id);
+    const next = history.filter((record) => record.id !== id).map(sanitizeHistoryRecord);
     setHistory(next);
     try {
       await invoke("save_history", { history: next });
@@ -797,12 +804,54 @@ function formatError(error: unknown) {
   }
 }
 
-function safeStatusText(value: string) {
-  const text = value
+function safeStatusText(value: unknown) {
+  const text = String(value ?? "")
     .trim()
     .replace(/[\p{C}]/gu, "")
     .slice(0, MAX_STATUS_CHARS);
   return text || "未知错误";
+}
+
+function safeText(value: unknown, limit: number) {
+  return String(value ?? "")
+    .trim()
+    .replace(/[\p{C}]/gu, "")
+    .slice(0, limit);
+}
+
+function safeSource(value: unknown) {
+  const source = safeText(value, MAX_SOURCE_CHARS);
+  return Object.prototype.hasOwnProperty.call(sourceNames, source) ? source : "none";
+}
+
+function asArray<T>(value: T[] | unknown): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function sanitizeSearchResult(value: unknown): SearchResult {
+  const result = value as Partial<SearchResult>;
+  return {
+    package: safeText(result.package, MAX_RESULT_FIELD_CHARS),
+    requestedVersion: safeText(result.requestedVersion, MAX_VERSION_CHARS),
+    latestVersion: safeText(result.latestVersion, MAX_VERSION_CHARS),
+    repository: safeText(result.repository, MAX_RESULT_FIELD_CHARS),
+    realName: safeText(result.realName, MAX_RESULT_FIELD_CHARS),
+    source: safeSource(result.source),
+    found: Boolean(result.found),
+    message: safeStatusText(result.message),
+  };
+}
+
+function sanitizeHistoryRecord(value: unknown): HistoryRecord {
+  const record = value as Partial<HistoryRecord>;
+  return {
+    id: safeText(record.id, 64),
+    command: safeText(record.command, MAX_HISTORY_FIELD_CHARS),
+    packageName: safeText(record.packageName, MAX_RESULT_FIELD_CHARS),
+    version: safeText(record.version, MAX_VERSION_CHARS),
+    toolName: safeText(record.toolName, MAX_RESULT_FIELD_CHARS),
+    createdAt: safeText(record.createdAt, 32),
+  };
 }
 
 function nextSearchRunId() {
