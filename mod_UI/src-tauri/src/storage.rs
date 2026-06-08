@@ -1,6 +1,10 @@
 use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Mutex,
+};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
@@ -15,6 +19,8 @@ const MAX_PROTECTED_TOKEN_CHARS: usize = MAX_TOKEN_CHARS * 16;
 const MAX_SETTINGS_FILE_BYTES: u64 = 64 * 1024;
 const MAX_HISTORY_FILE_BYTES: u64 = 8 * 1024 * 1024;
 const OVERSIZED_BACKUP_NOTICE: &str = "原文件超过安全读取上限，内容未复制到备份。";
+static STORAGE_WRITE_LOCK: Mutex<()> = Mutex::new(());
+static STORAGE_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,6 +75,21 @@ fn data_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
 }
 
 pub fn load_settings(app: &AppHandle) -> Result<Settings, String> {
+    load_settings_with_recovery(app, true)
+}
+
+pub fn load_existing_settings(app: &AppHandle) -> Result<Option<Settings>, String> {
+    let path = data_file(app, "settings.json")?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    load_settings_with_recovery(app, false).map(Some)
+}
+
+fn load_settings_with_recovery(
+    app: &AppHandle,
+    fallback_to_default: bool,
+) -> Result<Settings, String> {
     let path = data_file(app, "settings.json")?;
     if !path.exists() {
         return Ok(Settings::default());
@@ -76,7 +97,11 @@ pub fn load_settings(app: &AppHandle) -> Result<Settings, String> {
     let Some(content) = read_limited_to_string(&path, MAX_SETTINGS_FILE_BYTES, "设置文件")?
     else {
         backup_corrupt_settings_file(app, OVERSIZED_BACKUP_NOTICE)?;
-        return Ok(Settings::default());
+        return if fallback_to_default {
+            Ok(Settings::default())
+        } else {
+            Err("设置文件超过安全读取上限，已备份；请重新确认设置后再保存".to_string())
+        };
     };
     match serde_json::from_str::<StoredSettings>(&content).and_then(|settings| {
         settings.into_settings().map_err(|error| {
@@ -86,7 +111,11 @@ pub fn load_settings(app: &AppHandle) -> Result<Settings, String> {
         Ok(settings) => Ok(settings),
         Err(_) => {
             backup_corrupt_settings_file(app, &content)?;
-            Ok(Settings::default())
+            if fallback_to_default {
+                Ok(Settings::default())
+            } else {
+                Err("设置文件损坏，已备份；请重新确认设置后再保存".to_string())
+            }
         }
     }
 }
@@ -175,7 +204,14 @@ fn read_limited_to_string(
 }
 
 fn atomic_write(path: &PathBuf, content: &str) -> Result<(), String> {
-    let tmp = path.with_extension("tmp");
+    let _guard = STORAGE_WRITE_LOCK
+        .lock()
+        .map_err(|_| "存储写入锁已损坏".to_string())?;
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "存储文件名无效".to_string())?;
+    let tmp = path.with_file_name(format!("{file_name}.{}.tmp", unique_file_suffix()));
     let backup = path.with_extension("bak");
     fs::write(&tmp, content).map_err(|error| error.to_string())?;
     if path.exists() {
@@ -198,12 +234,17 @@ fn backup_corrupt_settings_file(app: &AppHandle, content: &str) -> Result<(), St
 }
 
 fn backup_corrupt_file(app: &AppHandle, name: &str, content: &str) -> Result<(), String> {
+    let backup = data_file(app, &format!("{name}.corrupt.{}.bak", unique_file_suffix()))?;
+    fs::write(backup, content).map_err(|error| error.to_string())
+}
+
+fn unique_file_suffix() -> String {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs();
-    let backup = data_file(app, &format!("{name}.corrupt.{stamp}.bak"))?;
-    fs::write(backup, content).map_err(|error| error.to_string())
+        .as_nanos();
+    let counter = STORAGE_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("{stamp}.{counter}")
 }
 
 fn redact_settings_backup_content(content: &str) -> String {
@@ -372,5 +413,32 @@ mod tests {
         assert!(!redacted.contains("dpapi:encrypted-secret"));
         assert!(redacted.contains("\"githubToken\":\"[redacted]\""));
         assert!(redacted.contains("\"githubTokenProtected\":\"[redacted]\""));
+    }
+
+    #[test]
+    fn unique_file_suffix_changes_between_calls() {
+        assert_ne!(unique_file_suffix(), unique_file_suffix());
+    }
+
+    #[test]
+    fn atomic_write_does_not_use_shared_tmp_name() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-storage-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+        let path = directory.join("settings.json");
+
+        atomic_write(&path, "first").expect("首次写入应成功");
+        atomic_write(&path, "second").expect("第二次写入应成功");
+
+        assert_eq!(fs::read_to_string(&path).expect("应能读取文件"), "second");
+        assert!(!path.with_extension("tmp").exists());
+        let leftovers = fs::read_dir(&directory)
+            .expect("应能列出目录")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .count();
+        assert_eq!(leftovers, 0);
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
     }
 }

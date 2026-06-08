@@ -129,7 +129,7 @@ fn load_settings(app: AppHandle) -> Result<PublicSettings, String> {
 
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
-    let existing = storage::load_settings(&app).unwrap_or_default();
+    let existing = storage::load_existing_settings(&app)?.unwrap_or_default();
     let settings = settings.merged_with_existing_token(&existing)?;
     storage::save_settings(&app, &settings)
 }
