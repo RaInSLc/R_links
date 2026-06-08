@@ -4,15 +4,20 @@ mod search;
 mod secrets;
 mod storage;
 
+use std::collections::VecDeque;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, MutexGuard,
 };
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, State};
 
 use models::{
     GenerateOptions, HistoryRecord, PublicSettings, SearchResponse, SearchResult, Settings,
 };
+
+const MAX_BROWSER_OPEN_REQUESTS: usize = 30;
+const BROWSER_OPEN_WINDOW: Duration = Duration::from_secs(60);
 
 pub struct SearchState {
     inner: Mutex<SearchStateInner>,
@@ -97,6 +102,42 @@ impl Drop for SearchRunGuard<'_> {
     }
 }
 
+pub struct BrowserOpenLimiter {
+    opened_at: Mutex<VecDeque<Instant>>,
+}
+
+impl Default for BrowserOpenLimiter {
+    fn default() -> Self {
+        Self {
+            opened_at: Mutex::new(VecDeque::new()),
+        }
+    }
+}
+
+impl BrowserOpenLimiter {
+    fn try_acquire(&self, now: Instant) -> Result<(), String> {
+        let mut opened_at = self
+            .opened_at
+            .lock()
+            .map_err(|_| "浏览器打开限流状态已损坏".to_string())?;
+        while opened_at.front().is_some_and(|opened| {
+            now.checked_duration_since(*opened)
+                .is_some_and(|elapsed| elapsed >= BROWSER_OPEN_WINDOW)
+        }) {
+            opened_at.pop_front();
+        }
+        if opened_at.len() >= MAX_BROWSER_OPEN_REQUESTS {
+            return Err(format!(
+                "浏览器搜索打开过于频繁，请稍后再试；每 {} 秒最多允许 {} 次",
+                BROWSER_OPEN_WINDOW.as_secs(),
+                MAX_BROWSER_OPEN_REQUESTS
+            ));
+        }
+        opened_at.push_back(now);
+        Ok(())
+    }
+}
+
 #[tauri::command]
 fn generate_script(
     input: String,
@@ -145,7 +186,11 @@ fn save_history(app: AppHandle, history: Vec<HistoryRecord>) -> Result<(), Strin
 }
 
 #[tauri::command]
-fn open_package_search(app: AppHandle, package_name: String) -> Result<(), String> {
+fn open_package_search(
+    app: AppHandle,
+    limiter: State<'_, BrowserOpenLimiter>,
+    package_name: String,
+) -> Result<(), String> {
     let package_name = package_name.trim();
     if !logic::is_valid_package_name(package_name) || package_name.contains('/') {
         return Err(format!("无效包名，无法打开浏览器搜索: {package_name}"));
@@ -157,6 +202,7 @@ fn open_package_search(app: AppHandle, package_name: String) -> Result<(), Strin
     if !logic::is_allowed_browser_search_url(&url) {
         return Err("浏览器搜索 URL 不在允许范围内".to_string());
     }
+    limiter.try_acquire(Instant::now())?;
     tauri_plugin_opener::OpenerExt::opener(&app)
         .open_url(url, None::<&str>)
         .map_err(|error| format!("打开浏览器失败: {error}"))
@@ -192,6 +238,7 @@ fn merge_runtime_settings(incoming: Settings, existing: &Settings) -> Result<Set
 pub fn run() {
     tauri::Builder::default()
         .manage(SearchState::default())
+        .manage(BrowserOpenLimiter::default())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -253,6 +300,18 @@ mod tests {
         assert!(!state.request_stop());
         assert!(!state.is_running_for_test());
         assert!(!state.is_cancelled_for_test());
+    }
+
+    #[test]
+    fn browser_open_limiter_enforces_window_limit() {
+        let limiter = BrowserOpenLimiter::default();
+        let now = Instant::now();
+
+        for _ in 0..MAX_BROWSER_OPEN_REQUESTS {
+            assert!(limiter.try_acquire(now).is_ok());
+        }
+        assert!(limiter.try_acquire(now).is_err());
+        assert!(limiter.try_acquire(now + BROWSER_OPEN_WINDOW).is_ok());
     }
 
     #[test]
