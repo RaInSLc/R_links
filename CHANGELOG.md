@@ -3,6 +3,12 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 21:35:33 +08:00] `mod_UI\` GitHub Token 磁盘加密加固**：
+  - 新增 Windows DPAPI 凭据保护模块，`settings.json` 保存 `githubTokenProtected` 加密字段，不再持久化明文 `githubToken`。
+  - 读取逻辑兼容旧版明文 `githubToken`，下次保存会迁移为 DPAPI 加密字段；无效或超长加密字段会触发损坏配置备份与默认回退。
+  - 增加 DPAPI 加解密、旧明文兼容、加密字段不含明文、非法加密字段拒绝等单元测试，测试总数提升至 22 项。
+  - 完成 `cargo test --locked`、`cargo clippy --all-targets --locked -- -D warnings`、`npm run build`、`npm run tauri build -- --no-bundle` 与危险 API / 明文 Token 扫描验证。
+
 - **[2026-06-08 21:11:36 +08:00] `mod_UI\` GitHub Token IPC 暴露面加固**：
   - `load_settings` 改为只返回公开设置视图，前端不再通过 IPC 回读 GitHub Token 明文。
   - 保存设置时若 Token 输入为空则保留已保存 Token，保存后前端立即清空 Token 输入框并仅显示已配置状态。

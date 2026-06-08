@@ -5,7 +5,55 @@ use tauri::{AppHandle, Manager};
 
 use crate::models::{
     HistoryRecord, Settings, MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS,
+    MAX_TOKEN_CHARS,
 };
+use crate::secrets;
+use serde::{Deserialize, Serialize};
+
+const MAX_PROTECTED_TOKEN_CHARS: usize = MAX_TOKEN_CHARS * 16;
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredSettings {
+    proxy: String,
+    cran_mirror: String,
+    full_search: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    github_token: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    github_token_protected: String,
+}
+
+impl StoredSettings {
+    fn into_settings(self) -> Result<Settings, String> {
+        if self.github_token_protected.len() > MAX_PROTECTED_TOKEN_CHARS {
+            return Err("加密 Token 长度超过限制".to_string());
+        }
+        let github_token = if self.github_token_protected.trim().is_empty() {
+            self.github_token
+        } else {
+            secrets::unprotect_string(&self.github_token_protected)?
+        };
+        Settings {
+            proxy: self.proxy,
+            github_token,
+            cran_mirror: self.cran_mirror,
+            full_search: self.full_search,
+        }
+        .normalized()
+    }
+
+    fn from_settings(settings: &Settings) -> Result<Self, String> {
+        let settings = settings.normalized()?;
+        Ok(Self {
+            proxy: settings.proxy,
+            github_token: String::new(),
+            github_token_protected: secrets::protect_string(&settings.github_token)?,
+            cran_mirror: settings.cran_mirror,
+            full_search: settings.full_search,
+        })
+    }
+}
 
 fn data_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
     let directory = app
@@ -22,8 +70,8 @@ pub fn load_settings(app: &AppHandle) -> Result<Settings, String> {
         return Ok(Settings::default());
     }
     let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    match serde_json::from_str::<Settings>(&content).and_then(|settings| {
-        settings.normalized().map_err(|error| {
+    match serde_json::from_str::<StoredSettings>(&content).and_then(|settings| {
+        settings.into_settings().map_err(|error| {
             serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, error))
         })
     }) {
@@ -37,7 +85,7 @@ pub fn load_settings(app: &AppHandle) -> Result<Settings, String> {
 
 pub fn save_settings(app: &AppHandle, settings: &Settings) -> Result<(), String> {
     let path = data_file(app, "settings.json")?;
-    let settings = settings.normalized()?;
+    let settings = StoredSettings::from_settings(settings)?;
     let content = serde_json::to_string_pretty(&settings).map_err(|error| error.to_string())?;
     atomic_write(&path, &content)
 }
@@ -114,4 +162,52 @@ fn backup_corrupt_file(app: &AppHandle, name: &str, content: &str) -> Result<(),
         .as_secs();
     let backup = data_file(app, &format!("{name}.corrupt.{stamp}.bak"))?;
     fs::write(backup, content).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stored_settings_do_not_serialize_plain_token() {
+        let settings = Settings {
+            github_token: "secret-token".to_string(),
+            ..Settings::default()
+        };
+        let stored = StoredSettings::from_settings(&settings).expect("应能保护 Token");
+        let content = serde_json::to_string(&stored).expect("应能序列化设置");
+        assert!(!content.contains("secret-token"));
+        assert!(!content.contains("githubToken\":\""));
+        assert!(content.contains("githubTokenProtected"));
+        assert_eq!(stored.into_settings().unwrap().github_token, "secret-token");
+    }
+
+    #[test]
+    fn stored_settings_read_legacy_plain_token() {
+        let content = r#"{
+            "proxy": "",
+            "githubToken": "legacy-token",
+            "cranMirror": "https://cloud.r-project.org",
+            "fullSearch": false
+        }"#;
+        let settings = serde_json::from_str::<StoredSettings>(content)
+            .expect("旧设置应可解析")
+            .into_settings()
+            .expect("旧 Token 应可迁移读取");
+        assert_eq!(settings.github_token, "legacy-token");
+    }
+
+    #[test]
+    fn stored_settings_reject_invalid_protected_token() {
+        let content = r#"{
+            "proxy": "",
+            "githubTokenProtected": "dpapi:not-valid-base64",
+            "cranMirror": "https://cloud.r-project.org",
+            "fullSearch": false
+        }"#;
+        assert!(serde_json::from_str::<StoredSettings>(content)
+            .expect("格式本身应可解析")
+            .into_settings()
+            .is_err());
+    }
 }

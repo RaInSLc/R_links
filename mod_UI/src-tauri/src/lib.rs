@@ -1,6 +1,7 @@
 mod logic;
 mod models;
 mod search;
+mod secrets;
 mod storage;
 
 use std::sync::atomic::{AtomicBool, Ordering};

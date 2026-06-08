@@ -118,7 +118,7 @@ npm ci
 
 ### GitHub 搜索经常限流
 
-在界面 `网络设置` 中填写 GitHub Token。Token 只保存到 Tauri 应用数据目录，不写入源码目录。
+在界面 `网络设置` 中填写 GitHub Token。Token 只保存到 Tauri 应用数据目录，不写入源码目录；Windows 下会使用 DPAPI 加密后写入 `settings.json`。
 
 ## 7. 数据位置
 
@@ -130,6 +130,7 @@ history.json
 ```
 
 当 JSON 损坏时，应用会自动备份为 `*.corrupt.<timestamp>.bak` 并回退到默认配置，避免启动失败。
+GitHub Token 在磁盘中保存为 `githubTokenProtected` 字段，旧版明文 `githubToken` 配置仍可读取，并会在下次保存时迁移为加密字段。
 
 ## 8. 安全边界
 
@@ -138,4 +139,5 @@ history.json
 - 生产环境启用 CSP，禁止远程脚本、对象、iframe 和表单提交。
 - CRAN 镜像、安装 URL、代理、GitHub 仓库名和输入规模均由 Rust 后端二次校验。
 - CRAN 镜像与 `install_url` 输入必须使用 HTTPS，避免生成明文包源安装命令。
+- GitHub Token 不经 `load_settings` 回传前端，磁盘持久化使用 Windows DPAPI 保护。
 - `node_modules\`、`dist\`、`src-tauri\target\` 不应提交。
