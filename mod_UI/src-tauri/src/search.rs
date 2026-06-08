@@ -567,9 +567,11 @@ fn should_attach_github_token(url: &str, settings: &Settings) -> bool {
         && Url::parse(url)
             .ok()
             .and_then(|parsed| {
-                parsed
-                    .host_str()
-                    .map(|host| host.eq_ignore_ascii_case("api.github.com"))
+                (parsed.scheme() == "https").then(|| {
+                    parsed
+                        .host_str()
+                        .is_some_and(|host| host.eq_ignore_ascii_case("api.github.com"))
+                })
             })
             .unwrap_or(false)
 }
@@ -697,6 +699,10 @@ mod tests {
         };
         assert!(should_attach_github_token(
             "https://api.github.com/search/repositories?q=demo",
+            &settings
+        ));
+        assert!(!should_attach_github_token(
+            "http://api.github.com/search/repositories?q=demo",
             &settings
         ));
         assert!(!should_attach_github_token(

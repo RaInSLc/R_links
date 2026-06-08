@@ -14,6 +14,7 @@ use crate::secrets;
 use serde::{Deserialize, Serialize};
 
 const MAX_PROTECTED_TOKEN_CHARS: usize = MAX_TOKEN_CHARS * 16;
+const MAX_HISTORY_SAVE_RECORDS: usize = MAX_HISTORY_RECORDS * 4;
 const MAX_SETTINGS_FILE_BYTES: u64 = 64 * 1024;
 const MAX_HISTORY_FILE_BYTES: u64 = 8 * 1024 * 1024;
 const OVERSIZED_BACKUP_NOTICE: &str = "原文件超过安全读取上限，内容未复制到备份。";
@@ -145,10 +146,20 @@ pub fn load_history(app: &AppHandle) -> Result<Vec<HistoryRecord>, String> {
 }
 
 pub fn save_history(app: &AppHandle, history: &[HistoryRecord]) -> Result<(), String> {
+    validate_history_save_count(history.len())?;
     let path = data_file(app, "history.json")?;
     let limited = sanitize_history(history.to_vec());
     let content = serde_json::to_string_pretty(&limited).map_err(|error| error.to_string())?;
     atomic_write(&path, &content)
+}
+
+fn validate_history_save_count(count: usize) -> Result<(), String> {
+    if count > MAX_HISTORY_SAVE_RECORDS {
+        return Err(format!(
+            "历史记录数量过多，最多允许 {MAX_HISTORY_SAVE_RECORDS} 条"
+        ));
+    }
+    Ok(())
 }
 
 fn sanitize_history(history: Vec<HistoryRecord>) -> Vec<HistoryRecord> {
@@ -506,5 +517,11 @@ mod tests {
         assert_eq!(history[0].version, "");
         assert_eq!(history[0].tool_name, "GitHub");
         assert_eq!(history[0].created_at, "123456");
+    }
+
+    #[test]
+    fn rejects_unbounded_history_save_payload() {
+        assert!(validate_history_save_count(MAX_HISTORY_SAVE_RECORDS).is_ok());
+        assert!(validate_history_save_count(MAX_HISTORY_SAVE_RECORDS + 1).is_err());
     }
 }
