@@ -4,7 +4,10 @@ mod search;
 mod secrets;
 mod storage;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex, MutexGuard,
+};
 use tauri::{AppHandle, Manager, State};
 
 use models::{
@@ -12,15 +15,84 @@ use models::{
 };
 
 pub struct SearchState {
-    running: AtomicBool,
-    cancelled: AtomicBool,
+    inner: Mutex<SearchStateInner>,
+}
+
+struct SearchStateInner {
+    running: bool,
+    cancellation: Arc<AtomicBool>,
+}
+
+struct SearchRunGuard<'a> {
+    state: &'a SearchState,
+    cancellation: Arc<AtomicBool>,
 }
 
 impl Default for SearchState {
     fn default() -> Self {
         Self {
-            running: AtomicBool::new(false),
-            cancelled: AtomicBool::new(false),
+            inner: Mutex::new(SearchStateInner {
+                running: false,
+                cancellation: Arc::new(AtomicBool::new(false)),
+            }),
+        }
+    }
+}
+
+impl SearchState {
+    fn try_begin(&self) -> Result<SearchRunGuard<'_>, String> {
+        let mut inner = self.lock_inner();
+        if inner.running {
+            return Err("已有检索任务正在运行".to_string());
+        }
+
+        let cancellation = Arc::new(AtomicBool::new(false));
+        inner.running = true;
+        inner.cancellation = Arc::clone(&cancellation);
+        Ok(SearchRunGuard {
+            state: self,
+            cancellation,
+        })
+    }
+
+    fn request_stop(&self) -> bool {
+        let inner = self.lock_inner();
+        if !inner.running {
+            return false;
+        }
+
+        inner.cancellation.store(true, Ordering::SeqCst);
+        true
+    }
+
+    fn lock_inner(&self) -> MutexGuard<'_, SearchStateInner> {
+        self.inner.lock().unwrap_or_else(|error| error.into_inner())
+    }
+
+    #[cfg(test)]
+    fn is_running_for_test(&self) -> bool {
+        self.lock_inner().running
+    }
+
+    #[cfg(test)]
+    fn is_cancelled_for_test(&self) -> bool {
+        self.lock_inner().cancellation.load(Ordering::SeqCst)
+    }
+}
+
+impl SearchRunGuard<'_> {
+    fn cancelled(&self) -> &AtomicBool {
+        self.cancellation.as_ref()
+    }
+}
+
+impl Drop for SearchRunGuard<'_> {
+    fn drop(&mut self) {
+        self.cancellation.store(false, Ordering::SeqCst);
+        let mut inner = self.state.lock_inner();
+        if Arc::ptr_eq(&inner.cancellation, &self.cancellation) {
+            inner.running = false;
+            inner.cancellation = Arc::new(AtomicBool::new(false));
         }
     }
 }
@@ -92,8 +164,7 @@ fn open_package_search(app: AppHandle, package_name: String) -> Result<(), Strin
 
 #[tauri::command]
 fn stop_search(state: State<'_, SearchState>) -> bool {
-    state.cancelled.store(true, Ordering::SeqCst);
-    state.running.load(Ordering::SeqCst)
+    state.request_stop()
 }
 
 #[tauri::command]
@@ -105,17 +176,9 @@ async fn start_search(
 ) -> Result<SearchResponse, String> {
     logic::validate_input_size(&input)?;
     let settings = settings.normalized()?;
-    if state
-        .running
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
-    {
-        return Err("已有检索任务正在运行".to_string());
-    }
-
-    state.cancelled.store(false, Ordering::SeqCst);
-    let result = search::search_packages(&app, &state.cancelled, &input, &settings).await;
-    state.running.store(false, Ordering::SeqCst);
+    let run = state.try_begin()?;
+    let result = search::search_packages(&app, run.cancelled(), &input, &settings).await;
+    drop(run);
     result
 }
 
@@ -144,4 +207,45 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn search_state_rejects_overlapping_runs() {
+        let state = SearchState::default();
+        let run = state.try_begin().expect("应允许启动首个检索任务");
+
+        assert!(state.is_running_for_test());
+        assert!(!run.cancelled().load(Ordering::SeqCst));
+        assert!(state.try_begin().is_err());
+
+        drop(run);
+        assert!(!state.is_running_for_test());
+        assert!(!state.is_cancelled_for_test());
+    }
+
+    #[test]
+    fn search_state_clears_cancel_flag_after_run_drop() {
+        let state = SearchState::default();
+        let run = state.try_begin().expect("应允许启动检索任务");
+
+        assert!(state.request_stop());
+        assert!(run.cancelled().load(Ordering::SeqCst));
+
+        drop(run);
+        assert!(!state.is_running_for_test());
+        assert!(!state.is_cancelled_for_test());
+    }
+
+    #[test]
+    fn search_state_ignores_idle_stop_requests() {
+        let state = SearchState::default();
+
+        assert!(!state.request_stop());
+        assert!(!state.is_running_for_test());
+        assert!(!state.is_cancelled_for_test());
+    }
 }
