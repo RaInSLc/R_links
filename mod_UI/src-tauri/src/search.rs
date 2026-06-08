@@ -1,5 +1,5 @@
 use regex::Regex;
-use reqwest::{Client, StatusCode};
+use reqwest::{Client, RequestBuilder, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
@@ -242,7 +242,8 @@ fn build_client(settings: &Settings) -> Result<Client, String> {
     let mut builder = Client::builder()
         .user_agent("RLinkModUI/0.1")
         .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(30));
+        .timeout(Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::none());
     if !settings.proxy.trim().is_empty() {
         builder = builder.proxy(
             reqwest::Proxy::all(settings.proxy.trim())
@@ -418,10 +419,16 @@ async fn search_github(
         "https://api.github.com/search/repositories?q={}+language:R&sort=stars&per_page=10",
         urlencoding::encode(&package.name)
     );
+    let request = match authorized_get(context.client, &url, context.settings) {
+        Ok(request) => request,
+        Err(error) => {
+            context.log(&error);
+            return results;
+        }
+    };
     if !context.acquire_request_budget() {
         return results;
     }
-    let request = authorized_get(context.client, &url, context.settings);
     let response = match request.send().await {
         Ok(response) => response,
         Err(error) => {
@@ -485,13 +492,18 @@ async fn github_description_version(
             return None;
         }
         let url = format!("https://raw.githubusercontent.com/{repository}/{branch}/DESCRIPTION");
-        if !context.acquire_request_budget() {
-            return None;
-        }
-        let response = authorized_get(context.client, &url, context.settings)
-            .send()
-            .await
-            .ok()?;
+        let response = match authorized_get(context.client, &url, context.settings) {
+            Ok(request) => {
+                if !context.acquire_request_budget() {
+                    return None;
+                }
+                request.send().await.ok()?
+            }
+            Err(error) => {
+                context.log(&error);
+                return None;
+            }
+        };
         if response.status().is_success() {
             let description = read_limited_text(response, MAX_DESCRIPTION_BYTES)
                 .await
@@ -504,19 +516,28 @@ async fn github_description_version(
     None
 }
 
-fn authorized_get(client: &Client, url: &str, settings: &Settings) -> reqwest::RequestBuilder {
+fn authorized_get(
+    client: &Client,
+    url: &str,
+    settings: &Settings,
+) -> Result<RequestBuilder, String> {
+    validate_search_request_url(url)?;
     let request = client
         .get(url)
         .header("Accept", "application/vnd.github+json");
-    if should_attach_github_token(url, settings) {
+    Ok(if should_attach_github_token(url, settings) {
         request.bearer_auth(settings.github_token.trim())
     } else {
         request
-    }
+    })
 }
 
 async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Option<String> {
     if context.is_stopped() {
+        return None;
+    }
+    if let Err(error) = validate_search_request_url(url) {
+        context.log(&error);
         return None;
     }
     if !context.acquire_request_budget() {
@@ -535,13 +556,17 @@ async fn get_json(context: &mut SearchContext<'_>, url: &str) -> Option<Value> {
     if context.is_stopped() {
         return None;
     }
+    let request = match authorized_get(context.client, url, context.settings) {
+        Ok(request) => request,
+        Err(error) => {
+            context.log(&error);
+            return None;
+        }
+    };
     if !context.acquire_request_budget() {
         return None;
     }
-    let response = authorized_get(context.client, url, context.settings)
-        .send()
-        .await
-        .ok()?;
+    let response = request.send().await.ok()?;
     let text = read_limited_text(response, MAX_JSON_RESPONSE_BYTES)
         .await
         .ok()?;
@@ -584,6 +609,96 @@ fn should_attach_github_token(url: &str, settings: &Settings) -> bool {
                 })
             })
             .unwrap_or(false)
+}
+
+fn validate_search_request_url(value: &str) -> Result<(), String> {
+    let parsed = Url::parse(value).map_err(|_| "检索 URL 无效，已阻止请求".to_string())?;
+    if parsed.scheme() != "https"
+        || parsed.port().is_some()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.fragment().is_some()
+    {
+        return Err("检索 URL 不在允许范围内，已阻止请求".to_string());
+    }
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "检索 URL 缺少主机名，已阻止请求".to_string())?;
+    let path = parsed.path();
+    let allowed = match host {
+        "cloud.r-project.org" => {
+            parsed.query().is_none()
+                && path.starts_with("/web/packages/")
+                && path.ends_with("/index.html")
+        }
+        "bioconductor.org" => {
+            parsed.query().is_none() && path.starts_with("/packages/") && path.ends_with(".html")
+        }
+        "r-universe.dev" => path == "/api/search" && is_allowed_r_universe_query(&parsed),
+        "api.github.com" => {
+            path == "/search/repositories" && is_allowed_github_search_query(&parsed)
+        }
+        "raw.githubusercontent.com" => {
+            parsed.query().is_none()
+                && parsed.path_segments().is_some_and(|segments| {
+                    let segments = segments.collect::<Vec<_>>();
+                    segments.len() == 4
+                        && normalize_github_repository(&format!("{}/{}", segments[0], segments[1]))
+                            .is_some()
+                        && matches!(segments[2], "HEAD" | "master" | "main" | "devel")
+                        && segments[3] == "DESCRIPTION"
+                })
+        }
+        _ => false,
+    };
+
+    if allowed {
+        Ok(())
+    } else {
+        Err("检索 URL 不在允许范围内，已阻止请求".to_string())
+    }
+}
+
+fn is_allowed_r_universe_query(url: &Url) -> bool {
+    let pairs = url
+        .query_pairs()
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect::<Vec<_>>();
+    pairs.len() == 2
+        && pairs.iter().any(|(key, value)| {
+            key == "q"
+                && value
+                    .strip_prefix("package:")
+                    .is_some_and(is_valid_search_package_query)
+        })
+        && pairs
+            .iter()
+            .any(|(key, value)| key == "limit" && value == "1")
+}
+
+fn is_allowed_github_search_query(url: &Url) -> bool {
+    let pairs = url
+        .query_pairs()
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect::<Vec<_>>();
+    pairs.len() == 3
+        && pairs.iter().any(|(key, value)| {
+            key == "q"
+                && value
+                    .strip_suffix(" language:R")
+                    .is_some_and(is_valid_search_package_query)
+        })
+        && pairs
+            .iter()
+            .any(|(key, value)| key == "sort" && value == "stars")
+        && pairs
+            .iter()
+            .any(|(key, value)| key == "per_page" && value == "10")
+}
+
+fn is_valid_search_package_query(value: &str) -> bool {
+    !value.contains('/') && is_valid_package_name(value)
 }
 
 fn extract_html_version(html: &str) -> Option<String> {
@@ -818,6 +933,38 @@ mod tests {
             "https://raw.githubusercontent.com/owner/repo/HEAD/DESCRIPTION",
             &settings
         ));
+    }
+
+    #[test]
+    fn validates_search_request_url_scope() {
+        for url in [
+            "https://cloud.r-project.org/web/packages/demo/index.html",
+            "https://bioconductor.org/packages/release/bioc/html/demo.html",
+            "https://bioconductor.org/packages/3.18/bioc/html/demo.html",
+            "https://r-universe.dev/api/search?q=package%3Ademo&limit=1",
+            "https://api.github.com/search/repositories?q=demo+language%3AR&sort=stars&per_page=10",
+            "https://raw.githubusercontent.com/owner/repo/HEAD/DESCRIPTION",
+        ] {
+            assert!(validate_search_request_url(url).is_ok(), "{url}");
+        }
+
+        for url in [
+            "http://cloud.r-project.org/web/packages/demo/index.html",
+            "https://user:pass@api.github.com/search/repositories?q=demo",
+            "https://api.github.com:443/search/repositories?q=demo",
+            "https://api.github.com/search/repositories?q=demo#token",
+            "https://example.com/search/repositories?q=demo",
+            "https://raw.githubusercontent.com/owner/repo/HEAD/DESCRIPTION?token=secret",
+            "https://cloud.r-project.org/web/packages/demo/index.html?mirror=evil",
+            "https://r-universe.dev/api/search?q=package%3Ademo&limit=100",
+            "https://r-universe.dev/api/search?q=owner%2Frepo&limit=1",
+            "https://api.github.com/search/repositories?q=demo+language%3AR&sort=updated&per_page=10",
+            "https://api.github.com/search/repositories?q=owner%2Frepo+language%3AR&sort=stars&per_page=10",
+            "https://raw.githubusercontent.com/owner/repo/feature/DESCRIPTION",
+            "https://raw.githubusercontent.com/owner/repo/HEAD/path/DESCRIPTION",
+        ] {
+            assert!(validate_search_request_url(url).is_err(), "{url}");
+        }
     }
 
     #[test]
