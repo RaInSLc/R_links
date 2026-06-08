@@ -42,7 +42,7 @@ impl Settings {
     pub fn normalized(&self) -> Result<Self, String> {
         let proxy = normalize_proxy(&self.proxy)?;
         let github_token = normalize_token(&self.github_token)?;
-        let cran_mirror = normalize_https_url(&self.cran_mirror, "CRAN 镜像")?;
+        let cran_mirror = normalize_cran_mirror_url(&self.cran_mirror)?;
 
         Ok(Self {
             proxy,
@@ -151,6 +151,17 @@ pub fn normalize_https_url(value: &str, field_name: &str) -> Result<String, Stri
     Ok(normalized)
 }
 
+pub fn normalize_cran_mirror_url(value: &str) -> Result<String, String> {
+    let normalized = normalize_https_url(value, "CRAN 镜像")?;
+    let parsed = Url::parse(&normalized).map_err(|_| "CRAN 镜像必须是有效 URL".to_string())?;
+    if parsed.query().is_some() || parsed.fragment().is_some() {
+        return Err("CRAN 镜像不允许包含查询参数或片段".to_string());
+    }
+    let mut mirror = normalized.trim_end_matches('/').to_string();
+    mirror.push('/');
+    Ok(mirror)
+}
+
 fn normalize_proxy(value: &str) -> Result<String, String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -229,6 +240,18 @@ mod tests {
     #[test]
     fn rejects_credentialed_mirror_url() {
         assert!(normalize_http_url("https://user:pass@example.com/CRAN/", "CRAN 镜像").is_err());
+    }
+
+    #[test]
+    fn normalizes_cran_mirror_directory_url() {
+        assert_eq!(
+            normalize_cran_mirror_url(" https://cloud.r-project.org ")
+                .expect("CRAN 镜像应可规范化"),
+            "https://cloud.r-project.org/"
+        );
+        assert!(normalize_cran_mirror_url("https://cloud.r-project.org?token=secret").is_err());
+        assert!(normalize_cran_mirror_url("https://cloud.r-project.org/#cran").is_err());
+        assert!(normalize_cran_mirror_url("https://user:pass@example.com/CRAN/").is_err());
     }
 
     #[test]

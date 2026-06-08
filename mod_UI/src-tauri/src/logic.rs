@@ -4,8 +4,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 
 use crate::models::{
-    normalize_https_url, GenerateOptions, HistoryRecord, PackageInput, SearchResult,
-    MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS,
+    normalize_cran_mirror_url, normalize_https_url, GenerateOptions, HistoryRecord, PackageInput,
+    SearchResult, MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS,
     MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
 };
 
@@ -153,7 +153,7 @@ pub fn generate_script(
     let mirror = if options.mirror.trim().is_empty() {
         "https://cloud.r-project.org".to_string()
     } else {
-        normalize_https_url(&options.mirror, "CRAN 镜像")?
+        normalize_cran_mirror_url(&options.mirror)?
     };
 
     if requested_method == "checkSystem" {
@@ -1073,6 +1073,17 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "http://cran.example.org".to_string(),
+            },
+            &[],
+        )
+        .is_err());
+        assert!(generate_script(
+            "demo",
+            &GenerateOptions {
+                method: "base".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org?token=secret".to_string(),
             },
             &[],
         )
