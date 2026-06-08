@@ -130,7 +130,7 @@ fn load_settings(app: AppHandle) -> Result<PublicSettings, String> {
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     let existing = storage::load_existing_settings(&app)?.unwrap_or_default();
-    let settings = settings.merged_with_existing_token(&existing)?;
+    let settings = merge_runtime_settings(settings, &existing)?;
     storage::save_settings(&app, &settings)
 }
 
@@ -176,11 +176,16 @@ async fn start_search(
     settings: Settings,
 ) -> Result<SearchResponse, String> {
     logic::validate_input_size(&input)?;
-    let settings = settings.normalized()?;
+    let existing = storage::load_existing_settings(&app)?.unwrap_or_default();
+    let settings = merge_runtime_settings(settings, &existing)?;
     let run = state.try_begin()?;
     let result = search::search_packages(&app, run_id, run.cancelled(), &input, &settings).await;
     drop(run);
     result
+}
+
+fn merge_runtime_settings(incoming: Settings, existing: &Settings) -> Result<Settings, String> {
+    incoming.merged_with_existing_token(existing)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -248,5 +253,37 @@ mod tests {
         assert!(!state.request_stop());
         assert!(!state.is_running_for_test());
         assert!(!state.is_cancelled_for_test());
+    }
+
+    #[test]
+    fn runtime_settings_preserve_saved_token_when_incoming_token_empty() {
+        let existing = Settings {
+            github_token: "ghp_saved".to_string(),
+            ..Settings::default()
+        };
+        let incoming = Settings {
+            github_token: String::new(),
+            ..Settings::default()
+        };
+
+        let merged = merge_runtime_settings(incoming, &existing).expect("设置应可合并");
+
+        assert_eq!(merged.github_token, "ghp_saved");
+    }
+
+    #[test]
+    fn runtime_settings_allow_explicit_token_replacement() {
+        let existing = Settings {
+            github_token: "ghp_saved".to_string(),
+            ..Settings::default()
+        };
+        let incoming = Settings {
+            github_token: "ghp_new".to_string(),
+            ..Settings::default()
+        };
+
+        let merged = merge_runtime_settings(incoming, &existing).expect("设置应可合并");
+
+        assert_eq!(merged.github_token, "ghp_new");
     }
 }

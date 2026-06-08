@@ -3,6 +3,11 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 23:16:36 +08:00] `mod_UI\` 检索运行时设置合并加固**：
+  - `start_search` 在后端合并已保存设置，当前端不回传 GitHub Token 时仍保留已加密保存的 Token 用于 GitHub API 检索。
+  - 继续保持 `load_settings` 只返回公开设置视图，避免 Token 明文经 IPC 回流到前端。
+  - 新增空 Token 继承已保存 Token、显式 Token 覆盖旧 Token 单元测试，Rust 测试总数提升至 37 项。
+
 - **[2026-06-08 22:59:09 +08:00] `mod_UI\` 检索事件任务隔离加固**：
   - `start_search` 增加非零 `runId`，后端搜索日志、进度事件与最终响应统一携带任务 ID。
   - 前端监听 `search-log` 与 `search-progress` 时只接收当前任务 ID，任务结束后清空活动 ID，避免延迟事件污染已收敛的检索结果。
