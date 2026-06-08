@@ -23,6 +23,10 @@ const MAX_DESCRIPTION_BYTES: usize = 64 * 1024;
 const MAX_JSON_RESPONSE_BYTES: usize = 1024 * 1024;
 const MAX_SEARCH_HTTP_REQUESTS: usize = 200;
 const MAX_RESULT_MESSAGE_CHARS: usize = 256;
+const MAX_SEARCH_LOG_CHARS: usize = 512;
+const MAX_SEARCH_LOGS: usize = 1_000;
+const SEARCH_LOG_EMPTY_MESSAGE: &str = "日志内容为空或已被清理";
+const SEARCH_LOGS_TRUNCATED_MESSAGE: &str = "检索日志达到上限，后续日志已停止记录";
 
 #[derive(Debug, Deserialize)]
 struct GithubSearchResponse {
@@ -114,6 +118,7 @@ impl SearchContext<'_> {
         match self.budget.try_acquire() {
             Ok(()) => true,
             Err(message) => {
+                let message = sanitize_log_message(&message);
                 if !self.logs.iter().any(|log| log == &message) {
                     self.log(&message);
                 }
@@ -699,10 +704,25 @@ fn sanitize_search_result_for_emit(mut result: SearchResult) -> SearchResult {
     result.requested_version = clean_version(&result.requested_version).unwrap_or_default();
     result.latest_version = clean_version(&result.latest_version).unwrap_or_default();
     result.source = clean_result_source(&result.source);
-    result.repository = clean_result_repository(&result.source, &result.repository).unwrap_or_default();
+    result.repository =
+        clean_result_repository(&result.source, &result.repository).unwrap_or_default();
     result.real_name = clean_result_package_name(&result.real_name).unwrap_or(fallback_package);
     result.message = sanitize_result_message(&result.message);
     result
+}
+
+fn sanitize_log_message(value: &str) -> String {
+    let message = value
+        .trim()
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(MAX_SEARCH_LOG_CHARS)
+        .collect::<String>();
+    if message.is_empty() {
+        SEARCH_LOG_EMPTY_MESSAGE.to_string()
+    } else {
+        message
+    }
 }
 
 fn is_valid_bioc_version(value: &str) -> bool {
@@ -713,15 +733,24 @@ fn is_valid_bioc_version(value: &str) -> bool {
         })
 }
 
+fn append_search_log(logs: &mut Vec<String>, message: &str) -> Option<String> {
+    if logs.len() >= MAX_SEARCH_LOGS {
+        return None;
+    }
+
+    let message = if logs.len() + 1 == MAX_SEARCH_LOGS {
+        SEARCH_LOGS_TRUNCATED_MESSAGE.to_string()
+    } else {
+        sanitize_log_message(message)
+    };
+    logs.push(message.clone());
+    Some(message)
+}
+
 fn log(app: &AppHandle, run_id: u64, logs: &mut Vec<String>, message: &str) {
-    logs.push(message.to_string());
-    let _ = app.emit(
-        "search-log",
-        SearchLogEvent {
-            run_id,
-            message: message.to_string(),
-        },
-    );
+    if let Some(message) = append_search_log(logs, message) {
+        let _ = app.emit("search-log", SearchLogEvent { run_id, message });
+    }
 }
 
 fn push_result(
@@ -840,6 +869,40 @@ mod tests {
         assert_eq!(result.source, "none");
         assert!(!result.message.contains('\n'));
         assert!(result.message.len() <= MAX_RESULT_MESSAGE_CHARS);
+    }
+
+    #[test]
+    fn sanitizes_search_log_messages() {
+        let message = sanitize_log_message(&format!(
+            " ok\nbad\t{} ",
+            "x".repeat(MAX_SEARCH_LOG_CHARS + 20)
+        ));
+
+        assert!(!message.contains('\n'));
+        assert!(!message.contains('\t'));
+        assert!(message.starts_with("okbad"));
+        assert_eq!(message.chars().count(), MAX_SEARCH_LOG_CHARS);
+        assert_eq!(sanitize_log_message("\n\t"), SEARCH_LOG_EMPTY_MESSAGE);
+    }
+
+    #[test]
+    fn bounds_search_log_count() {
+        let mut logs = Vec::new();
+
+        for index in 0..(MAX_SEARCH_LOGS + 10) {
+            let emitted = append_search_log(&mut logs, &format!("log {index}"));
+            if index < MAX_SEARCH_LOGS {
+                assert!(emitted.is_some());
+            } else {
+                assert!(emitted.is_none());
+            }
+        }
+
+        assert_eq!(logs.len(), MAX_SEARCH_LOGS);
+        assert_eq!(
+            logs.last().map(String::as_str),
+            Some(SEARCH_LOGS_TRUNCATED_MESSAGE)
+        );
     }
 
     #[test]
