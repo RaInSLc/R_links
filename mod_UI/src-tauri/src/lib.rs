@@ -205,9 +205,17 @@ fn open_package_search(
     limiter: State<'_, BrowserOpenLimiter>,
     package_name: String,
 ) -> Result<(), String> {
+    let url = browser_search_url_for_package(&package_name)?;
+    limiter.try_acquire(Instant::now())?;
+    tauri_plugin_opener::OpenerExt::opener(&app)
+        .open_url(url, None::<&str>)
+        .map_err(|error| format!("打开浏览器失败: {error}"))
+}
+
+fn browser_search_url_for_package(package_name: &str) -> Result<String, String> {
     let package_name = package_name.trim();
     if !logic::is_valid_package_name(package_name) || package_name.contains('/') {
-        return Err(format!("无效包名，无法打开浏览器搜索: {package_name}"));
+        return Err("无效包名，无法打开浏览器搜索".to_string());
     }
     let url = format!(
         "https://www.google.com/search?q={}",
@@ -216,10 +224,7 @@ fn open_package_search(
     if !logic::is_allowed_browser_search_url(&url) {
         return Err("浏览器搜索 URL 不在允许范围内".to_string());
     }
-    limiter.try_acquire(Instant::now())?;
-    tauri_plugin_opener::OpenerExt::opener(&app)
-        .open_url(url, None::<&str>)
-        .map_err(|error| format!("打开浏览器失败: {error}"))
+    Ok(url)
 }
 
 #[tauri::command]
@@ -347,6 +352,23 @@ mod tests {
         }
         assert!(limiter.try_acquire(now).is_err());
         assert!(limiter.try_acquire(now + BROWSER_OPEN_WINDOW).is_ok());
+    }
+
+    #[test]
+    fn browser_search_url_rejects_invalid_package_without_echoing_value() {
+        let package_name = format!("bad/{}", "x".repeat(4096));
+        let error =
+            browser_search_url_for_package(&package_name).expect_err("非法包名应被拒绝");
+
+        assert_eq!(error, "无效包名，无法打开浏览器搜索");
+        assert!(!error.contains(&package_name));
+    }
+
+    #[test]
+    fn browser_search_url_encodes_valid_package() {
+        let url = browser_search_url_for_package("GSVA").expect("合法包名应可生成搜索 URL");
+
+        assert_eq!(url, "https://www.google.com/search?q=R%20package%20GSVA");
     }
 
     #[test]
