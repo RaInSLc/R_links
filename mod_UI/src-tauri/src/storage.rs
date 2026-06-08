@@ -255,6 +255,12 @@ fn atomic_write(path: &PathBuf, content: &str) -> Result<(), String> {
         .ok_or_else(|| "存储文件名无效".to_string())?;
     let tmp = path.with_file_name(format!("{file_name}.{}.tmp", unique_file_suffix()));
     let backup = path.with_extension("bak");
+    if path.exists() {
+        let metadata = fs::metadata(path).map_err(|error| error.to_string())?;
+        if !metadata.is_file() {
+            return Err("存储目标不是普通文件".to_string());
+        }
+    }
     fs::write(&tmp, content).map_err(|error| error.to_string())?;
     if path.exists() {
         let _ = fs::remove_file(&backup);
@@ -538,6 +544,26 @@ mod tests {
         let path = directory.join("missing").join("settings.json");
 
         assert!(atomic_write(&path, "content").is_err());
+        let leftovers = fs::read_dir(&directory)
+            .expect("应能列出临时目录")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .count();
+        assert_eq!(leftovers, 0);
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[test]
+    fn atomic_write_rejects_non_file_target_without_tmp() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-storage-non-file-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+        let path = directory.join("settings.json");
+        fs::create_dir(&path).expect("应能创建同名目录");
+
+        assert!(atomic_write(&path, "content").is_err());
+        assert!(path.is_dir());
         let leftovers = fs::read_dir(&directory)
             .expect("应能列出临时目录")
             .filter_map(Result::ok)
