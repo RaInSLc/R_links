@@ -696,40 +696,50 @@ fn is_allowed_bioc_package_file(file: &str) -> bool {
 }
 
 fn is_allowed_r_universe_query(url: &Url) -> bool {
-    let pairs = url
-        .query_pairs()
-        .map(|(key, value)| (key.into_owned(), value.into_owned()))
-        .collect::<Vec<_>>();
-    pairs.len() == 2
-        && pairs.iter().any(|(key, value)| {
-            key == "q"
-                && value
-                    .strip_prefix("package:")
-                    .is_some_and(is_valid_search_package_query)
-        })
-        && pairs
-            .iter()
-            .any(|(key, value)| key == "limit" && value == "1")
+    let mut pairs = url.query_pairs();
+    let Some((query_key, query_value)) = pairs.next() else {
+        return false;
+    };
+    if query_key != "q"
+        || !query_value
+            .as_ref()
+            .strip_prefix("package:")
+            .is_some_and(is_valid_search_package_query)
+    {
+        return false;
+    }
+
+    let Some((limit_key, limit_value)) = pairs.next() else {
+        return false;
+    };
+    limit_key == "limit" && limit_value == "1" && pairs.next().is_none()
 }
 
 fn is_allowed_github_search_query(url: &Url) -> bool {
-    let pairs = url
-        .query_pairs()
-        .map(|(key, value)| (key.into_owned(), value.into_owned()))
-        .collect::<Vec<_>>();
-    pairs.len() == 3
-        && pairs.iter().any(|(key, value)| {
-            key == "q"
-                && value
-                    .strip_suffix(" language:R")
-                    .is_some_and(is_valid_search_package_query)
-        })
-        && pairs
-            .iter()
-            .any(|(key, value)| key == "sort" && value == "stars")
-        && pairs
-            .iter()
-            .any(|(key, value)| key == "per_page" && value == "10")
+    let mut pairs = url.query_pairs();
+    let Some((query_key, query_value)) = pairs.next() else {
+        return false;
+    };
+    if query_key != "q"
+        || !query_value
+            .as_ref()
+            .strip_suffix(" language:R")
+            .is_some_and(is_valid_search_package_query)
+    {
+        return false;
+    }
+
+    let Some((sort_key, sort_value)) = pairs.next() else {
+        return false;
+    };
+    if sort_key != "sort" || sort_value != "stars" {
+        return false;
+    }
+
+    let Some((page_key, page_value)) = pairs.next() else {
+        return false;
+    };
+    page_key == "per_page" && page_value == "10" && pairs.next().is_none()
 }
 
 fn is_valid_search_package_query(value: &str) -> bool {
@@ -1012,8 +1022,14 @@ mod tests {
             "https://bioconductor.org/packages/release/data/unknown/html/demo.html",
             "https://bioconductor.org/packages/release/bioc/html/demo.html/extra",
             "https://r-universe.dev/api/search?q=package%3Ademo&limit=100",
+            "https://r-universe.dev/api/search?limit=1&q=package%3Ademo",
+            "https://r-universe.dev/api/search?q=package%3Ademo&q=package%3Aother&limit=1",
+            "https://r-universe.dev/api/search?q=package%3A&limit=1",
             "https://r-universe.dev/api/search?q=owner%2Frepo&limit=1",
             "https://api.github.com/search/repositories?q=demo+language%3AR&sort=updated&per_page=10",
+            "https://api.github.com/search/repositories?sort=stars&q=demo+language%3AR&per_page=10",
+            "https://api.github.com/search/repositories?q=demo+language%3AR&q=other+language%3AR&sort=stars&per_page=10",
+            "https://api.github.com/search/repositories?q=+language%3AR&sort=stars&per_page=10",
             "https://api.github.com/search/repositories?q=owner%2Frepo+language%3AR&sort=stars&per_page=10",
             "https://raw.githubusercontent.com/owner/repo/feature/DESCRIPTION",
             "https://raw.githubusercontent.com/owner/repo/HEAD/path/DESCRIPTION",
