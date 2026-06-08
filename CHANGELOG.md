@@ -3,6 +3,11 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 20:43:02 +08:00] `mod_UI\` 前端依赖可复现性加固**：
+  - 将 `package.json` 顶层 npm 依赖从 `^` / `~` 范围改为与 `package-lock.json` 一致的精确版本，降低后续安装时的供应链漂移。
+  - 同步 `package-lock.json` 根依赖声明，并将 README 首次安装和故障处理命令改为 `npm ci`。
+  - 通过 `npm ci --ignore-scripts --audit=false`、`npm run build`、`cargo test`、`cargo clippy --all-targets -- -D warnings`、`npm run tauri build -- --no-bundle` 和 `npm audit --audit-level=moderate` 验证。
+
 - **[2026-06-08 20:33:35 +08:00] `mod_UI\` 安装 URL 与解析失败处理加固**：
   - 包输入解析改为对非空非注释行执行显式失败返回，避免非法输入被静默丢弃后生成误导性空脚本。
   - 对 `devtools::install_url` 与 `remotes::install_url` 的 URL 输入复用后端 URL 规范化校验，拒绝非 HTTP/HTTPS、带凭据或含控制字符的安装地址。

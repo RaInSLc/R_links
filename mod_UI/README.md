@@ -10,7 +10,7 @@
 
 ```powershell
 cd /d Z:\R_links\mod_UI
-npm install
+npm ci
 $env:PATH = "C:\Users\rainsc\.cargo\bin;$env:PATH"
 npm run tauri dev
 ```
@@ -19,7 +19,7 @@ npm run tauri dev
 
 ```powershell
 Set-Location -LiteralPath "Z:\R_links\mod_UI"
-npm install
+npm ci
 $env:PATH = "C:\Users\rainsc\.cargo\bin;$env:PATH"
 npm run tauri dev
 ```
@@ -107,13 +107,13 @@ Set-Location -LiteralPath "Z:\R_links\mod_UI"
 
 不要在同一个终端中来回切换 `Z:\R_links` 与 `\\10.0.0.163\pythonProject\R_links`。
 
-### `npm install` 很慢或失败
+### `npm ci` 很慢或失败
 
 先确认网络可访问 npm registry。不要手工删除 `package-lock.json`，它用于锁定依赖版本。必要时可以清理本机 npm 缓存后重试：
 
 ```powershell
 npm cache verify
-npm install
+npm ci
 ```
 
 ### GitHub 搜索经常限流
