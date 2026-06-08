@@ -80,6 +80,8 @@ const MAX_INPUT_CHARS = 100_000;
 const MAX_PACKAGE_LINES = 500;
 const MAX_SEARCH_TABS = 30;
 const MAX_SCRIPT_CHARS = 1_000_000;
+const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
+const MAX_SEARCH_LOGS = 1_000;
 
 const methods: Array<{
   id: Method;
@@ -112,6 +114,17 @@ const sourceNames: Record<string, string> = {
 };
 
 let searchRunCounter = 0;
+
+function appendBounded<T>(items: T[], item: T, limit: number) {
+  if (items.length >= limit) {
+    return items;
+  }
+  return [...items, item];
+}
+
+function takeBounded<T>(items: T[], limit: number) {
+  return items.length > limit ? items.slice(0, limit) : items;
+}
 
 function App() {
   const [view, setView] = useState<View>("workspace");
@@ -167,7 +180,7 @@ function App() {
       if (event.payload.runId !== activeSearchRunId.current) {
         return;
       }
-      setLogs((current) => [...current, event.payload.message]);
+      setLogs((current) => appendBounded(current, event.payload.message, MAX_SEARCH_LOGS));
     });
     const unlistenProgress = listen<SearchProgressEvent>(
       "search-progress",
@@ -175,7 +188,7 @@ function App() {
         if (event.payload.runId !== activeSearchRunId.current) {
           return;
         }
-        setResults((current) => [...current, event.payload.result]);
+        setResults((current) => appendBounded(current, event.payload.result, MAX_SEARCH_RESULTS));
       },
     );
     return () => {
@@ -254,8 +267,8 @@ function App() {
       if (response.runId !== activeSearchRunId.current) {
         return;
       }
-      setResults(response.results);
-      setLogs(response.logs);
+      setResults(takeBounded(response.results, MAX_SEARCH_RESULTS));
+      setLogs(takeBounded(response.logs, MAX_SEARCH_LOGS));
       setStatus(response.stopped ? "检索任务已停止" : "检索完成，脚本已自动刷新");
       if (!response.stopped) {
         setMethod("auto");
