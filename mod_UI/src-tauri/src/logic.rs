@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 
 use crate::models::{
-    normalize_http_url, GenerateOptions, HistoryRecord, PackageInput, SearchResult,
+    normalize_https_url, GenerateOptions, HistoryRecord, PackageInput, SearchResult,
     MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES,
     MAX_SCRIPT_CHARS,
 };
@@ -39,7 +39,7 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
     }
 
     if raw.starts_with("http://") || raw.starts_with("https://") {
-        if normalize_http_url(raw, "安装 URL").is_err() {
+        if normalize_https_url(raw, "安装 URL").is_err() {
             return None;
         }
         let name = extract_package_name(raw);
@@ -137,7 +137,7 @@ pub fn generate_script(
     let mirror = if options.mirror.trim().is_empty() {
         "https://cloud.r-project.org".to_string()
     } else {
-        normalize_http_url(&options.mirror, "CRAN 镜像")?
+        normalize_https_url(&options.mirror, "CRAN 镜像")?
     };
 
     if options.method == "checkSystem" {
@@ -277,14 +277,14 @@ fn generate_command(
 
     let raw = match method {
         "devtools" => {
-            let url = normalize_http_url(value, "安装 URL")?;
+            let url = normalize_https_url(value, "安装 URL")?;
             format!(
                 "devtools::install_url(\"{}\", dependencies = {dependencies})",
                 escape_r(&url)
             )
         }
         "remotes" => {
-            let url = normalize_http_url(value, "安装 URL")?;
+            let url = normalize_https_url(value, "安装 URL")?;
             format!(
                 "remotes::install_url(\"{}\", dependencies = {dependencies})",
                 escape_r(&url)
@@ -603,6 +603,7 @@ mod tests {
     #[test]
     fn rejects_unsafe_install_url_inputs() {
         assert!(parse_input_line("https://user:pass@example.com/pkg_1.0.tar.gz").is_none());
+        assert!(parse_input_line("http://example.com/pkg_1.0.tar.gz").is_none());
         assert!(parse_input_line("ftp://example.com/pkg_1.0.tar.gz").is_none());
         assert!(generate_script(
             "https://user:pass@example.com/pkg_1.0.tar.gz",
@@ -611,6 +612,17 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[],
+        )
+        .is_err());
+        assert!(generate_script(
+            "demo",
+            &GenerateOptions {
+                method: "base".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "http://cran.example.org".to_string(),
             },
             &[],
         )

@@ -33,7 +33,7 @@ impl Settings {
     pub fn normalized(&self) -> Result<Self, String> {
         let proxy = normalize_proxy(&self.proxy)?;
         let github_token = normalize_token(&self.github_token)?;
-        let cran_mirror = normalize_http_url(&self.cran_mirror, "CRAN 镜像")?;
+        let cran_mirror = normalize_https_url(&self.cran_mirror, "CRAN 镜像")?;
 
         Ok(Self {
             proxy,
@@ -115,6 +115,15 @@ pub fn normalize_http_url(value: &str, field_name: &str) -> Result<String, Strin
     Ok(trimmed.to_string())
 }
 
+pub fn normalize_https_url(value: &str, field_name: &str) -> Result<String, String> {
+    let normalized = normalize_http_url(value, field_name)?;
+    let parsed = Url::parse(&normalized).map_err(|_| format!("{field_name}必须是有效 URL"))?;
+    if parsed.scheme() != "https" {
+        return Err(format!("{field_name}仅支持 https"));
+    }
+    Ok(normalized)
+}
+
 fn normalize_proxy(value: &str) -> Result<String, String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -170,5 +179,11 @@ mod tests {
     #[test]
     fn rejects_credentialed_mirror_url() {
         assert!(normalize_http_url("https://user:pass@example.com/CRAN/", "CRAN 镜像").is_err());
+    }
+
+    #[test]
+    fn rejects_plain_http_package_source_url() {
+        assert!(normalize_https_url("http://example.com/pkg_1.0.tar.gz", "安装 URL").is_err());
+        assert!(normalize_https_url("https://example.com/pkg_1.0.tar.gz", "安装 URL").is_ok());
     }
 }

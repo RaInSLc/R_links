@@ -3,6 +3,11 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 21:01:22 +08:00] `mod_UI\` 包源传输安全加固**：
+  - CRAN 镜像和 `devtools::install_url` / `remotes::install_url` 输入强制使用 HTTPS，拒绝明文 HTTP、带凭据或含控制字符的包源地址。
+  - 前端安装 URL 自动识别同步收紧为 HTTPS，README 安全边界补充包源传输要求。
+  - 新增 HTTPS 包源校验单元测试，完成 `cargo test --locked`、`cargo clippy --all-targets --locked -- -D warnings`、`npm run build` 与 `npm run tauri build -- --no-bundle` 验证。
+
 - **[2026-06-08 20:52:32 +08:00] `mod_UI\` Rust 依赖可复现性加固**：
   - 将 `src-tauri\Cargo.toml` 直接依赖从 Cargo 默认兼容范围改为与 `Cargo.lock` 一致的精确版本。
   - README 验证命令增加 `--locked`，避免测试和 Clippy 在验证时隐式更新 Rust 依赖解析结果。

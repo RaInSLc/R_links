@@ -182,7 +182,7 @@ function App() {
     if (!trimmed || trimmed.includes("\n")) {
       return;
     }
-    const containsUrl = /^https?:\/\//i.test(trimmed);
+    const containsUrl = /^https:\/\//i.test(trimmed);
     const looksLikeRepository = !containsUrl && trimmed.split(/\s+/)[0].includes("/");
     if (containsUrl && !["devtools", "remotes"].includes(method)) {
       setMethod("remotes");
@@ -350,7 +350,7 @@ function App() {
     if (!trimmed || trimmed.includes("\n")) {
       return false;
     }
-    const containsUrl = /^https?:\/\//i.test(trimmed);
+    const containsUrl = /^https:\/\//i.test(trimmed);
     const containsSlash = trimmed.split(/\s+/)[0].includes("/");
     if (["devtools", "remotes"].includes(candidate)) {
       return !containsUrl;

@@ -136,5 +136,6 @@ history.json
 - 前端只保留剪贴板读写权限。
 - 外部浏览器搜索由 Rust 命令生成固定 `https://www.google.com/search?...` URL，前端不能打开任意 URL。
 - 生产环境启用 CSP，禁止远程脚本、对象、iframe 和表单提交。
-- CRAN 镜像、代理、GitHub 仓库名和输入规模均由 Rust 后端二次校验。
+- CRAN 镜像、安装 URL、代理、GitHub 仓库名和输入规模均由 Rust 后端二次校验。
+- CRAN 镜像与 `install_url` 输入必须使用 HTTPS，避免生成明文包源安装命令。
 - `node_modules\`、`dist\`、`src-tauri\target\` 不应提交。
