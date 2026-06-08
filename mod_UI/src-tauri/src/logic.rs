@@ -15,6 +15,7 @@ const MAX_VERSION_CHARS: usize = 64;
 const MAX_RESULT_SOURCE_CHARS: usize = 16;
 const MAX_RESULT_MESSAGE_CHARS: usize = 512;
 const MAX_INSTALL_ARCHIVE_FILE_CHARS: usize = 256;
+const MAX_HISTORY_SCAN_LINES: usize = MAX_HISTORY_RECORDS * 20;
 const INSTALL_ARCHIVE_EXTENSIONS: &[&str] = &[".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".zip"];
 
 pub fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
@@ -528,6 +529,8 @@ pub fn build_history_records(script: &str) -> Vec<HistoryRecord> {
     script
         .lines()
         .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .take(MAX_HISTORY_SCAN_LINES)
         .filter_map(|line| {
             supported_history_command(line).and_then(|command| {
                 history_metadata_from_command(&command).map(|(package_name, version, tool_name)| {
@@ -591,6 +594,9 @@ pub fn supported_history_command(command: &str) -> Option<String> {
     {
         return None;
     }
+    if !looks_like_supported_history_command(command) {
+        return None;
+    }
 
     let patterns = [
         r#"^install\.packages\("[A-Za-z0-9._-]{1,128}", repos = "https://[^"\r\n]{1,2048}", dependencies = (TRUE|FALSE)\)$"#,
@@ -619,6 +625,17 @@ pub fn supported_history_command(command: &str) -> Option<String> {
     }
 
     None
+}
+
+fn looks_like_supported_history_command(command: &str) -> bool {
+    matches!(
+        command.as_bytes().first(),
+        Some(b'B' | b'd' | b'i' | b'p' | b'r')
+    ) && (command.starts_with("BiocManager::install(")
+        || command.starts_with("devtools::install_url(")
+        || command.starts_with("install.packages(")
+        || command.starts_with("packageVersion(")
+        || command.starts_with("remotes::install_"))
 }
 
 fn supported_install_url_history_command(command: &str) -> bool {
@@ -882,6 +899,7 @@ mod tests {
     #[test]
     fn rejects_unsupported_history_commands() {
         assert!(supported_history_command("system(\"calc.exe\")").is_none());
+        assert!(supported_history_command("not_a_supported_command()").is_none());
         assert!(supported_history_command("install.packages(pkg)").is_none());
         assert!(supported_history_command(
             "install.packages(\"demo\", repos = \"http://example.com\", dependencies = TRUE)"
@@ -944,6 +962,23 @@ mod tests {
         let script = "install.packages(\"demo\")\n".repeat((MAX_SCRIPT_CHARS / 25) + 10);
         assert!(build_history_records(&script).is_empty());
         assert!(validate_script_size(&script).is_err());
+    }
+
+    #[test]
+    fn bounds_history_scan_lines() {
+        let script = format!(
+            "{}\ninstall.packages(\"demo\", repos = \"https://cloud.r-project.org/\", dependencies = TRUE)",
+            "not_a_supported_command()\n".repeat(MAX_HISTORY_SCAN_LINES + 1)
+        );
+
+        assert!(build_history_records(&script).is_empty());
+
+        let script = format!(
+            "{}\ninstall.packages(\"demo\", repos = \"https://cloud.r-project.org/\", dependencies = TRUE)",
+            "# ignored\n\n".repeat(MAX_HISTORY_SCAN_LINES + 10)
+        );
+
+        assert_eq!(build_history_records(&script).len(), 1);
     }
 
     #[test]
