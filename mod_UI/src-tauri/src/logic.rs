@@ -11,7 +11,7 @@ use crate::models::{
 
 const MAX_GENERATE_METHOD_CHARS: usize = 32;
 const MAX_GENERATE_SEARCH_RESULTS: usize = MAX_PACKAGE_LINES * 16;
-const MAX_RESULT_VERSION_CHARS: usize = 64;
+const MAX_VERSION_CHARS: usize = 64;
 const MAX_RESULT_SOURCE_CHARS: usize = 16;
 const MAX_RESULT_MESSAGE_CHARS: usize = 512;
 
@@ -79,6 +79,9 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
         .and_then(|capture| capture.get(1))
         .map(|value| value.as_str().to_string())
         .unwrap_or_default();
+    if !version.is_empty() && !is_clean_version(&version) {
+        return None;
+    }
 
     Some(PackageInput {
         raw: raw.to_string(),
@@ -335,8 +338,8 @@ fn sanitize_search_result(result: &SearchResult) -> Option<SearchResult> {
 
 fn search_result_fields_within_bounds(result: &SearchResult) -> bool {
     result.package.len() <= MAX_FIELD_CHARS
-        && result.requested_version.len() <= MAX_RESULT_VERSION_CHARS
-        && result.latest_version.len() <= MAX_RESULT_VERSION_CHARS
+        && result.requested_version.len() <= MAX_VERSION_CHARS
+        && result.latest_version.len() <= MAX_VERSION_CHARS
         && result.repository.len() <= MAX_FIELD_CHARS
         && result.real_name.len() <= MAX_FIELD_CHARS
         && result.source.len() <= MAX_RESULT_SOURCE_CHARS
@@ -353,7 +356,7 @@ fn clean_result_version(value: &str) -> Option<String> {
     if trimmed.is_empty() {
         return Some(String::new());
     }
-    (trimmed.len() <= 64 && is_clean_version(trimmed)).then(|| trimmed.to_string())
+    is_clean_version(trimmed).then(|| trimmed.to_string())
 }
 
 fn clean_result_source(value: &str) -> Option<String> {
@@ -633,6 +636,7 @@ fn source_label(source: &str) -> &str {
 
 fn is_clean_version(version: &str) -> bool {
     !version.is_empty()
+        && version.len() <= MAX_VERSION_CHARS
         && version
             .chars()
             .all(|character| character.is_ascii_digit() || matches!(character, '.' | '-'))
@@ -842,6 +846,14 @@ mod tests {
     }
 
     #[test]
+    fn rejects_oversized_requested_versions() {
+        let input = format!("demo {}", "1".repeat(MAX_VERSION_CHARS + 1));
+
+        assert!(parse_input_line(&input).is_none());
+        assert!(parse_inputs(&input).is_err());
+    }
+
+    #[test]
     fn validates_browser_search_url_scope() {
         assert!(is_allowed_browser_search_url(
             "https://www.google.com/search?q=R%20package%20GSVA"
@@ -1043,6 +1055,35 @@ mod tests {
         assert!(output.contains("install.packages(\"demo\""));
         assert!(!output.contains("install_version"));
         assert!(!output.contains("Injected"));
+    }
+
+    #[test]
+    fn ignores_search_results_with_oversized_versions() {
+        let oversized_version = "1".repeat(MAX_VERSION_CHARS + 1);
+        let output = generate_script(
+            "demo",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[SearchResult {
+                package: "demo".to_string(),
+                requested_version: String::new(),
+                latest_version: oversized_version.clone(),
+                repository: String::new(),
+                real_name: "demo".to_string(),
+                source: "cran".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            }],
+        )
+        .expect("超长版本检索结果应被忽略");
+
+        assert!(output.contains("install.packages(\"demo\""));
+        assert!(!output.contains("install_version"));
+        assert!(!output.contains(&oversized_version));
     }
 
     #[test]
