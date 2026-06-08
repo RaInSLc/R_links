@@ -599,16 +599,12 @@ async fn read_limited_text(
 
 fn should_attach_github_token(url: &str, settings: &Settings) -> bool {
     !settings.github_token.trim().is_empty()
-        && Url::parse(url)
-            .ok()
-            .and_then(|parsed| {
-                (parsed.scheme() == "https").then(|| {
-                    parsed
-                        .host_str()
-                        .is_some_and(|host| host.eq_ignore_ascii_case("api.github.com"))
-                })
-            })
-            .unwrap_or(false)
+        && Url::parse(url).ok().is_some_and(|parsed| {
+            parsed
+                .host_str()
+                .is_some_and(|host| host == "api.github.com")
+                && validate_search_request_url(url).is_ok()
+        })
 }
 
 fn validate_search_request_url(value: &str) -> Result<(), String> {
@@ -957,7 +953,7 @@ mod tests {
             ..Settings::default()
         };
         assert!(should_attach_github_token(
-            "https://api.github.com/search/repositories?q=demo",
+            "https://api.github.com/search/repositories?q=demo+language%3AR&sort=stars&per_page=10",
             &settings
         ));
         assert!(!should_attach_github_token(
@@ -971,6 +967,18 @@ mod tests {
         assert!(!should_attach_github_token(
             "https://raw.githubusercontent.com/owner/repo/HEAD/DESCRIPTION",
             &settings
+        ));
+        assert!(!should_attach_github_token(
+            "https://api.github.com/search/repositories?q=demo",
+            &settings
+        ));
+        assert!(!should_attach_github_token(
+            "https://api.github.com/search/repositories?q=owner%2Frepo+language%3AR&sort=stars&per_page=10",
+            &settings
+        ));
+        assert!(!should_attach_github_token(
+            "https://api.github.com/search/repositories?q=demo+language%3AR&sort=stars&per_page=10",
+            &Settings::default()
         ));
     }
 

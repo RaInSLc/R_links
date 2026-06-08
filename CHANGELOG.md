@@ -3,6 +3,10 @@
 ## [2026-06-09]
 
 ### Added
+- **[2026-06-09 06:36:44 +08:00] `mod_UI\` GitHub Token 附加范围加固**：
+  - `should_attach_github_token` 独立复用检索 URL 白名单，只允许完整合法的 GitHub API 搜索请求附加 Token。
+  - 扩展单元测试，覆盖缺少固定查询参数、仓库式查询和空 Token 不会附加 Authorization。
+
 - **[2026-06-09 06:32:05 +08:00] `mod_UI\` 空 DPAPI 凭据载荷加固**：
   - `unprotect_string` 在调用 Windows DPAPI 前拒绝空或全空白的 `dpapi:` 载荷。
   - 新增密钥保护单元测试，覆盖空加密凭据不会进入系统解密调用。
