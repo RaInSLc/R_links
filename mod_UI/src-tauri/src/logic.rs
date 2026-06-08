@@ -5,8 +5,8 @@ use url::Url;
 
 use crate::models::{
     normalize_https_url, GenerateOptions, HistoryRecord, PackageInput, SearchResult,
-    MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES,
-    MAX_SCRIPT_CHARS,
+    MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS,
+    MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
 };
 
 pub fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
@@ -134,6 +134,7 @@ pub fn generate_script(
     if packages.is_empty() {
         return Ok("等待输入...".to_string());
     }
+    let results = sanitize_search_results(results);
 
     let mirror = if options.mirror.trim().is_empty() {
         "https://cloud.r-project.org".to_string()
@@ -162,7 +163,7 @@ pub fn generate_script(
         let mut version = package.version.clone();
         let mut method = options.method.clone();
 
-        if let Some(best) = choose_best_result(&package.name, results) {
+        if let Some(best) = choose_best_result(&package.name, &results) {
             let source_label = source_label(&best.source);
             if version.is_empty() {
                 output.push(format!(
@@ -256,6 +257,95 @@ fn choose_best_result<'a>(package: &str, results: &'a [SearchResult]) -> Option<
         (strict_name, source, if exact_repo { 0 } else { 1 })
     });
     candidates.into_iter().next()
+}
+
+fn sanitize_search_results(results: &[SearchResult]) -> Vec<SearchResult> {
+    results
+        .iter()
+        .filter_map(sanitize_search_result)
+        .take(MAX_PACKAGE_LINES * 4)
+        .collect()
+}
+
+fn sanitize_search_result(result: &SearchResult) -> Option<SearchResult> {
+    let package = clean_result_package(&result.package)?;
+    let requested_version = clean_result_version(&result.requested_version).unwrap_or_default();
+    let latest_version = clean_result_version(&result.latest_version).unwrap_or_default();
+    let source = clean_result_source(&result.source)?;
+    let repository = clean_result_repository(&source, &result.repository)?;
+    let real_name = clean_result_package(&result.real_name).unwrap_or_else(|| package.clone());
+    let message = clean_result_text(&result.message);
+
+    if result.found && latest_version.is_empty() && source != "github" {
+        return None;
+    }
+
+    Some(SearchResult {
+        package,
+        requested_version,
+        latest_version,
+        repository,
+        real_name,
+        source,
+        found: result.found,
+        message,
+    })
+}
+
+fn clean_result_package(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    is_valid_package_name(trimmed).then(|| trimmed.to_string())
+}
+
+fn clean_result_version(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Some(String::new());
+    }
+    (trimmed.len() <= 64 && is_clean_version(trimmed)).then(|| trimmed.to_string())
+}
+
+fn clean_result_source(value: &str) -> Option<String> {
+    match value.trim() {
+        "cran" | "bioc" | "biocGit" | "github" | "none" => Some(value.trim().to_string()),
+        _ => None,
+    }
+}
+
+fn clean_result_repository(source: &str, value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    match source {
+        "github" => {
+            if trimmed.is_empty() {
+                Some(String::new())
+            } else {
+                normalize_github_repository(trimmed)
+            }
+        }
+        "biocGit" => {
+            if trimmed.is_empty() || is_valid_bioc_version(trimmed) {
+                Some(trimmed.to_string())
+            } else {
+                None
+            }
+        }
+        _ => {
+            if trimmed.len() <= MAX_FIELD_CHARS && !trimmed.chars().any(char::is_control) {
+                Some(trimmed.to_string())
+            } else {
+                None
+            }
+        }
+    }
+}
+
+fn clean_result_text(value: &str) -> String {
+    value
+        .trim()
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(256)
+        .collect()
 }
 
 fn generate_command(
@@ -664,5 +754,88 @@ mod tests {
             &[],
         )
         .is_err());
+    }
+
+    #[test]
+    fn rejects_untrusted_search_results_for_auto_script() {
+        let output = generate_script(
+            "demo",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[SearchResult {
+                package: "demo".to_string(),
+                requested_version: String::new(),
+                latest_version: "1.2.3".to_string(),
+                repository: "https://example.com/github.com/evil/demo".to_string(),
+                real_name: "demo".to_string(),
+                source: "github".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            }],
+        )
+        .expect("非法检索结果应被忽略并回退基础安装");
+
+        assert!(output.contains("install.packages(\"demo\""));
+        assert!(!output.contains("install_github"));
+        assert!(!output.contains("evil/demo"));
+    }
+
+    #[test]
+    fn accepts_sanitized_search_results_for_auto_script() {
+        let output = generate_script(
+            "demo",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[SearchResult {
+                package: " demo ".to_string(),
+                requested_version: String::new(),
+                latest_version: " 1.2.3 ".to_string(),
+                repository: "https://github.com/owner/demo.git".to_string(),
+                real_name: "demo".to_string(),
+                source: "github".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            }],
+        )
+        .expect("合法检索结果应可参与自动路由");
+
+        assert!(output.contains("remotes::install_github(\"owner/demo\""));
+        assert!(!output.contains("https://github.com/owner/demo.git"));
+    }
+
+    #[test]
+    fn rejects_result_versions_with_control_characters() {
+        let output = generate_script(
+            "demo",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[SearchResult {
+                package: "demo".to_string(),
+                requested_version: String::new(),
+                latest_version: "1.2.3\nInjected".to_string(),
+                repository: String::new(),
+                real_name: "demo".to_string(),
+                source: "cran".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            }],
+        )
+        .expect("非法版本检索结果应被忽略");
+
+        assert!(output.contains("install.packages(\"demo\""));
+        assert!(!output.contains("install_version"));
+        assert!(!output.contains("Injected"));
     }
 }
