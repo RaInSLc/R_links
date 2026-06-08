@@ -3,7 +3,7 @@ use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use url::Url;
@@ -19,6 +19,7 @@ const BIOC_CATEGORIES: &[&str] = &["bioc", "data/annotation", "data/experiment",
 const MAX_TEXT_RESPONSE_BYTES: usize = 512 * 1024;
 const MAX_DESCRIPTION_BYTES: usize = 64 * 1024;
 const MAX_JSON_RESPONSE_BYTES: usize = 1024 * 1024;
+const MAX_SEARCH_HTTP_REQUESTS: usize = 200;
 
 #[derive(Debug, Deserialize)]
 struct GithubSearchResponse {
@@ -44,6 +45,68 @@ pub struct SearchProgressEvent {
     pub result: SearchResult,
 }
 
+struct RequestBudget {
+    remaining: AtomicUsize,
+}
+
+impl RequestBudget {
+    fn new(limit: usize) -> Self {
+        Self {
+            remaining: AtomicUsize::new(limit),
+        }
+    }
+
+    fn try_acquire(&self) -> Result<(), String> {
+        self.remaining
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+                if remaining > 0 {
+                    Some(remaining - 1)
+                } else {
+                    None
+                }
+            })
+            .map(|_| ())
+            .map_err(|_| {
+                format!("单次检索 HTTP 请求数超过上限 {MAX_SEARCH_HTTP_REQUESTS}，任务已停止")
+            })
+    }
+
+    #[cfg(test)]
+    fn remaining_for_test(&self) -> usize {
+        self.remaining.load(Ordering::SeqCst)
+    }
+}
+
+struct SearchContext<'a> {
+    client: &'a Client,
+    settings: &'a Settings,
+    cancelled: &'a AtomicBool,
+    budget: &'a RequestBudget,
+    app: &'a AppHandle,
+    run_id: u64,
+    logs: &'a mut Vec<String>,
+}
+
+impl SearchContext<'_> {
+    fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
+    }
+
+    fn log(&mut self, message: &str) {
+        log(self.app, self.run_id, self.logs, message);
+    }
+
+    fn acquire_request_budget(&mut self) -> bool {
+        match self.budget.try_acquire() {
+            Ok(()) => true,
+            Err(message) => {
+                self.log(&message);
+                false
+            }
+        }
+    }
+}
+
 pub async fn search_packages(
     app: &AppHandle,
     run_id: u64,
@@ -60,19 +123,27 @@ pub async fn search_packages(
     }
 
     let client = build_client(settings)?;
+    let budget = RequestBudget::new(MAX_SEARCH_HTTP_REQUESTS);
     let mut results = Vec::new();
     let mut logs = Vec::new();
 
-    log(app, run_id, &mut logs, "开始多源检索");
-    for (index, package) in packages.iter().enumerate() {
-        if cancelled.load(Ordering::SeqCst) {
-            break;
-        }
-        log(
+    let stopped = {
+        let mut context = SearchContext {
+            client: &client,
+            settings,
+            cancelled,
+            budget: &budget,
             app,
             run_id,
-            &mut logs,
-            &format!(
+            logs: &mut logs,
+        };
+
+        context.log("开始多源检索");
+        for (index, package) in packages.iter().enumerate() {
+            if context.is_cancelled() {
+                break;
+            }
+            context.log(&format!(
                 "[{}/{}] 检索 {}{}",
                 index + 1,
                 packages.len(),
@@ -82,74 +153,56 @@ pub async fn search_packages(
                 } else {
                     format!(" {}", package.version)
                 }
-            ),
-        );
+            ));
 
-        let before = results.len();
-        if package.name.contains('/') {
-            if let Some(result) = search_explicit_github(
-                &client, package, settings, cancelled, app, run_id, &mut logs,
-            )
-            .await
-            {
-                push_result(app, run_id, &mut results, result);
-            }
-        } else {
-            if let Some(result) =
-                search_cran(&client, package, cancelled, app, run_id, &mut logs).await
-            {
-                push_result(app, run_id, &mut results, result);
-            }
-
-            if (settings.full_search || results.len() == before)
-                && !cancelled.load(Ordering::SeqCst)
-            {
-                let bioc_results =
-                    search_bioconductor(&client, package, cancelled, app, run_id, &mut logs).await;
-                for result in bioc_results {
+            let before = results.len();
+            if package.name.contains('/') {
+                if let Some(result) = search_explicit_github(&mut context, package).await {
                     push_result(app, run_id, &mut results, result);
+                }
+            } else {
+                if let Some(result) = search_cran(&mut context, package).await {
+                    push_result(app, run_id, &mut results, result);
+                }
+
+                if (settings.full_search || results.len() == before) && !context.is_cancelled() {
+                    let bioc_results = search_bioconductor(&mut context, package).await;
+                    for result in bioc_results {
+                        push_result(app, run_id, &mut results, result);
+                    }
+                }
+
+                if (settings.full_search || results.len() == before) && !context.is_cancelled() {
+                    let github_results = search_github(&mut context, package).await;
+                    for result in github_results {
+                        push_result(app, run_id, &mut results, result);
+                    }
                 }
             }
 
-            if (settings.full_search || results.len() == before)
-                && !cancelled.load(Ordering::SeqCst)
-            {
-                let github_results = search_github(
-                    &client, package, settings, cancelled, app, run_id, &mut logs,
-                )
-                .await;
-                for result in github_results {
-                    push_result(app, run_id, &mut results, result);
-                }
+            if results.len() == before && !context.is_cancelled() {
+                let result = SearchResult {
+                    package: package.name.clone(),
+                    requested_version: package.version.clone(),
+                    latest_version: String::new(),
+                    repository: String::new(),
+                    real_name: package.name.clone(),
+                    source: "none".to_string(),
+                    found: false,
+                    message: "所有来源均未找到".to_string(),
+                };
+                push_result(app, run_id, &mut results, result);
             }
         }
 
-        if results.len() == before && !cancelled.load(Ordering::SeqCst) {
-            let result = SearchResult {
-                package: package.name.clone(),
-                requested_version: package.version.clone(),
-                latest_version: String::new(),
-                repository: String::new(),
-                real_name: package.name.clone(),
-                source: "none".to_string(),
-                found: false,
-                message: "所有来源均未找到".to_string(),
-            };
-            push_result(app, run_id, &mut results, result);
-        }
-    }
-
-    let stopped = cancelled.load(Ordering::SeqCst);
-    log(
-        app,
-        run_id,
-        &mut logs,
-        if stopped {
+        let stopped = context.is_cancelled();
+        context.log(if stopped {
             "检索任务已停止"
         } else {
             "检索任务已完成"
-        },
-    );
+        });
+        stopped
+    };
     Ok(SearchResponse {
         run_id,
         results,
@@ -173,59 +226,43 @@ fn build_client(settings: &Settings) -> Result<Client, String> {
 }
 
 async fn search_cran(
-    client: &Client,
+    context: &mut SearchContext<'_>,
     package: &PackageInput,
-    cancelled: &AtomicBool,
-    app: &AppHandle,
-    run_id: u64,
-    logs: &mut Vec<String>,
 ) -> Option<SearchResult> {
-    log(app, run_id, logs, "查询 CRAN");
+    context.log("查询 CRAN");
     let url = format!(
         "https://cloud.r-project.org/web/packages/{}/index.html",
         urlencoding::encode(&package.name)
     );
-    let html = get_text(client, &url, cancelled).await?;
+    let html = get_text(context, &url).await?;
     let version = extract_html_version(&html)?;
-    log(app, run_id, logs, &format!("CRAN 命中版本 {version}"));
+    context.log(&format!("CRAN 命中版本 {version}"));
     Some(found_result(package, &version, "", &package.name, "cran"))
 }
 
 async fn search_bioconductor(
-    client: &Client,
+    context: &mut SearchContext<'_>,
     package: &PackageInput,
-    cancelled: &AtomicBool,
-    app: &AppHandle,
-    run_id: u64,
-    logs: &mut Vec<String>,
 ) -> Vec<SearchResult> {
-    log(app, run_id, logs, "查询 Bioconductor");
+    context.log("查询 Bioconductor");
     for category in BIOC_CATEGORIES {
-        if cancelled.load(Ordering::SeqCst) {
+        if context.is_cancelled() {
             return Vec::new();
         }
         let release_url = format!(
             "https://bioconductor.org/packages/release/{category}/html/{}.html",
             urlencoding::encode(&package.name)
         );
-        if let Some(html) = get_text(client, &release_url, cancelled).await {
+        if let Some(html) = get_text(context, &release_url).await {
             if let Some(release_version) = extract_html_version(&html) {
                 if !package.version.is_empty()
                     && !version_compatible(&release_version, &package.version)
                 {
-                    if let Some(history) =
-                        find_bioc_history(client, package, category, cancelled, app, run_id, logs)
-                            .await
-                    {
+                    if let Some(history) = find_bioc_history(context, package, category).await {
                         return vec![history];
                     }
                 }
-                log(
-                    app,
-                    run_id,
-                    logs,
-                    &format!("Bioconductor Release 命中版本 {release_version}"),
-                );
+                context.log(&format!("Bioconductor Release 命中版本 {release_version}"));
                 return vec![found_result(
                     package,
                     &release_version,
@@ -240,13 +277,9 @@ async fn search_bioconductor(
 }
 
 async fn find_bioc_history(
-    client: &Client,
+    context: &mut SearchContext<'_>,
     package: &PackageInput,
     category: &str,
-    cancelled: &AtomicBool,
-    app: &AppHandle,
-    run_id: u64,
-    logs: &mut Vec<String>,
 ) -> Option<SearchResult> {
     let mut versions = BIOC_VERSIONS.to_vec();
     let parts = package
@@ -265,22 +298,17 @@ async fn find_bioc_history(
     }
 
     for bioc_version in versions {
-        if cancelled.load(Ordering::SeqCst) {
+        if context.is_cancelled() {
             return None;
         }
         let url = format!(
             "https://bioconductor.org/packages/{bioc_version}/{category}/html/{}.html",
             urlencoding::encode(&package.name)
         );
-        if let Some(html) = get_text(client, &url, cancelled).await {
+        if let Some(html) = get_text(context, &url).await {
             if let Some(version) = extract_html_version(&html) {
                 if version_compatible(&version, &package.version) {
-                    log(
-                        app,
-                        run_id,
-                        logs,
-                        &format!("Bioconductor {bioc_version} 匹配版本 {version}"),
-                    );
+                    context.log(&format!("Bioconductor {bioc_version} 匹配版本 {version}"));
                     return Some(found_result(
                         package,
                         &version,
@@ -296,20 +324,15 @@ async fn find_bioc_history(
 }
 
 async fn search_explicit_github(
-    client: &Client,
+    context: &mut SearchContext<'_>,
     package: &PackageInput,
-    settings: &Settings,
-    cancelled: &AtomicBool,
-    app: &AppHandle,
-    run_id: u64,
-    logs: &mut Vec<String>,
 ) -> Option<SearchResult> {
-    log(app, run_id, logs, "验证指定 GitHub 仓库");
+    context.log("验证指定 GitHub 仓库");
     let Some(repository) = normalize_github_repository(&package.name) else {
-        log(app, run_id, logs, "GitHub 仓库格式无效，已跳过");
+        context.log("GitHub 仓库格式无效，已跳过");
         return None;
     };
-    let version = github_description_version(client, &repository, settings, cancelled).await?;
+    let version = github_description_version(context, &repository).await?;
     let real_name = repository.rsplit('/').next().unwrap_or(&repository);
     Some(found_result(
         package,
@@ -321,22 +344,17 @@ async fn search_explicit_github(
 }
 
 async fn search_github(
-    client: &Client,
+    context: &mut SearchContext<'_>,
     package: &PackageInput,
-    settings: &Settings,
-    cancelled: &AtomicBool,
-    app: &AppHandle,
-    run_id: u64,
-    logs: &mut Vec<String>,
 ) -> Vec<SearchResult> {
-    log(app, run_id, logs, "查询 r-universe 与 GitHub");
+    context.log("查询 r-universe 与 GitHub");
     let mut results = Vec::new();
     let mut seen = HashSet::new();
     let universe_url = format!(
         "https://r-universe.dev/api/search?q=package:{}&limit=1",
         urlencoding::encode(&package.name)
     );
-    if let Some(value) = get_json(client, &universe_url, settings, cancelled).await {
+    if let Some(value) = get_json(context, &universe_url).await {
         if let Some(object) = find_package_object(&value) {
             let real_name = object
                 .get("Package")
@@ -365,7 +383,7 @@ async fn search_github(
         }
     }
 
-    if !results.is_empty() && !settings.full_search {
+    if !results.is_empty() && !context.settings.full_search {
         return results;
     }
 
@@ -373,35 +391,38 @@ async fn search_github(
         "https://api.github.com/search/repositories?q={}+language:R&sort=stars&per_page=10",
         urlencoding::encode(&package.name)
     );
-    let request = authorized_get(client, &url, settings);
+    if !context.acquire_request_budget() {
+        return results;
+    }
+    let request = authorized_get(context.client, &url, context.settings);
     let response = match request.send().await {
         Ok(response) => response,
         Err(error) => {
-            log(app, run_id, logs, &format!("GitHub 请求失败: {error}"));
+            context.log(&format!("GitHub 请求失败: {error}"));
             return results;
         }
     };
     if response.status() == StatusCode::FORBIDDEN {
-        log(app, run_id, logs, "GitHub API 已触发频率限制");
+        context.log("GitHub API 已触发频率限制");
         return results;
     }
     let text = match read_limited_text(response, MAX_JSON_RESPONSE_BYTES).await {
         Ok(value) => value,
         Err(error) => {
-            log(app, run_id, logs, &format!("GitHub 响应读取失败: {error}"));
+            context.log(&format!("GitHub 响应读取失败: {error}"));
             return results;
         }
     };
     let body = match serde_json::from_str::<GithubSearchResponse>(&text) {
         Ok(value) => value,
         Err(error) => {
-            log(app, run_id, logs, &format!("GitHub 响应解析失败: {error}"));
+            context.log(&format!("GitHub 响应解析失败: {error}"));
             return results;
         }
     };
 
     for repository in body.items {
-        if cancelled.load(Ordering::SeqCst) {
+        if context.is_cancelled() {
             break;
         }
         let repo_name = repository.full_name.rsplit('/').next().unwrap_or_default();
@@ -413,9 +434,7 @@ async fn search_github(
             continue;
         }
         if let Some(repository_name) = normalize_github_repository(&repository.full_name) {
-            if let Some(version) =
-                github_description_version(client, &repository_name, settings, cancelled).await
-            {
+            if let Some(version) = github_description_version(context, &repository_name).await {
                 seen.insert(repository_name.to_ascii_lowercase());
                 results.push(found_result(
                     package,
@@ -431,17 +450,21 @@ async fn search_github(
 }
 
 async fn github_description_version(
-    client: &Client,
+    context: &mut SearchContext<'_>,
     repository: &str,
-    settings: &Settings,
-    cancelled: &AtomicBool,
 ) -> Option<String> {
     for branch in ["HEAD", "master", "main", "devel"] {
-        if cancelled.load(Ordering::SeqCst) {
+        if context.is_cancelled() {
             return None;
         }
         let url = format!("https://raw.githubusercontent.com/{repository}/{branch}/DESCRIPTION");
-        let response = authorized_get(client, &url, settings).send().await.ok()?;
+        if !context.acquire_request_budget() {
+            return None;
+        }
+        let response = authorized_get(context.client, &url, context.settings)
+            .send()
+            .await
+            .ok()?;
         if response.status().is_success() {
             let description = read_limited_text(response, MAX_DESCRIPTION_BYTES)
                 .await
@@ -465,11 +488,14 @@ fn authorized_get(client: &Client, url: &str, settings: &Settings) -> reqwest::R
     }
 }
 
-async fn get_text(client: &Client, url: &str, cancelled: &AtomicBool) -> Option<String> {
-    if cancelled.load(Ordering::SeqCst) {
+async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Option<String> {
+    if context.is_cancelled() {
         return None;
     }
-    let response = client.get(url).send().await.ok()?;
+    if !context.acquire_request_budget() {
+        return None;
+    }
+    let response = context.client.get(url).send().await.ok()?;
     if !response.status().is_success() {
         return None;
     }
@@ -478,16 +504,17 @@ async fn get_text(client: &Client, url: &str, cancelled: &AtomicBool) -> Option<
         .ok()
 }
 
-async fn get_json(
-    client: &Client,
-    url: &str,
-    settings: &Settings,
-    cancelled: &AtomicBool,
-) -> Option<Value> {
-    if cancelled.load(Ordering::SeqCst) {
+async fn get_json(context: &mut SearchContext<'_>, url: &str) -> Option<Value> {
+    if context.is_cancelled() {
         return None;
     }
-    let response = authorized_get(client, url, settings).send().await.ok()?;
+    if !context.acquire_request_budget() {
+        return None;
+    }
+    let response = authorized_get(context.client, url, context.settings)
+        .send()
+        .await
+        .ok()?;
     let text = read_limited_text(response, MAX_JSON_RESPONSE_BYTES)
         .await
         .ok()?;
@@ -695,5 +722,15 @@ mod tests {
 
         assert!(encoded.contains("\"runId\":42"));
         assert!(encoded.contains("\"message\""));
+    }
+
+    #[test]
+    fn request_budget_rejects_after_limit() {
+        let budget = RequestBudget::new(2);
+
+        assert!(budget.try_acquire().is_ok());
+        assert!(budget.try_acquire().is_ok());
+        assert!(budget.try_acquire().is_err());
+        assert_eq!(budget.remaining_for_test(), 0);
     }
 }
