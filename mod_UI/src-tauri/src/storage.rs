@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Read;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
@@ -11,6 +12,9 @@ use crate::secrets;
 use serde::{Deserialize, Serialize};
 
 const MAX_PROTECTED_TOKEN_CHARS: usize = MAX_TOKEN_CHARS * 16;
+const MAX_SETTINGS_FILE_BYTES: u64 = 64 * 1024;
+const MAX_HISTORY_FILE_BYTES: u64 = 8 * 1024 * 1024;
+const OVERSIZED_BACKUP_NOTICE: &str = "原文件超过安全读取上限，内容未复制到备份。";
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,7 +73,11 @@ pub fn load_settings(app: &AppHandle) -> Result<Settings, String> {
     if !path.exists() {
         return Ok(Settings::default());
     }
-    let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let Some(content) = read_limited_to_string(&path, MAX_SETTINGS_FILE_BYTES, "设置文件")?
+    else {
+        backup_corrupt_settings_file(app, OVERSIZED_BACKUP_NOTICE)?;
+        return Ok(Settings::default());
+    };
     match serde_json::from_str::<StoredSettings>(&content).and_then(|settings| {
         settings.into_settings().map_err(|error| {
             serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, error))
@@ -77,7 +85,7 @@ pub fn load_settings(app: &AppHandle) -> Result<Settings, String> {
     }) {
         Ok(settings) => Ok(settings),
         Err(_) => {
-            backup_corrupt_file(app, "settings.json", &content)?;
+            backup_corrupt_settings_file(app, &content)?;
             Ok(Settings::default())
         }
     }
@@ -95,7 +103,11 @@ pub fn load_history(app: &AppHandle) -> Result<Vec<HistoryRecord>, String> {
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let Some(content) = read_limited_to_string(&path, MAX_HISTORY_FILE_BYTES, "历史文件")?
+    else {
+        backup_corrupt_file(app, "history.json", OVERSIZED_BACKUP_NOTICE)?;
+        return Ok(Vec::new());
+    };
     match serde_json::from_str::<Vec<HistoryRecord>>(&content) {
         Ok(history) => Ok(sanitize_history(history)),
         Err(_) => {
@@ -137,6 +149,31 @@ fn is_forbidden_control(character: char) -> bool {
     character.is_control() && !matches!(character, '\r' | '\n' | '\t')
 }
 
+fn read_limited_to_string(
+    path: &PathBuf,
+    max_bytes: u64,
+    file_label: &str,
+) -> Result<Option<String>, String> {
+    let metadata = fs::metadata(path).map_err(|error| error.to_string())?;
+    if !metadata.is_file() {
+        return Err(format!("{file_label}不是普通文件"));
+    }
+    if metadata.len() > max_bytes {
+        return Ok(None);
+    }
+
+    let file = fs::File::open(path).map_err(|error| error.to_string())?;
+    let mut reader = file.take(max_bytes + 1);
+    let mut content = String::new();
+    reader
+        .read_to_string(&mut content)
+        .map_err(|error| error.to_string())?;
+    if content.len() as u64 > max_bytes {
+        return Ok(None);
+    }
+    Ok(Some(content))
+}
+
 fn atomic_write(path: &PathBuf, content: &str) -> Result<(), String> {
     let tmp = path.with_extension("tmp");
     let backup = path.with_extension("bak");
@@ -155,6 +192,11 @@ fn atomic_write(path: &PathBuf, content: &str) -> Result<(), String> {
     }
 }
 
+fn backup_corrupt_settings_file(app: &AppHandle, content: &str) -> Result<(), String> {
+    let redacted = redact_settings_backup_content(content);
+    backup_corrupt_file(app, "settings.json", &redacted)
+}
+
 fn backup_corrupt_file(app: &AppHandle, name: &str, content: &str) -> Result<(), String> {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -162,6 +204,97 @@ fn backup_corrupt_file(app: &AppHandle, name: &str, content: &str) -> Result<(),
         .as_secs();
     let backup = data_file(app, &format!("{name}.corrupt.{stamp}.bak"))?;
     fs::write(backup, content).map_err(|error| error.to_string())
+}
+
+fn redact_settings_backup_content(content: &str) -> String {
+    if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(content) {
+        redact_settings_value(&mut value);
+        return serde_json::to_string_pretty(&value)
+            .unwrap_or_else(|_| OVERSIZED_BACKUP_NOTICE.to_string());
+    }
+
+    ["githubTokenProtected", "githubToken"]
+        .into_iter()
+        .fold(content.to_string(), redact_json_string_field)
+}
+
+fn redact_settings_value(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, child) in map.iter_mut() {
+                if key == "githubToken" || key == "githubTokenProtected" {
+                    *child = serde_json::Value::String("[redacted]".to_string());
+                } else {
+                    redact_settings_value(child);
+                }
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                redact_settings_value(item);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn redact_json_string_field(content: String, field: &str) -> String {
+    let key = format!("\"{field}\"");
+    let mut output = String::with_capacity(content.len());
+    let mut cursor = 0;
+
+    while let Some(relative_start) = content[cursor..].find(&key) {
+        let start = cursor + relative_start;
+        output.push_str(&content[cursor..start]);
+        output.push_str(&key);
+
+        let after_key = start + key.len();
+        let Some((value_start, value_end)) = find_json_string_value_span(&content, after_key)
+        else {
+            cursor = after_key;
+            continue;
+        };
+
+        output.push_str(&content[after_key..value_start]);
+        output.push_str("\"[redacted]\"");
+        cursor = value_end;
+    }
+
+    output.push_str(&content[cursor..]);
+    output
+}
+
+fn find_json_string_value_span(content: &str, after_key: usize) -> Option<(usize, usize)> {
+    let bytes = content.as_bytes();
+    let mut index = after_key;
+    while bytes.get(index).is_some_and(u8::is_ascii_whitespace) {
+        index += 1;
+    }
+    if bytes.get(index) != Some(&b':') {
+        return None;
+    }
+    index += 1;
+    while bytes.get(index).is_some_and(u8::is_ascii_whitespace) {
+        index += 1;
+    }
+    if bytes.get(index) != Some(&b'"') {
+        return None;
+    }
+
+    let value_start = index;
+    index += 1;
+    let mut escaped = false;
+    while let Some(byte) = bytes.get(index) {
+        if escaped {
+            escaped = false;
+        } else if *byte == b'\\' {
+            escaped = true;
+        } else if *byte == b'"' {
+            return Some((value_start, index + 1));
+        }
+        index += 1;
+    }
+    None
 }
 
 #[cfg(test)]
@@ -209,5 +342,35 @@ mod tests {
             .expect("格式本身应可解析")
             .into_settings()
             .is_err());
+    }
+
+    #[test]
+    fn redacts_sensitive_settings_backup_fields() {
+        let content = r#"{
+            "proxy": "",
+            "githubToken": "legacy-secret",
+            "githubTokenProtected": "dpapi:encrypted-secret",
+            "cranMirror": "https://cloud.r-project.org",
+            "fullSearch": false
+        }"#;
+
+        let redacted = redact_settings_backup_content(content);
+
+        assert!(!redacted.contains("legacy-secret"));
+        assert!(!redacted.contains("dpapi:encrypted-secret"));
+        assert!(redacted.contains("\"githubToken\": \"[redacted]\""));
+        assert!(redacted.contains("\"githubTokenProtected\": \"[redacted]\""));
+    }
+
+    #[test]
+    fn redacts_sensitive_fields_from_malformed_settings_backup() {
+        let content = r#"{"githubToken":"legacy-secret","githubTokenProtected":"dpapi:encrypted-secret","broken":true"#;
+
+        let redacted = redact_settings_backup_content(content);
+
+        assert!(!redacted.contains("legacy-secret"));
+        assert!(!redacted.contains("dpapi:encrypted-secret"));
+        assert!(redacted.contains("\"githubToken\":\"[redacted]\""));
+        assert!(redacted.contains("\"githubTokenProtected\":\"[redacted]\""));
     }
 }
