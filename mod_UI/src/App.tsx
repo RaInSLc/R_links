@@ -148,6 +148,7 @@ function App() {
   const [showToken, setShowToken] = useState(false);
   const [tokenConfigured, setTokenConfigured] = useState(false);
   const activeSearchRunId = useRef(0);
+  const scriptRequestSeq = useRef(0);
 
   const packageCount = useMemo(
     () => input.split(/\r?\n/).filter((line) => line.trim()).length,
@@ -211,6 +212,8 @@ function App() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      const requestSeq = scriptRequestSeq.current + 1;
+      scriptRequestSeq.current = requestSeq;
       if (inputTooLarge) {
         setScript("输入超出限制，无法生成脚本。");
         return;
@@ -225,8 +228,16 @@ function App() {
         },
         results,
       })
-        .then(setScript)
-        .catch((error) => setStatus(`生成失败: ${formatError(error)}`));
+        .then((nextScript) => {
+          if (requestSeq === scriptRequestSeq.current) {
+            setScript(nextScript);
+          }
+        })
+        .catch((error) => {
+          if (requestSeq === scriptRequestSeq.current) {
+            setStatus(`生成失败: ${formatError(error)}`);
+          }
+        });
     }, 120);
     return () => window.clearTimeout(timer);
   }, [
