@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::OnceLock;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use url::Url;
@@ -27,6 +28,7 @@ const MAX_SEARCH_LOG_CHARS: usize = 512;
 const MAX_SEARCH_LOGS: usize = 1_000;
 const SEARCH_LOG_EMPTY_MESSAGE: &str = "日志内容为空或已被清理";
 const SEARCH_LOGS_TRUNCATED_MESSAGE: &str = "检索日志达到上限，后续日志已停止记录";
+static HTML_VERSION_RE: OnceLock<Regex> = OnceLock::new();
 
 #[derive(Debug, Deserialize)]
 struct GithubSearchResponse {
@@ -585,8 +587,10 @@ fn should_attach_github_token(url: &str, settings: &Settings) -> bool {
 }
 
 fn extract_html_version(html: &str) -> Option<String> {
-    let regex = Regex::new(r"(?is)<td[^>]*>\s*Version[^<]*</td>\s*<td[^>]*>\s*([^<\s][^<]*)</td>")
-        .expect("固定 HTML 版本正则必须有效");
+    let regex = HTML_VERSION_RE.get_or_init(|| {
+        Regex::new(r"(?is)<td[^>]*>\s*Version[^<]*</td>\s*<td[^>]*>\s*([^<\s][^<]*)</td>")
+            .expect("固定 HTML 版本正则必须有效")
+    });
     regex
         .captures(html)
         .and_then(|capture| capture.get(1))
