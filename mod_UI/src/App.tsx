@@ -271,7 +271,11 @@ function App() {
 
   async function stopSearch() {
     try {
-      await invoke("stop_search");
+      const runId = activeSearchRunId.current;
+      if (!runId) {
+        return;
+      }
+      await invoke("stop_search", { runId });
       setStatus("正在停止检索任务");
     } catch (error) {
       setStatus(`停止失败: ${formatError(error)}`);
