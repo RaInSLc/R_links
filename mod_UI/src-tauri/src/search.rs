@@ -1,6 +1,6 @@
 use regex::Regex;
 use reqwest::{Client, StatusCode};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -30,12 +30,30 @@ struct GithubRepository {
     full_name: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchLogEvent {
+    pub run_id: u64,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchProgressEvent {
+    pub run_id: u64,
+    pub result: SearchResult,
+}
+
 pub async fn search_packages(
     app: &AppHandle,
+    run_id: u64,
     cancelled: &AtomicBool,
     input: &str,
     settings: &Settings,
 ) -> Result<SearchResponse, String> {
+    if run_id == 0 {
+        return Err("检索任务 ID 无效".to_string());
+    }
     let packages = parse_inputs(input)?;
     if packages.is_empty() {
         return Err("请输入至少一个有效的 R 包".to_string());
@@ -45,13 +63,14 @@ pub async fn search_packages(
     let mut results = Vec::new();
     let mut logs = Vec::new();
 
-    log(app, &mut logs, "开始多源检索");
+    log(app, run_id, &mut logs, "开始多源检索");
     for (index, package) in packages.iter().enumerate() {
         if cancelled.load(Ordering::SeqCst) {
             break;
         }
         log(
             app,
+            run_id,
             &mut logs,
             &format!(
                 "[{}/{}] 检索 {}{}",
@@ -68,33 +87,39 @@ pub async fn search_packages(
 
         let before = results.len();
         if package.name.contains('/') {
-            if let Some(result) =
-                search_explicit_github(&client, package, settings, cancelled, app, &mut logs).await
+            if let Some(result) = search_explicit_github(
+                &client, package, settings, cancelled, app, run_id, &mut logs,
+            )
+            .await
             {
-                push_result(app, &mut results, result);
+                push_result(app, run_id, &mut results, result);
             }
         } else {
-            if let Some(result) = search_cran(&client, package, cancelled, app, &mut logs).await {
-                push_result(app, &mut results, result);
+            if let Some(result) =
+                search_cran(&client, package, cancelled, app, run_id, &mut logs).await
+            {
+                push_result(app, run_id, &mut results, result);
             }
 
             if (settings.full_search || results.len() == before)
                 && !cancelled.load(Ordering::SeqCst)
             {
                 let bioc_results =
-                    search_bioconductor(&client, package, cancelled, app, &mut logs).await;
+                    search_bioconductor(&client, package, cancelled, app, run_id, &mut logs).await;
                 for result in bioc_results {
-                    push_result(app, &mut results, result);
+                    push_result(app, run_id, &mut results, result);
                 }
             }
 
             if (settings.full_search || results.len() == before)
                 && !cancelled.load(Ordering::SeqCst)
             {
-                let github_results =
-                    search_github(&client, package, settings, cancelled, app, &mut logs).await;
+                let github_results = search_github(
+                    &client, package, settings, cancelled, app, run_id, &mut logs,
+                )
+                .await;
                 for result in github_results {
-                    push_result(app, &mut results, result);
+                    push_result(app, run_id, &mut results, result);
                 }
             }
         }
@@ -110,13 +135,14 @@ pub async fn search_packages(
                 found: false,
                 message: "所有来源均未找到".to_string(),
             };
-            push_result(app, &mut results, result);
+            push_result(app, run_id, &mut results, result);
         }
     }
 
     let stopped = cancelled.load(Ordering::SeqCst);
     log(
         app,
+        run_id,
         &mut logs,
         if stopped {
             "检索任务已停止"
@@ -125,6 +151,7 @@ pub async fn search_packages(
         },
     );
     Ok(SearchResponse {
+        run_id,
         results,
         logs,
         stopped,
@@ -150,16 +177,17 @@ async fn search_cran(
     package: &PackageInput,
     cancelled: &AtomicBool,
     app: &AppHandle,
+    run_id: u64,
     logs: &mut Vec<String>,
 ) -> Option<SearchResult> {
-    log(app, logs, "查询 CRAN");
+    log(app, run_id, logs, "查询 CRAN");
     let url = format!(
         "https://cloud.r-project.org/web/packages/{}/index.html",
         urlencoding::encode(&package.name)
     );
     let html = get_text(client, &url, cancelled).await?;
     let version = extract_html_version(&html)?;
-    log(app, logs, &format!("CRAN 命中版本 {version}"));
+    log(app, run_id, logs, &format!("CRAN 命中版本 {version}"));
     Some(found_result(package, &version, "", &package.name, "cran"))
 }
 
@@ -168,9 +196,10 @@ async fn search_bioconductor(
     package: &PackageInput,
     cancelled: &AtomicBool,
     app: &AppHandle,
+    run_id: u64,
     logs: &mut Vec<String>,
 ) -> Vec<SearchResult> {
-    log(app, logs, "查询 Bioconductor");
+    log(app, run_id, logs, "查询 Bioconductor");
     for category in BIOC_CATEGORIES {
         if cancelled.load(Ordering::SeqCst) {
             return Vec::new();
@@ -185,13 +214,15 @@ async fn search_bioconductor(
                     && !version_compatible(&release_version, &package.version)
                 {
                     if let Some(history) =
-                        find_bioc_history(client, package, category, cancelled, app, logs).await
+                        find_bioc_history(client, package, category, cancelled, app, run_id, logs)
+                            .await
                     {
                         return vec![history];
                     }
                 }
                 log(
                     app,
+                    run_id,
                     logs,
                     &format!("Bioconductor Release 命中版本 {release_version}"),
                 );
@@ -214,6 +245,7 @@ async fn find_bioc_history(
     category: &str,
     cancelled: &AtomicBool,
     app: &AppHandle,
+    run_id: u64,
     logs: &mut Vec<String>,
 ) -> Option<SearchResult> {
     let mut versions = BIOC_VERSIONS.to_vec();
@@ -245,6 +277,7 @@ async fn find_bioc_history(
                 if version_compatible(&version, &package.version) {
                     log(
                         app,
+                        run_id,
                         logs,
                         &format!("Bioconductor {bioc_version} 匹配版本 {version}"),
                     );
@@ -268,11 +301,12 @@ async fn search_explicit_github(
     settings: &Settings,
     cancelled: &AtomicBool,
     app: &AppHandle,
+    run_id: u64,
     logs: &mut Vec<String>,
 ) -> Option<SearchResult> {
-    log(app, logs, "验证指定 GitHub 仓库");
+    log(app, run_id, logs, "验证指定 GitHub 仓库");
     let Some(repository) = normalize_github_repository(&package.name) else {
-        log(app, logs, "GitHub 仓库格式无效，已跳过");
+        log(app, run_id, logs, "GitHub 仓库格式无效，已跳过");
         return None;
     };
     let version = github_description_version(client, &repository, settings, cancelled).await?;
@@ -292,9 +326,10 @@ async fn search_github(
     settings: &Settings,
     cancelled: &AtomicBool,
     app: &AppHandle,
+    run_id: u64,
     logs: &mut Vec<String>,
 ) -> Vec<SearchResult> {
-    log(app, logs, "查询 r-universe 与 GitHub");
+    log(app, run_id, logs, "查询 r-universe 与 GitHub");
     let mut results = Vec::new();
     let mut seen = HashSet::new();
     let universe_url = format!(
@@ -342,25 +377,25 @@ async fn search_github(
     let response = match request.send().await {
         Ok(response) => response,
         Err(error) => {
-            log(app, logs, &format!("GitHub 请求失败: {error}"));
+            log(app, run_id, logs, &format!("GitHub 请求失败: {error}"));
             return results;
         }
     };
     if response.status() == StatusCode::FORBIDDEN {
-        log(app, logs, "GitHub API 已触发频率限制");
+        log(app, run_id, logs, "GitHub API 已触发频率限制");
         return results;
     }
     let text = match read_limited_text(response, MAX_JSON_RESPONSE_BYTES).await {
         Ok(value) => value,
         Err(error) => {
-            log(app, logs, &format!("GitHub 响应读取失败: {error}"));
+            log(app, run_id, logs, &format!("GitHub 响应读取失败: {error}"));
             return results;
         }
     };
     let body = match serde_json::from_str::<GithubSearchResponse>(&text) {
         Ok(value) => value,
         Err(error) => {
-            log(app, logs, &format!("GitHub 响应解析失败: {error}"));
+            log(app, run_id, logs, &format!("GitHub 响应解析失败: {error}"));
             return results;
         }
     };
@@ -561,13 +596,30 @@ fn found_result(
     }
 }
 
-fn log(app: &AppHandle, logs: &mut Vec<String>, message: &str) {
+fn log(app: &AppHandle, run_id: u64, logs: &mut Vec<String>, message: &str) {
     logs.push(message.to_string());
-    let _ = app.emit("search-log", message);
+    let _ = app.emit(
+        "search-log",
+        SearchLogEvent {
+            run_id,
+            message: message.to_string(),
+        },
+    );
 }
 
-fn push_result(app: &AppHandle, results: &mut Vec<SearchResult>, result: SearchResult) {
-    let _ = app.emit("search-progress", &result);
+fn push_result(
+    app: &AppHandle,
+    run_id: u64,
+    results: &mut Vec<SearchResult>,
+    result: SearchResult,
+) {
+    let _ = app.emit(
+        "search-progress",
+        SearchProgressEvent {
+            run_id,
+            result: result.clone(),
+        },
+    );
     results.push(result);
 }
 
@@ -631,5 +683,17 @@ mod tests {
         assert!(clean_version(&"1".repeat(65)).is_none());
         assert!(extract_description_version("Version: 1.0.0\n").is_some());
         assert!(extract_description_version("Version: 1.0.0<script>\n").is_none());
+    }
+
+    #[test]
+    fn serializes_search_events_with_run_id() {
+        let event = SearchLogEvent {
+            run_id: 42,
+            message: "开始".to_string(),
+        };
+        let encoded = serde_json::to_string(&event).expect("事件应可序列化");
+
+        assert!(encoded.contains("\"runId\":42"));
+        assert!(encoded.contains("\"message\""));
     }
 }

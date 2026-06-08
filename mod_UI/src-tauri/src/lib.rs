@@ -171,13 +171,14 @@ fn stop_search(state: State<'_, SearchState>) -> bool {
 async fn start_search(
     app: AppHandle,
     state: State<'_, SearchState>,
+    run_id: u64,
     input: String,
     settings: Settings,
 ) -> Result<SearchResponse, String> {
     logic::validate_input_size(&input)?;
     let settings = settings.normalized()?;
     let run = state.try_begin()?;
-    let result = search::search_packages(&app, run.cancelled(), &input, &settings).await;
+    let result = search::search_packages(&app, run_id, run.cancelled(), &input, &settings).await;
     drop(run);
     result
 }

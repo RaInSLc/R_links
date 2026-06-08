@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -44,9 +44,20 @@ interface SearchResult {
 }
 
 interface SearchResponse {
+  runId: number;
   results: SearchResult[];
   logs: string[];
   stopped: boolean;
+}
+
+interface SearchLogEvent {
+  runId: number;
+  message: string;
+}
+
+interface SearchProgressEvent {
+  runId: number;
+  result: SearchResult;
 }
 
 interface HistoryRecord {
@@ -100,6 +111,8 @@ const sourceNames: Record<string, string> = {
   none: "未找到",
 };
 
+let searchRunCounter = 0;
+
 function App() {
   const [view, setView] = useState<View>("workspace");
   const [input, setInput] = useState("");
@@ -115,6 +128,7 @@ function App() {
   const [status, setStatus] = useState("就绪");
   const [showToken, setShowToken] = useState(false);
   const [tokenConfigured, setTokenConfigured] = useState(false);
+  const activeSearchRunId = useRef(0);
 
   const packageCount = useMemo(
     () => input.split(/\r?\n/).filter((line) => line.trim()).length,
@@ -146,13 +160,19 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const unlistenLog = listen<string>("search-log", (event) => {
-      setLogs((current) => [...current, event.payload]);
+    const unlistenLog = listen<SearchLogEvent>("search-log", (event) => {
+      if (event.payload.runId !== activeSearchRunId.current) {
+        return;
+      }
+      setLogs((current) => [...current, event.payload.message]);
     });
-    const unlistenProgress = listen<SearchResult>(
+    const unlistenProgress = listen<SearchProgressEvent>(
       "search-progress",
       (event) => {
-        setResults((current) => [...current, event.payload]);
+        if (event.payload.runId !== activeSearchRunId.current) {
+          return;
+        }
+        setResults((current) => [...current, event.payload.result]);
       },
     );
     return () => {
@@ -216,15 +236,21 @@ function App() {
       return;
     }
     setSearching(true);
+    const runId = nextSearchRunId();
+    activeSearchRunId.current = runId;
     setResults([]);
     setLogs([]);
     setStatus("正在检索包来源");
     setView("report");
     try {
       const response = await invoke<SearchResponse>("start_search", {
+        runId,
         input,
         settings,
       });
+      if (response.runId !== activeSearchRunId.current) {
+        return;
+      }
       setResults(response.results);
       setLogs(response.logs);
       setStatus(response.stopped ? "检索任务已停止" : "检索完成，脚本已自动刷新");
@@ -232,9 +258,14 @@ function App() {
         setMethod("auto");
       }
     } catch (error) {
-      setStatus(`检索失败: ${formatError(error)}`);
+      if (runId === activeSearchRunId.current) {
+        setStatus(`检索失败: ${formatError(error)}`);
+      }
     } finally {
-      setSearching(false);
+      if (runId === activeSearchRunId.current) {
+        setSearching(false);
+        activeSearchRunId.current = 0;
+      }
     }
   }
 
@@ -742,6 +773,11 @@ function EmptyState({ text }: { text: string }) {
 
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function nextSearchRunId() {
+  searchRunCounter = (searchRunCounter + 1) % 1000;
+  return Date.now() * 1000 + searchRunCounter;
 }
 
 export default App;

@@ -95,6 +95,7 @@ pub struct SearchResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResponse {
+    pub run_id: u64,
     pub results: Vec<SearchResult>,
     pub logs: Vec<String>,
     pub stopped: bool,
