@@ -369,7 +369,8 @@ function App() {
           .split(/\r?\n/)
           .map((line) => line.trim().split(/\s+/)[0])
           .filter(Boolean)
-          .map((name) => name.split("/").pop() ?? name),
+          .map((name) => name.split("/").pop() ?? name)
+          .filter(isBrowserSearchPackageName),
       ),
     ).slice(0, MAX_SEARCH_TABS);
     if (names.length === 0) {
@@ -875,6 +876,10 @@ function sanitizeHistoryRecord(value: unknown): HistoryRecord {
     toolName: safeText(record.toolName, MAX_RESULT_FIELD_CHARS),
     createdAt: safeText(record.createdAt, 32),
   };
+}
+
+function isBrowserSearchPackageName(value: string) {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value);
 }
 
 function nextSearchRunId() {
