@@ -82,6 +82,7 @@ const MAX_SEARCH_TABS = 30;
 const MAX_SCRIPT_CHARS = 1_000_000;
 const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
 const MAX_SEARCH_LOGS = 1_000;
+const MAX_STATUS_CHARS = 512;
 
 const methods: Array<{
   id: Method;
@@ -374,7 +375,7 @@ function App() {
         await invoke("open_package_search", { packageName: name });
         opened += 1;
       } catch (error) {
-        setStatus(`打开 ${name} 搜索失败: ${formatError(error)}`);
+        setStatus(`打开搜索失败: ${formatError(error)}`);
       }
       await new Promise((resolve) => window.setTimeout(resolve, 180));
     }
@@ -789,7 +790,19 @@ function EmptyState({ text }: { text: string }) {
 }
 
 function formatError(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+  try {
+    return safeStatusText(error instanceof Error ? error.message : String(error));
+  } catch {
+    return "未知错误";
+  }
+}
+
+function safeStatusText(value: string) {
+  const text = value
+    .trim()
+    .replace(/[\p{C}]/gu, "")
+    .slice(0, MAX_STATUS_CHARS);
+  return text || "未知错误";
 }
 
 function nextSearchRunId() {
