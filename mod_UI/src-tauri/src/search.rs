@@ -47,17 +47,20 @@ pub struct SearchProgressEvent {
 
 struct RequestBudget {
     remaining: AtomicUsize,
+    exhausted: AtomicBool,
 }
 
 impl RequestBudget {
     fn new(limit: usize) -> Self {
         Self {
             remaining: AtomicUsize::new(limit),
+            exhausted: AtomicBool::new(false),
         }
     }
 
     fn try_acquire(&self) -> Result<(), String> {
-        self.remaining
+        let result = self
+            .remaining
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
                 if remaining > 0 {
                     Some(remaining - 1)
@@ -68,7 +71,15 @@ impl RequestBudget {
             .map(|_| ())
             .map_err(|_| {
                 format!("单次检索 HTTP 请求数超过上限 {MAX_SEARCH_HTTP_REQUESTS}，任务已停止")
-            })
+            });
+        if result.is_err() {
+            self.exhausted.store(true, Ordering::SeqCst);
+        }
+        result
+    }
+
+    fn is_exhausted(&self) -> bool {
+        self.exhausted.load(Ordering::SeqCst)
     }
 
     #[cfg(test)]
@@ -88,8 +99,8 @@ struct SearchContext<'a> {
 }
 
 impl SearchContext<'_> {
-    fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::SeqCst)
+    fn is_stopped(&self) -> bool {
+        search_stopped(self.cancelled, self.budget)
     }
 
     fn log(&mut self, message: &str) {
@@ -100,11 +111,17 @@ impl SearchContext<'_> {
         match self.budget.try_acquire() {
             Ok(()) => true,
             Err(message) => {
-                self.log(&message);
+                if !self.logs.iter().any(|log| log == &message) {
+                    self.log(&message);
+                }
                 false
             }
         }
     }
+}
+
+fn search_stopped(cancelled: &AtomicBool, budget: &RequestBudget) -> bool {
+    cancelled.load(Ordering::SeqCst) || budget.is_exhausted()
 }
 
 pub async fn search_packages(
@@ -140,7 +157,7 @@ pub async fn search_packages(
 
         context.log("开始多源检索");
         for (index, package) in packages.iter().enumerate() {
-            if context.is_cancelled() {
+            if context.is_stopped() {
                 break;
             }
             context.log(&format!(
@@ -165,14 +182,14 @@ pub async fn search_packages(
                     push_result(app, run_id, &mut results, result);
                 }
 
-                if (settings.full_search || results.len() == before) && !context.is_cancelled() {
+                if (settings.full_search || results.len() == before) && !context.is_stopped() {
                     let bioc_results = search_bioconductor(&mut context, package).await;
                     for result in bioc_results {
                         push_result(app, run_id, &mut results, result);
                     }
                 }
 
-                if (settings.full_search || results.len() == before) && !context.is_cancelled() {
+                if (settings.full_search || results.len() == before) && !context.is_stopped() {
                     let github_results = search_github(&mut context, package).await;
                     for result in github_results {
                         push_result(app, run_id, &mut results, result);
@@ -180,7 +197,7 @@ pub async fn search_packages(
                 }
             }
 
-            if results.len() == before && !context.is_cancelled() {
+            if results.len() == before && !context.is_stopped() {
                 let result = SearchResult {
                     package: package.name.clone(),
                     requested_version: package.version.clone(),
@@ -195,7 +212,7 @@ pub async fn search_packages(
             }
         }
 
-        let stopped = context.is_cancelled();
+        let stopped = context.is_stopped();
         context.log(if stopped {
             "检索任务已停止"
         } else {
@@ -246,7 +263,7 @@ async fn search_bioconductor(
 ) -> Vec<SearchResult> {
     context.log("查询 Bioconductor");
     for category in BIOC_CATEGORIES {
-        if context.is_cancelled() {
+        if context.is_stopped() {
             return Vec::new();
         }
         let release_url = format!(
@@ -298,7 +315,7 @@ async fn find_bioc_history(
     }
 
     for bioc_version in versions {
-        if context.is_cancelled() {
+        if context.is_stopped() {
             return None;
         }
         let url = format!(
@@ -422,7 +439,7 @@ async fn search_github(
     };
 
     for repository in body.items {
-        if context.is_cancelled() {
+        if context.is_stopped() {
             break;
         }
         let repo_name = repository.full_name.rsplit('/').next().unwrap_or_default();
@@ -454,7 +471,7 @@ async fn github_description_version(
     repository: &str,
 ) -> Option<String> {
     for branch in ["HEAD", "master", "main", "devel"] {
-        if context.is_cancelled() {
+        if context.is_stopped() {
             return None;
         }
         let url = format!("https://raw.githubusercontent.com/{repository}/{branch}/DESCRIPTION");
@@ -489,7 +506,7 @@ fn authorized_get(client: &Client, url: &str, settings: &Settings) -> reqwest::R
 }
 
 async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Option<String> {
-    if context.is_cancelled() {
+    if context.is_stopped() {
         return None;
     }
     if !context.acquire_request_budget() {
@@ -505,7 +522,7 @@ async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Option<String> 
 }
 
 async fn get_json(context: &mut SearchContext<'_>, url: &str) -> Option<Value> {
-    if context.is_cancelled() {
+    if context.is_stopped() {
         return None;
     }
     if !context.acquire_request_budget() {
@@ -731,6 +748,23 @@ mod tests {
         assert!(budget.try_acquire().is_ok());
         assert!(budget.try_acquire().is_ok());
         assert!(budget.try_acquire().is_err());
+        assert!(budget.is_exhausted());
         assert_eq!(budget.remaining_for_test(), 0);
+    }
+
+    #[test]
+    fn search_stops_when_cancelled_or_budget_exhausted() {
+        let cancelled = AtomicBool::new(false);
+        let budget = RequestBudget::new(1);
+
+        assert!(!search_stopped(&cancelled, &budget));
+        assert!(budget.try_acquire().is_ok());
+        assert!(!search_stopped(&cancelled, &budget));
+        assert!(budget.try_acquire().is_err());
+        assert!(search_stopped(&cancelled, &budget));
+
+        let fresh_budget = RequestBudget::new(1);
+        cancelled.store(true, Ordering::SeqCst);
+        assert!(search_stopped(&cancelled, &fresh_budget));
     }
 }
