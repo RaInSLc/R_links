@@ -8,10 +8,8 @@ use std::sync::{
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
-use crate::models::{
-    HistoryRecord, Settings, MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS,
-    MAX_TOKEN_CHARS,
-};
+use crate::logic;
+use crate::models::{HistoryRecord, Settings, MAX_HISTORY_RECORDS, MAX_TOKEN_CHARS};
 use crate::secrets;
 use serde::{Deserialize, Serialize};
 
@@ -154,28 +152,58 @@ pub fn save_history(app: &AppHandle, history: &[HistoryRecord]) -> Result<(), St
 }
 
 fn sanitize_history(history: Vec<HistoryRecord>) -> Vec<HistoryRecord> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
     history
         .into_iter()
-        .filter(|record| {
-            !record.command.trim().is_empty()
-                && record.command.len() <= MAX_HISTORY_COMMAND_CHARS
-                && clean_history_field(&record.package_name, MAX_FIELD_CHARS)
-                && clean_history_field(&record.version, MAX_FIELD_CHARS)
-                && clean_history_field(&record.tool_name, MAX_FIELD_CHARS)
-                && clean_history_field(&record.created_at, MAX_FIELD_CHARS)
-                && clean_history_field(&record.id, MAX_FIELD_CHARS)
-                && !record.command.chars().any(is_forbidden_control)
-        })
+        .enumerate()
+        .filter_map(|(index, record)| sanitize_history_record(record, index, now))
         .take(MAX_HISTORY_RECORDS)
         .collect()
 }
 
-fn clean_history_field(value: &str, limit: usize) -> bool {
-    value.len() <= limit && !value.chars().any(char::is_control)
+fn sanitize_history_record(
+    record: HistoryRecord,
+    index: usize,
+    now: u128,
+) -> Option<HistoryRecord> {
+    let command = logic::supported_history_command(&record.command)?;
+    let (package_name, version, tool_name) = logic::history_metadata_from_command(&command)?;
+    let id = if is_clean_history_id(&record.id) {
+        record.id
+    } else {
+        format!("{now}-{index}")
+    };
+    let created_at = if is_clean_timestamp(&record.created_at) {
+        record.created_at
+    } else {
+        now.to_string()
+    };
+
+    Some(HistoryRecord {
+        id,
+        command,
+        package_name,
+        version,
+        tool_name,
+        created_at,
+    })
 }
 
-fn is_forbidden_control(character: char) -> bool {
-    character.is_control() && !matches!(character, '\r' | '\n' | '\t')
+fn is_clean_history_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+}
+
+fn is_clean_timestamp(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 32
+        && value.chars().all(|character| character.is_ascii_digit())
 }
 
 fn read_limited_to_string(
@@ -444,5 +472,39 @@ mod tests {
         assert_eq!(leftovers, 0);
 
         fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[test]
+    fn sanitize_history_rejects_unsupported_commands() {
+        let history = sanitize_history(vec![HistoryRecord {
+            id: "1".to_string(),
+            command: "system(\"calc.exe\")".to_string(),
+            package_name: "demo".to_string(),
+            version: String::new(),
+            tool_name: "base R".to_string(),
+            created_at: "1".to_string(),
+        }]);
+
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn sanitize_history_recomputes_frontend_metadata() {
+        let history = sanitize_history(vec![HistoryRecord {
+            id: "history-1".to_string(),
+            command:
+                "remotes::install_github(\"owner/demo\", upgrade = \"never\", dependencies = TRUE)"
+                    .to_string(),
+            package_name: "forged".to_string(),
+            version: "9.9.9".to_string(),
+            tool_name: "forged".to_string(),
+            created_at: "123456".to_string(),
+        }]);
+
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].package_name, "demo");
+        assert_eq!(history[0].version, "");
+        assert_eq!(history[0].tool_name, "GitHub");
+        assert_eq!(history[0].created_at, "123456");
     }
 }

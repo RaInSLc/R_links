@@ -471,47 +471,94 @@ pub fn build_history_records(script: &str) -> Vec<HistoryRecord> {
     script
         .lines()
         .map(str::trim)
-        .filter(|line| {
-            !line.is_empty()
-                && line.len() <= MAX_HISTORY_COMMAND_CHARS
-                && !line.starts_with('#')
-                && (line.contains("install_")
-                    || line.contains("install.packages")
-                    || line.contains("BiocManager::install")
-                    || line.contains("packageVersion"))
+        .filter_map(|line| {
+            supported_history_command(line).and_then(|command| {
+                history_metadata_from_command(&command).map(|(package_name, version, tool_name)| {
+                    (command, package_name, version, tool_name)
+                })
+            })
         })
-        .filter(|line| seen.insert((*line).to_string()))
+        .filter(|(command, _, _, _)| seen.insert(command.clone()))
         .enumerate()
-        .map(|(index, command)| {
-            let version_re =
-                Regex::new(r#"version\s*=\s*"([^"]+)""#).expect("固定历史版本正则必须有效");
-            let version = version_re
-                .captures(command)
-                .and_then(|capture| capture.get(1))
-                .map(|value| value.as_str().to_string())
-                .unwrap_or_default();
-            let tool_name = if command.contains("install_github") {
-                "GitHub"
-            } else if command.contains("BiocManager") || command.contains("install_git") {
-                "Bioconductor"
-            } else if command.contains("remotes") {
-                "remotes"
-            } else if command.contains("devtools") {
-                "devtools"
-            } else {
-                "base R"
-            };
-            HistoryRecord {
+        .map(
+            |(index, (command, package_name, version, tool_name))| HistoryRecord {
                 id: format!("{now}-{index}"),
-                command: command.to_string(),
-                package_name: extract_package_name(command),
+                command,
+                package_name,
                 version,
-                tool_name: tool_name.to_string(),
+                tool_name,
                 created_at: now.to_string(),
-            }
-        })
+            },
+        )
         .take(MAX_HISTORY_RECORDS)
         .collect()
+}
+
+pub fn history_metadata_from_command(command: &str) -> Option<(String, String, String)> {
+    let command = supported_history_command(command)?;
+    if command.is_empty() {
+        return None;
+    }
+
+    let version_re = Regex::new(r#"version\s*=\s*"([^"]+)""#).expect("固定历史版本正则必须有效");
+    let version = version_re
+        .captures(&command)
+        .and_then(|capture| capture.get(1))
+        .map(|value| value.as_str().to_string())
+        .unwrap_or_default();
+    let tool_name = if command.contains("install_github") {
+        "GitHub"
+    } else if command.contains("BiocManager") || command.contains("install_git") {
+        "Bioconductor"
+    } else if command.contains("remotes") {
+        "remotes"
+    } else if command.contains("devtools") {
+        "devtools"
+    } else {
+        "base R"
+    };
+
+    Some((
+        extract_package_name(&command),
+        version,
+        tool_name.to_string(),
+    ))
+}
+
+pub fn supported_history_command(command: &str) -> Option<String> {
+    let command = command.trim();
+    if command.is_empty()
+        || command.starts_with('#')
+        || command.len() > MAX_HISTORY_COMMAND_CHARS
+        || command.chars().any(char::is_control)
+    {
+        return None;
+    }
+
+    let patterns = [
+        r#"^install\.packages\("[A-Za-z0-9._-]{1,128}", repos = "https://[^"\r\n]{1,2048}", dependencies = (TRUE|FALSE)\)$"#,
+        r#"^packageVersion\("[A-Za-z0-9._-]{1,128}"\)$"#,
+        r#"^remotes::install_version\("[A-Za-z0-9._-]{1,128}", version = "[0-9][0-9A-Za-z.-]{0,63}", repos = "https://[^"\r\n]{1,2048}", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
+        r#"^BiocManager::install\("[A-Za-z0-9._-]{1,128}", update = FALSE, ask = FALSE, dependencies = (TRUE|FALSE)\)$"#,
+        r#"^remotes::install_github\("[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
+        r#"^remotes::install_git\("https://git\.bioconductor\.org/packages/[A-Za-z0-9._-]{1,128}", ref = "RELEASE_[0-9]+_[0-9]+", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
+        r#"^(remotes|devtools)::install_url\("https://[^"\r\n]{1,2048}", dependencies = (TRUE|FALSE)\)$"#,
+    ];
+
+    if patterns.iter().any(|pattern| {
+        Regex::new(pattern)
+            .expect("固定历史命令正则必须有效")
+            .is_match(command)
+    }) {
+        return Some(command.to_string());
+    }
+
+    let indented = command.trim_start();
+    if indented.len() != command.len() {
+        return supported_history_command(indented);
+    }
+
+    None
 }
 
 pub fn infer_bioc_version(major: i32, minor: i32) -> Option<i32> {
@@ -692,6 +739,42 @@ mod tests {
         .expect("应生成命令");
         assert!(output.contains("requireNamespace(\"dplyr\""));
         assert!(output.contains("dependencies = TRUE"));
+    }
+
+    #[test]
+    fn builds_history_from_supported_conditional_command_body() {
+        let script = generate_script(
+            "dplyr",
+            &GenerateOptions {
+                method: "base".to_string(),
+                conditional: true,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[],
+        )
+        .expect("应生成命令");
+
+        let records = build_history_records(&script);
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].package_name, "dplyr");
+        assert_eq!(records[0].tool_name, "base R");
+        assert!(records[0].command.starts_with("install.packages("));
+    }
+
+    #[test]
+    fn rejects_unsupported_history_commands() {
+        assert!(supported_history_command("system(\"calc.exe\")").is_none());
+        assert!(supported_history_command("install.packages(pkg)").is_none());
+        assert!(supported_history_command(
+            "install.packages(\"demo\", repos = \"http://example.com\", dependencies = TRUE)"
+        )
+        .is_none());
+        assert!(supported_history_command(
+            "install.packages(\"demo\", repos = \"https://cloud.r-project.org\", dependencies = TRUE)"
+        )
+        .is_some());
     }
 
     #[test]
