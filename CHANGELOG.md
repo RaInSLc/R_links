@@ -3,6 +3,12 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 20:22:10 +08:00] `mod_UI\` Tauri 外壳安全策略收紧**：
+  - 生产 CSP 移除 `style-src 'unsafe-inline'`，保持脚本、对象、iframe、表单和远程连接默认禁用。
+  - 主窗口显式关闭拖放、DevTools，并启用 incognito WebView，减少非必要 WebView 状态面。
+  - 增加 `Cross-Origin-Opener-Policy`、`Cross-Origin-Resource-Policy` 与 `X-Content-Type-Options` 响应头。
+  - 通过 `cargo test`、`cargo clippy --all-targets -- -D warnings` 和 `npm run tauri build -- --no-bundle` 验证当前 Tauri schema 与发布构建兼容。
+
 - **[2026-06-08 20:13:07 +08:00] `mod_UI\` 边界条件与凭据隔离加固**：
   - 为脚本清理与历史记录提取命令增加后端脚本体积上限，前端同步显示脚本超限提示并禁用高风险操作。
   - 将 HTTP 响应读取改为分块限流，避免服务端缺少 `Content-Length` 时先完整载入超大响应。
