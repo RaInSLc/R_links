@@ -170,13 +170,14 @@ function App() {
       invoke<HistoryRecord[]>("load_history"),
     ])
       .then(([savedSettings, savedHistory]) => {
+        const cleanSettings = sanitizePublicSettings(savedSettings);
         setSettings({
-          proxy: savedSettings.proxy,
+          proxy: cleanSettings.proxy,
           githubToken: "",
-          cranMirror: savedSettings.cranMirror,
-          fullSearch: savedSettings.fullSearch,
+          cranMirror: cleanSettings.cranMirror,
+          fullSearch: cleanSettings.fullSearch,
         });
-        setTokenConfigured(savedSettings.githubTokenConfigured);
+        setTokenConfigured(cleanSettings.githubTokenConfigured);
         setHistory(takeBounded(asArray(savedHistory).map(sanitizeHistoryRecord), 100));
       })
       .catch((error) => setStatus(`初始化失败: ${formatError(error)}`));
@@ -276,10 +277,11 @@ function App() {
       if (response.runId !== activeSearchRunId.current) {
         return;
       }
+      const stopped = safeBoolean(response.stopped);
       setResults(takeBounded(asArray(response.results).map(sanitizeSearchResult), MAX_SEARCH_RESULTS));
       setLogs(takeBounded(asArray(response.logs).map(safeStatusText), MAX_SEARCH_LOGS));
-      setStatus(response.stopped ? "检索任务已停止" : "检索完成，脚本已自动刷新");
-      if (!response.stopped) {
+      setStatus(stopped ? "检索任务已停止" : "检索完成，脚本已自动刷新");
+      if (!stopped) {
         setMethod("auto");
       }
     } catch (error) {
@@ -406,7 +408,7 @@ function App() {
 
   async function clearSavedToken() {
     try {
-      const publicSettings = await invoke<PublicSettings>("clear_github_token");
+      const publicSettings = sanitizePublicSettings(await invoke<PublicSettings>("clear_github_token"));
       setTokenConfigured(false);
       setSettings((current) => ({
         ...current,
@@ -849,6 +851,10 @@ function utf8Length(value: string) {
   return utf8Encoder.encode(value).length;
 }
 
+function safeBoolean(value: unknown) {
+  return value === true;
+}
+
 function safeSource(value: unknown) {
   const source = safeText(value, MAX_SOURCE_CHARS);
   return Object.prototype.hasOwnProperty.call(sourceNames, source) ? source : "none";
@@ -867,8 +873,18 @@ function sanitizeSearchResult(value: unknown): SearchResult {
     repository: safeText(result.repository, MAX_RESULT_FIELD_CHARS),
     realName: safeText(result.realName, MAX_RESULT_FIELD_CHARS),
     source: safeSource(result.source),
-    found: Boolean(result.found),
+    found: safeBoolean(result.found),
     message: safeStatusText(result.message),
+  };
+}
+
+function sanitizePublicSettings(value: unknown): PublicSettings {
+  const settings = value as Partial<PublicSettings>;
+  return {
+    proxy: safeText(settings.proxy, MAX_RESULT_FIELD_CHARS),
+    githubTokenConfigured: safeBoolean(settings.githubTokenConfigured),
+    cranMirror: safeText(settings.cranMirror, MAX_RESULT_FIELD_CHARS) || defaultSettings.cranMirror,
+    fullSearch: safeBoolean(settings.fullSearch),
   };
 }
 
