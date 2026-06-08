@@ -3,6 +3,10 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 23:25:32 +08:00] `mod_UI\` Tauri IPC 权限面最小化加固**：
+  - 移除主窗口 capability 中的 `core:default` 默认权限集合，避免额外暴露 path、window、webview、app、image、resources、menu、tray 等未使用核心命令。
+  - 仅保留前端实际需要的事件监听、事件取消监听和文本剪贴板读写权限，后端自定义 commands 与 Rust 侧事件发送保持不变。
+
 - **[2026-06-08 23:16:36 +08:00] `mod_UI\` 检索运行时设置合并加固**：
   - `start_search` 在后端合并已保存设置，当前端不回传 GitHub Token 时仍保留已加密保存的 Token 用于 GitHub API 检索。
   - 继续保持 `load_settings` 只返回公开设置视图，避免 Token 明文经 IPC 回流到前端。
