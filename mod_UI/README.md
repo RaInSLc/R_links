@@ -129,7 +129,7 @@ GitHub Token 在磁盘中保存为 `githubTokenProtected` 字段，旧版明文 
 - 外部浏览器搜索由 Rust 命令生成固定 `https://www.google.com/search?...` URL，前端不能打开任意 URL。
 - 生产环境启用 CSP，禁止远程脚本、对象、iframe 和表单提交。
 - CRAN 镜像、安装 URL、代理、GitHub 仓库名和输入规模均由 Rust 后端二次校验。
-- CRAN 镜像与 `install_url` 输入必须使用 HTTPS，避免生成明文包源安装命令。
+- CRAN 镜像必须使用 HTTPS；`install_url` 仅接受无凭据、无查询参数或片段的 HTTPS R 包归档 URL（`.tar.gz`、`.tar.bz2`、`.tar.xz`、`.tgz`、`.zip`）。
 - 网络代理只允许无凭据的 http、https、socks5 或 socks5h 主机端口形式，不允许用户名、密码、路径、查询参数或片段。
 - GitHub Token 不经 `load_settings` 回传前端，磁盘持久化使用 Windows DPAPI 保护。
 - `node_modules\`、`dist\`、`src-tauri\target\` 不应提交。

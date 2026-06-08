@@ -14,6 +14,8 @@ const MAX_GENERATE_SEARCH_RESULTS: usize = MAX_PACKAGE_LINES * 16;
 const MAX_VERSION_CHARS: usize = 64;
 const MAX_RESULT_SOURCE_CHARS: usize = 16;
 const MAX_RESULT_MESSAGE_CHARS: usize = 512;
+const MAX_INSTALL_ARCHIVE_FILE_CHARS: usize = 256;
+const INSTALL_ARCHIVE_EXTENSIONS: &[&str] = &[".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".zip"];
 
 pub fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
     validate_input_size(input)?;
@@ -45,7 +47,7 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
     }
 
     if raw.starts_with("http://") || raw.starts_with("https://") {
-        if normalize_https_url(raw, "安装 URL").is_err() {
+        if normalize_install_archive_url(raw).is_err() {
             return None;
         }
         let name = extract_package_name(raw);
@@ -104,9 +106,10 @@ pub fn extract_package_name(input: &str) -> String {
         if let Some((name, _)) = file.split_once('_') {
             return name.to_string();
         }
+        if let Some(name) = package_name_from_archive_file(file) {
+            return name;
+        }
         return file
-            .trim_end_matches(".tar.gz")
-            .trim_end_matches(".zip")
             .trim_end_matches(".html")
             .split('.')
             .next()
@@ -422,14 +425,14 @@ fn generate_command(
 
     let raw = match method {
         "devtools" => {
-            let url = normalize_https_url(value, "安装 URL")?;
+            let url = normalize_install_archive_url(value)?;
             format!(
                 "devtools::install_url(\"{}\", dependencies = {dependencies})",
                 escape_r(&url)
             )
         }
         "remotes" => {
-            let url = normalize_https_url(value, "安装 URL")?;
+            let url = normalize_install_archive_url(value)?;
             format!(
                 "remotes::install_url(\"{}\", dependencies = {dependencies})",
                 escape_r(&url)
@@ -596,7 +599,6 @@ pub fn supported_history_command(command: &str) -> Option<String> {
         r#"^BiocManager::install\("[A-Za-z0-9._-]{1,128}", update = FALSE, ask = FALSE, dependencies = (TRUE|FALSE)\)$"#,
         r#"^remotes::install_github\("[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
         r#"^remotes::install_git\("https://git\.bioconductor\.org/packages/[A-Za-z0-9._-]{1,128}", ref = "RELEASE_[0-9]+_[0-9]+", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
-        r#"^(remotes|devtools)::install_url\("https://[^"\r\n]{1,2048}", dependencies = (TRUE|FALSE)\)$"#,
     ];
 
     if patterns.iter().any(|pattern| {
@@ -607,12 +609,27 @@ pub fn supported_history_command(command: &str) -> Option<String> {
         return Some(command.to_string());
     }
 
+    if supported_install_url_history_command(command) {
+        return Some(command.to_string());
+    }
+
     let indented = command.trim_start();
     if indented.len() != command.len() {
         return supported_history_command(indented);
     }
 
     None
+}
+
+fn supported_install_url_history_command(command: &str) -> bool {
+    let regex = Regex::new(
+        r#"^(remotes|devtools)::install_url\("([^"\r\n]{1,2048})", dependencies = (TRUE|FALSE)\)$"#,
+    )
+    .expect("固定 install_url 历史命令正则必须有效");
+    regex
+        .captures(command)
+        .and_then(|capture| capture.get(2))
+        .is_some_and(|url| normalize_install_archive_url(url.as_str()).is_ok())
 }
 
 pub fn infer_bioc_version(major: i32, minor: i32) -> Option<i32> {
@@ -640,6 +657,42 @@ fn is_clean_version(version: &str) -> bool {
         && version
             .chars()
             .all(|character| character.is_ascii_digit() || matches!(character, '.' | '-'))
+}
+
+fn normalize_install_archive_url(value: &str) -> Result<String, String> {
+    let normalized = normalize_https_url(value, "安装 URL")?;
+    let parsed = Url::parse(&normalized).map_err(|_| "安装 URL 必须是有效 URL".to_string())?;
+    if parsed.query().is_some() || parsed.fragment().is_some() {
+        return Err("安装 URL 不允许包含查询参数或片段".to_string());
+    }
+    let file_name = parsed
+        .path_segments()
+        .and_then(|mut segments| segments.next_back())
+        .unwrap_or_default();
+    if file_name.is_empty()
+        || file_name.len() > MAX_INSTALL_ARCHIVE_FILE_CHARS
+        || file_name.chars().any(char::is_control)
+    {
+        return Err("安装 URL 文件名无效或长度过长".to_string());
+    }
+    let lower_file_name = file_name.to_ascii_lowercase();
+    if !INSTALL_ARCHIVE_EXTENSIONS
+        .iter()
+        .any(|extension| lower_file_name.ends_with(extension))
+    {
+        return Err("安装 URL 必须指向 R 包归档文件".to_string());
+    }
+    Ok(normalized)
+}
+
+fn package_name_from_archive_file(file_name: &str) -> Option<String> {
+    let lower_file_name = file_name.to_ascii_lowercase();
+    INSTALL_ARCHIVE_EXTENSIONS
+        .iter()
+        .find(|extension| lower_file_name.ends_with(**extension))
+        .and_then(|extension| file_name.get(..file_name.len().saturating_sub(extension.len())))
+        .filter(|name| !name.is_empty())
+        .map(ToString::to_string)
 }
 
 fn escape_r(value: &str) -> String {
@@ -770,6 +823,14 @@ mod tests {
             extract_package_name("https://github.com/buenrostrolab/FigR/"),
             "FigR"
         );
+        assert_eq!(
+            extract_package_name("https://example.org/src/contrib/demo.tgz"),
+            "demo"
+        );
+        assert_eq!(
+            extract_package_name("https://example.org/src/contrib/demo.package.zip"),
+            "demo.package"
+        );
     }
 
     #[test]
@@ -830,6 +891,18 @@ mod tests {
             "install.packages(\"demo\", repos = \"https://cloud.r-project.org\", dependencies = TRUE)"
         )
         .is_some());
+        assert!(supported_history_command(
+            "remotes::install_url(\"https://example.org/src/contrib/demo_1.0.0.tar.gz\", dependencies = TRUE)"
+        )
+        .is_some());
+        assert!(supported_history_command(
+            "remotes::install_url(\"https://github.com/owner/demo\", dependencies = TRUE)"
+        )
+        .is_none());
+        assert!(supported_history_command(
+            "devtools::install_url(\"https://example.org/demo_1.0.0.tar.gz?token=secret\", dependencies = TRUE)"
+        )
+        .is_none());
     }
 
     #[test]
@@ -947,11 +1020,43 @@ mod tests {
 
     #[test]
     fn rejects_unsafe_install_url_inputs() {
+        assert!(parse_input_line("https://example.org/src/contrib/demo_1.0.0.tar.gz").is_some());
         assert!(parse_input_line("https://user:pass@example.com/pkg_1.0.tar.gz").is_none());
         assert!(parse_input_line("http://example.com/pkg_1.0.tar.gz").is_none());
         assert!(parse_input_line("ftp://example.com/pkg_1.0.tar.gz").is_none());
+        assert!(parse_input_line("https://github.com/owner/demo").is_none());
+        assert!(parse_input_line("https://example.com/pkg_1.0.tar.gz?token=secret").is_none());
+        assert!(parse_input_line("https://example.com/pkg_1.0.tar.gz#section").is_none());
+        assert!(parse_input_line("https://example.com/index.html").is_none());
+
+        let output = generate_script(
+            "https://example.org/src/contrib/demo_1.0.0.tar.gz",
+            &GenerateOptions {
+                method: "remotes".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[],
+        )
+        .expect("合法安装归档 URL 应可生成 install_url 命令");
+        assert!(output.contains(
+            "remotes::install_url(\"https://example.org/src/contrib/demo_1.0.0.tar.gz\""
+        ));
+
         assert!(generate_script(
             "https://user:pass@example.com/pkg_1.0.tar.gz",
+            &GenerateOptions {
+                method: "remotes".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[],
+        )
+        .is_err());
+        assert!(generate_script(
+            "https://github.com/owner/demo",
             &GenerateOptions {
                 method: "remotes".to_string(),
                 conditional: false,
