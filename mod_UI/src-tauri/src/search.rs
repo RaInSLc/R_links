@@ -8,7 +8,9 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use url::Url;
 
-use crate::logic::{infer_bioc_version, normalize_github_repository, parse_inputs};
+use crate::logic::{
+    infer_bioc_version, is_valid_package_name, normalize_github_repository, parse_inputs,
+};
 use crate::models::{PackageInput, SearchResponse, SearchResult, Settings};
 
 const BIOC_VERSIONS: &[&str] = &[
@@ -20,6 +22,7 @@ const MAX_TEXT_RESPONSE_BYTES: usize = 512 * 1024;
 const MAX_DESCRIPTION_BYTES: usize = 64 * 1024;
 const MAX_JSON_RESPONSE_BYTES: usize = 1024 * 1024;
 const MAX_SEARCH_HTTP_REQUESTS: usize = 200;
+const MAX_RESULT_MESSAGE_CHARS: usize = 256;
 
 #[derive(Debug, Deserialize)]
 struct GithubSearchResponse {
@@ -630,16 +633,84 @@ fn found_result(
     real_name: &str,
     source: &str,
 ) -> SearchResult {
+    let package_name =
+        clean_result_package_name(&package.name).unwrap_or_else(|| package.name.clone());
+    let latest_version = clean_version(version).unwrap_or_default();
+    let source = clean_result_source(source);
+    let repository = clean_result_repository(&source, repository).unwrap_or_default();
+    let real_name = clean_result_package_name(real_name).unwrap_or_else(|| package_name.clone());
     SearchResult {
-        package: package.name.clone(),
+        package: package_name,
         requested_version: package.version.clone(),
-        latest_version: version.to_string(),
-        repository: repository.to_string(),
-        real_name: real_name.to_string(),
-        source: source.to_string(),
+        latest_version,
+        repository,
+        real_name,
+        source,
         found: true,
         message: "验证成功".to_string(),
     }
+}
+
+fn clean_result_package_name(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    is_valid_package_name(trimmed).then(|| trimmed.to_string())
+}
+
+fn clean_result_repository(source: &str, value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    match source {
+        "github" => {
+            if trimmed.is_empty() {
+                Some(String::new())
+            } else {
+                normalize_github_repository(trimmed)
+            }
+        }
+        "biocGit" => {
+            if trimmed.is_empty() || is_valid_bioc_version(trimmed) {
+                Some(trimmed.to_string())
+            } else {
+                None
+            }
+        }
+        _ => trimmed.is_empty().then(String::new),
+    }
+}
+
+fn clean_result_source(value: &str) -> String {
+    match value.trim() {
+        "cran" | "bioc" | "biocGit" | "github" | "none" => value.trim().to_string(),
+        _ => "none".to_string(),
+    }
+}
+
+fn sanitize_result_message(value: &str) -> String {
+    value
+        .trim()
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(MAX_RESULT_MESSAGE_CHARS)
+        .collect()
+}
+
+fn sanitize_search_result_for_emit(mut result: SearchResult) -> SearchResult {
+    let fallback_package = clean_result_package_name(&result.package).unwrap_or_default();
+    result.package = fallback_package.clone();
+    result.requested_version = clean_version(&result.requested_version).unwrap_or_default();
+    result.latest_version = clean_version(&result.latest_version).unwrap_or_default();
+    result.source = clean_result_source(&result.source);
+    result.repository = clean_result_repository(&result.source, &result.repository).unwrap_or_default();
+    result.real_name = clean_result_package_name(&result.real_name).unwrap_or(fallback_package);
+    result.message = sanitize_result_message(&result.message);
+    result
+}
+
+fn is_valid_bioc_version(value: &str) -> bool {
+    let parts = value.split('.').collect::<Vec<_>>();
+    parts.len() == 2
+        && parts.iter().all(|part| {
+            !part.is_empty() && part.chars().all(|character| character.is_ascii_digit())
+        })
 }
 
 fn log(app: &AppHandle, run_id: u64, logs: &mut Vec<String>, message: &str) {
@@ -659,6 +730,7 @@ fn push_result(
     results: &mut Vec<SearchResult>,
     result: SearchResult,
 ) {
+    let result = sanitize_search_result_for_emit(result);
     let _ = app.emit(
         "search-progress",
         SearchProgressEvent {
@@ -745,6 +817,43 @@ mod tests {
 
         assert!(encoded.contains("\"runId\":42"));
         assert!(encoded.contains("\"message\""));
+    }
+
+    #[test]
+    fn sanitizes_progress_results_before_emit() {
+        let result = sanitize_search_result_for_emit(SearchResult {
+            package: "demo".to_string(),
+            requested_version: "1.2.3\nbad".to_string(),
+            latest_version: "9".repeat(65),
+            repository: "https://example.com/owner/demo".to_string(),
+            real_name: "demo\nbad".to_string(),
+            source: "github<script>".to_string(),
+            found: true,
+            message: format!("ok\n{}", "x".repeat(MAX_RESULT_MESSAGE_CHARS + 20)),
+        });
+
+        assert_eq!(result.package, "demo");
+        assert!(result.requested_version.is_empty());
+        assert!(result.latest_version.is_empty());
+        assert!(result.repository.is_empty());
+        assert_eq!(result.real_name, "demo");
+        assert_eq!(result.source, "none");
+        assert!(!result.message.contains('\n'));
+        assert!(result.message.len() <= MAX_RESULT_MESSAGE_CHARS);
+    }
+
+    #[test]
+    fn preserves_bioc_git_repository_version_in_results() {
+        let package = PackageInput {
+            raw: "demo".to_string(),
+            name: "demo".to_string(),
+            version: String::new(),
+        };
+
+        let result = found_result(&package, "1.2.3", "3.18", "demo", "biocGit");
+
+        assert_eq!(result.repository, "3.18");
+        assert_eq!(result.source, "biocGit");
     }
 
     #[test]
