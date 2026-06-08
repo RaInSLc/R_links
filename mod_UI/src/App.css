@@ -198,17 +198,32 @@ button {
 }
 
 .summary-track {
+  display: block;
+  width: 100%;
   height: 3px;
   margin-top: 13px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.1);
+  border: 0;
+  border-radius: 2px;
+  appearance: none;
+}
+
+.summary-track::-webkit-progress-bar {
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
 }
 
-.summary-track i {
-  display: block;
+.summary-track::-webkit-progress-value {
+  background: #7bc19d;
+  border-radius: 2px;
+  transition: width 240ms ease;
+}
+
+.summary-track::-moz-progress-bar {
   height: 100%;
   background: #7bc19d;
+  border-radius: 2px;
   transition: width 240ms ease;
 }
 

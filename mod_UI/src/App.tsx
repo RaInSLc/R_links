@@ -140,6 +140,9 @@ function App() {
   const uniqueFoundCount = new Set(
     results.filter((result) => result.found).map((result) => result.package),
   ).size;
+  const summaryProgress = packageCount
+    ? Math.min(100, (uniqueFoundCount / packageCount) * 100)
+    : 0;
 
   useEffect(() => {
     Promise.all([
@@ -434,15 +437,12 @@ function App() {
         <div className="sidebar-summary">
           <span>当前任务</span>
           <strong>{searching ? "检索中" : `${packageCount} 个输入`}</strong>
-          <div className="summary-track">
-            <i
-              style={{
-                width: packageCount
-                  ? `${Math.min(100, (uniqueFoundCount / packageCount) * 100)}%`
-                  : "0%",
-              }}
-            />
-          </div>
+          <progress
+            className="summary-track"
+            value={summaryProgress}
+            max={100}
+            aria-label="已验证包比例"
+          />
           <small>
             {results.length ? `${foundCount} 条来源记录` : "等待开始"}
           </small>
