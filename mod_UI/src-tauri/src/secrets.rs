@@ -20,6 +20,9 @@ pub fn unprotect_string(value: &str) -> Result<String, String> {
     let encoded = value
         .strip_prefix(DPAPI_PREFIX)
         .ok_or_else(|| "凭据格式无效".to_string())?;
+    if encoded.trim().is_empty() {
+        return Err("凭据编码为空".to_string());
+    }
     let encrypted = STANDARD
         .decode(encoded)
         .map_err(|_| "凭据编码无效".to_string())?;
@@ -140,6 +143,12 @@ mod tests {
     #[test]
     fn leaves_plain_legacy_value_readable() {
         assert_eq!(unprotect_string("legacy-token").unwrap(), "legacy-token");
+    }
+
+    #[test]
+    fn rejects_empty_protected_payload() {
+        assert_eq!(unprotect_string("dpapi:").unwrap_err(), "凭据编码为空");
+        assert_eq!(unprotect_string("dpapi:   ").unwrap_err(), "凭据编码为空");
     }
 
     #[cfg(windows)]
