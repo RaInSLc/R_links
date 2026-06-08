@@ -5,7 +5,6 @@ import {
   readText,
   writeText,
 } from "@tauri-apps/plugin-clipboard-manager";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import "./App.css";
 
 type View = "workspace" | "report" | "history" | "settings";
@@ -59,6 +58,10 @@ const defaultSettings: Settings = {
   fullSearch: false,
 };
 
+const MAX_INPUT_CHARS = 100_000;
+const MAX_PACKAGE_LINES = 500;
+const MAX_SEARCH_TABS = 30;
+
 const methods: Array<{
   id: Method;
   title: string;
@@ -102,11 +105,13 @@ function App() {
   const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [searching, setSearching] = useState(false);
   const [status, setStatus] = useState("就绪");
+  const [showToken, setShowToken] = useState(false);
 
   const packageCount = useMemo(
     () => input.split(/\r?\n/).filter((line) => line.trim()).length,
     [input],
   );
+  const inputTooLarge = input.length > MAX_INPUT_CHARS || packageCount > MAX_PACKAGE_LINES;
   const foundCount = results.filter((result) => result.found).length;
   const uniqueFoundCount = new Set(
     results.filter((result) => result.found).map((result) => result.package),
@@ -121,7 +126,7 @@ function App() {
         setSettings(savedSettings);
         setHistory(savedHistory);
       })
-      .catch((error) => setStatus(`初始化失败: ${String(error)}`));
+      .catch((error) => setStatus(`初始化失败: ${formatError(error)}`));
   }, []);
 
   useEffect(() => {
@@ -153,7 +158,7 @@ function App() {
         results,
       })
         .then(setScript)
-        .catch((error) => setStatus(`生成失败: ${String(error)}`));
+        .catch((error) => setStatus(`生成失败: ${formatError(error)}`));
     }, 120);
     return () => window.clearTimeout(timer);
   }, [
@@ -183,7 +188,10 @@ function App() {
   }, [input, method]);
 
   async function startSearch() {
-    if (!input.trim() || searching) {
+    if (!input.trim() || searching || inputTooLarge) {
+      if (inputTooLarge) {
+        setStatus(`输入超出限制：最多 ${MAX_PACKAGE_LINES} 行、${MAX_INPUT_CHARS} 个字符`);
+      }
       return;
     }
     setSearching(true);
@@ -203,47 +211,67 @@ function App() {
         setMethod("auto");
       }
     } catch (error) {
-      setStatus(`检索失败: ${String(error)}`);
+      setStatus(`检索失败: ${formatError(error)}`);
     } finally {
       setSearching(false);
     }
   }
 
   async function stopSearch() {
-    await invoke("stop_search");
-    setStatus("正在停止检索任务");
+    try {
+      await invoke("stop_search");
+      setStatus("正在停止检索任务");
+    } catch (error) {
+      setStatus(`停止失败: ${formatError(error)}`);
+    }
   }
 
   async function copyScript() {
     if (!script || script === "等待输入...") {
       return;
     }
-    await writeText(script);
-    const records = await invoke<HistoryRecord[]>("build_history_records", {
-      script,
-    });
-    const commands = new Set(records.map((record) => record.command));
-    const merged = [
-      ...records,
-      ...history.filter((record) => !commands.has(record.command)),
-    ].slice(0, 100);
-    setHistory(merged);
-    await invoke("save_history", { history: merged });
-    setStatus(`已复制脚本并记录 ${records.length} 条命令`);
+    try {
+      await writeText(script);
+      const records = await invoke<HistoryRecord[]>("build_history_records", {
+        script,
+      });
+      const commands = new Set(records.map((record) => record.command));
+      const merged = [
+        ...records,
+        ...history.filter((record) => !commands.has(record.command)),
+      ].slice(0, 100);
+      setHistory(merged);
+      await invoke("save_history", { history: merged });
+      setStatus(`已复制脚本并记录 ${records.length} 条命令`);
+    } catch (error) {
+      setStatus(`复制失败: ${formatError(error)}`);
+    }
   }
 
   async function pasteInput() {
-    const value = await readText();
-    if (value) {
-      setInput(value);
-      setStatus("已从剪贴板粘贴");
+    try {
+      const value = await readText();
+      if (value) {
+        if (value.length > MAX_INPUT_CHARS) {
+          setStatus(`剪贴板内容过长，最多允许 ${MAX_INPUT_CHARS} 个字符`);
+          return;
+        }
+        setInput(value);
+        setStatus("已从剪贴板粘贴");
+      }
+    } catch (error) {
+      setStatus(`粘贴失败: ${formatError(error)}`);
     }
   }
 
   async function cleanComments() {
-    const cleaned = await invoke<string>("clean_script", { script });
-    setScript(cleaned);
-    setStatus("已移除脚本注释");
+    try {
+      const cleaned = await invoke<string>("clean_script", { script });
+      setScript(cleaned);
+      setStatus("已移除脚本注释");
+    } catch (error) {
+      setStatus(`清理失败: ${formatError(error)}`);
+    }
   }
 
   async function openSearchTabs() {
@@ -255,34 +283,51 @@ function App() {
           .filter(Boolean)
           .map((name) => name.split("/").pop() ?? name),
       ),
-    );
-    if (names.length > 10 && !window.confirm(`将打开 ${names.length} 个搜索页面，是否继续？`)) {
+    ).slice(0, MAX_SEARCH_TABS);
+    if (names.length === 0) {
+      setStatus("没有可搜索的包名");
       return;
     }
+    let opened = 0;
     for (const name of names) {
-      await openUrl(
-        `https://www.google.com/search?q=${encodeURIComponent(`R package ${name}`)}`,
-      );
+      try {
+        await invoke("open_package_search", { packageName: name });
+        opened += 1;
+      } catch (error) {
+        setStatus(`打开 ${name} 搜索失败: ${formatError(error)}`);
+      }
       await new Promise((resolve) => window.setTimeout(resolve, 180));
     }
-    setStatus(`已打开 ${names.length} 个搜索页面`);
+    setStatus(`已打开 ${opened} 个搜索页面${packageCount > MAX_SEARCH_TABS ? `，已按上限截断到 ${MAX_SEARCH_TABS} 个` : ""}`);
   }
 
   async function persistSettings() {
-    await invoke("save_settings", { settings });
-    setStatus("设置已保存并立即生效");
+    try {
+      await invoke("save_settings", { settings });
+      setStatus("设置已保存并立即生效");
+    } catch (error) {
+      setStatus(`设置保存失败: ${formatError(error)}`);
+    }
   }
 
   async function copyHistoryRecord(record: HistoryRecord) {
-    await writeText(record.command);
-    setStatus(`已复制 ${record.packageName || "历史命令"}`);
+    try {
+      await writeText(record.command);
+      setStatus(`已复制 ${record.packageName || "历史命令"}`);
+    } catch (error) {
+      setStatus(`历史复制失败: ${formatError(error)}`);
+    }
   }
 
   async function deleteHistoryRecord(id: string) {
     const next = history.filter((record) => record.id !== id);
     setHistory(next);
-    await invoke("save_history", { history: next });
-    setStatus("历史记录已删除");
+    try {
+      await invoke("save_history", { history: next });
+      setStatus("历史记录已删除");
+    } catch (error) {
+      setStatus(`历史保存失败: ${formatError(error)}`);
+    }
   }
 
   function isMethodDisabled(candidate: Method) {
@@ -361,14 +406,20 @@ function App() {
                 <PanelHeader
                   step="01"
                   title="输入包列表"
-                  meta={`${packageCount} 项`}
+                  meta={`${packageCount}/${MAX_PACKAGE_LINES} 项`}
                 />
                 <textarea
                   value={input}
                   onChange={(event) => setInput(event.currentTarget.value)}
                   placeholder={"每行一个包，例如：\nSeurat 5.2.1\nGSVA 1.50\nbuenrostrolab/FigR\nhttps://example.org/pkg_1.0.tar.gz"}
                   spellCheck={false}
+                  maxLength={MAX_INPUT_CHARS + 1}
                 />
+                {inputTooLarge && (
+                  <div className="inline-warning">
+                    输入超出限制：最多 {MAX_PACKAGE_LINES} 行、{MAX_INPUT_CHARS} 个字符。
+                  </div>
+                )}
                 <div className="input-actions">
                   <button className="button ghost" onClick={pasteInput}>粘贴</button>
                   <button className="button ghost" onClick={() => setInput("")}>清空</button>
@@ -376,7 +427,7 @@ function App() {
                   {searching ? (
                     <button className="button danger" onClick={stopSearch}>停止</button>
                   ) : (
-                    <button className="button primary" onClick={startSearch} disabled={!input.trim()}>
+                    <button className="button primary" onClick={startSearch} disabled={!input.trim() || inputTooLarge}>
                       开始检索
                     </button>
                   )}
@@ -419,7 +470,7 @@ function App() {
                 <pre>{script}</pre>
                 <div className="script-actions">
                   <button className="button ghost" onClick={cleanComments}>移除注释</button>
-                  <button className="button primary copy-button" onClick={copyScript}>
+                  <button className="button primary copy-button" onClick={copyScript} disabled={!script || script === "等待输入..."}>
                     复制完整脚本
                   </button>
                 </div>
@@ -512,13 +563,20 @@ function App() {
                 <label className="field">
                   <span>GitHub Token</span>
                   <small>仅保存在本应用的数据目录，用于提高 API 配额</small>
-                  <input
-                    type="password"
-                    value={settings.githubToken}
-                    onChange={(event) => setSettings({ ...settings, githubToken: event.currentTarget.value })}
-                    placeholder="ghp_..."
-                    autoComplete="off"
-                  />
+                  <div className="secret-field">
+                    <input
+                      type={showToken ? "text" : "password"}
+                      value={settings.githubToken}
+                      onChange={(event) => setSettings({ ...settings, githubToken: event.currentTarget.value.trim() })}
+                      placeholder="ghp_..."
+                      autoComplete="off"
+                      spellCheck={false}
+                      maxLength={512}
+                    />
+                    <button type="button" onClick={() => setShowToken((value) => !value)}>
+                      {showToken ? "隐藏" : "显示"}
+                    </button>
+                  </div>
                 </label>
                 <Toggle
                   checked={settings.fullSearch}
@@ -546,7 +604,7 @@ function App() {
                   <span>自定义镜像</span>
                   <input
                     value={settings.cranMirror}
-                    onChange={(event) => setSettings({ ...settings, cranMirror: event.currentTarget.value })}
+                    onChange={(event) => setSettings({ ...settings, cranMirror: event.currentTarget.value.trim() })}
                     placeholder="https://cloud.r-project.org"
                   />
                 </label>
@@ -639,6 +697,10 @@ function Metric({
 
 function EmptyState({ text }: { text: string }) {
   return <div className="empty-state"><span>—</span>{text}</div>;
+}
+
+function formatError(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export default App;

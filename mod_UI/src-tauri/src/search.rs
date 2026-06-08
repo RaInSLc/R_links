@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
-use crate::logic::{infer_bioc_version, parse_inputs};
+use crate::logic::{infer_bioc_version, is_valid_github_repository, parse_inputs};
 use crate::models::{PackageInput, SearchResponse, SearchResult, Settings};
 
 const BIOC_VERSIONS: &[&str] = &[
@@ -15,6 +15,9 @@ const BIOC_VERSIONS: &[&str] = &[
     "3.11", "3.10", "3.9", "3.8", "3.7", "3.6", "3.5", "3.4", "3.3", "3.2", "3.1", "3.0",
 ];
 const BIOC_CATEGORIES: &[&str] = &["bioc", "data/annotation", "data/experiment", "workflows"];
+const MAX_TEXT_RESPONSE_BYTES: usize = 512 * 1024;
+const MAX_DESCRIPTION_BYTES: usize = 64 * 1024;
+const MAX_JSON_RESPONSE_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Deserialize)]
 struct GithubSearchResponse {
@@ -32,7 +35,7 @@ pub async fn search_packages(
     input: &str,
     settings: &Settings,
 ) -> Result<SearchResponse, String> {
-    let packages = parse_inputs(input);
+    let packages = parse_inputs(input)?;
     if packages.is_empty() {
         return Err("请输入至少一个有效的 R 包".to_string());
     }
@@ -133,12 +136,10 @@ fn build_client(settings: &Settings) -> Result<Client, String> {
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(30));
     if !settings.proxy.trim().is_empty() {
-        let proxy = if settings.proxy.contains("://") {
-            settings.proxy.trim().to_string()
-        } else {
-            format!("http://{}", settings.proxy.trim())
-        };
-        builder = builder.proxy(reqwest::Proxy::all(&proxy).map_err(|error| error.to_string())?);
+        builder = builder.proxy(
+            reqwest::Proxy::all(settings.proxy.trim())
+                .map_err(|_| "网络代理配置无效".to_string())?,
+        );
     }
     builder.build().map_err(|error| error.to_string())
 }
@@ -269,6 +270,10 @@ async fn search_explicit_github(
     logs: &mut Vec<String>,
 ) -> Option<SearchResult> {
     log(app, logs, "验证指定 GitHub 仓库");
+    if !is_valid_github_repository(&package.name) {
+        log(app, logs, "GitHub 仓库格式无效，已跳过");
+        return None;
+    }
     let version = github_description_version(client, &package.name, settings, cancelled).await?;
     let real_name = package.name.rsplit('/').next().unwrap_or(&package.name);
     Some(found_result(
@@ -361,17 +366,19 @@ async fn search_github(
         {
             continue;
         }
-        if let Some(version) =
-            github_description_version(client, &repository.full_name, settings, cancelled).await
-        {
-            seen.insert(repository.full_name.to_ascii_lowercase());
-            results.push(found_result(
-                package,
-                &version,
-                &repository.full_name,
-                repo_name,
-                "github",
-            ));
+        if is_valid_github_repository(&repository.full_name) {
+            if let Some(version) =
+                github_description_version(client, &repository.full_name, settings, cancelled).await
+            {
+                seen.insert(repository.full_name.to_ascii_lowercase());
+                results.push(found_result(
+                    package,
+                    &version,
+                    &repository.full_name,
+                    repo_name,
+                    "github",
+                ));
+            }
         }
     }
     results
@@ -390,7 +397,9 @@ async fn github_description_version(
         let url = format!("https://raw.githubusercontent.com/{repository}/{branch}/DESCRIPTION");
         let response = authorized_get(client, &url, settings).send().await.ok()?;
         if response.status().is_success() {
-            let description = response.text().await.ok()?;
+            let description = read_limited_text(response, MAX_DESCRIPTION_BYTES)
+                .await
+                .ok()?;
             if let Some(version) = extract_description_version(&description) {
                 return Some(version);
             }
@@ -418,7 +427,9 @@ async fn get_text(client: &Client, url: &str, cancelled: &AtomicBool) -> Option<
     if !response.status().is_success() {
         return None;
     }
-    response.text().await.ok()
+    read_limited_text(response, MAX_TEXT_RESPONSE_BYTES)
+        .await
+        .ok()
 }
 
 async fn get_json(
@@ -430,13 +441,27 @@ async fn get_json(
     if cancelled.load(Ordering::SeqCst) {
         return None;
     }
-    authorized_get(client, url, settings)
-        .send()
+    let response = authorized_get(client, url, settings).send().await.ok()?;
+    let text = read_limited_text(response, MAX_JSON_RESPONSE_BYTES)
         .await
-        .ok()?
-        .json()
+        .ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+async fn read_limited_text(response: reqwest::Response, limit: usize) -> Result<String, String> {
+    if let Some(length) = response.content_length() {
+        if length > limit as u64 {
+            return Err("响应内容超过大小限制".to_string());
+        }
+    }
+    let bytes = response
+        .bytes()
         .await
-        .ok()
+        .map_err(|_| "读取响应失败".to_string())?;
+    if bytes.len() > limit {
+        return Err("响应内容超过大小限制".to_string());
+    }
+    String::from_utf8(bytes.to_vec()).map_err(|_| "响应不是有效 UTF-8".to_string())
 }
 
 fn extract_html_version(html: &str) -> Option<String> {

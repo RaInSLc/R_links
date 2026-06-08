@@ -340,6 +340,14 @@ button {
   color: #a3aca8;
 }
 
+.inline-warning {
+  padding: 10px 14px;
+  color: #8f3f24;
+  background: #f7e6dc;
+  border-bottom: 1px solid #efc9b7;
+  font-size: 11px;
+}
+
 .input-actions,
 .script-actions {
   display: flex;
@@ -801,6 +809,27 @@ button {
 .field input:focus {
   border-color: #7fab93;
   box-shadow: 0 0 0 3px rgba(23, 107, 77, 0.08);
+}
+
+.secret-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 62px;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.secret-field input {
+  margin-top: 0;
+}
+
+.secret-field button {
+  color: var(--green);
+  background: #f8faf7;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .settings-panel > .toggle {

@@ -3,6 +3,14 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 19:50:41 +08:00] `mod_UI\` 工程加固与启动文档完善**：
+  - 重写 `mod_UI\README.md`，补充 Windows 首次启动、日常开发、构建、验证、常见问题、数据位置和安全边界说明。
+  - 收紧 Tauri 权限与 CSP：移除前端 `opener` 插件权限，生产环境禁用远程脚本、对象、iframe 和表单提交，仅保留剪贴板读写与受控 Rust 搜索命令。
+  - 增加 Rust 后端输入规模限制、包名/GitHub 仓库/CRAN 镜像/代理/Token 校验、HTTP 响应大小限制和外部搜索 URL 白名单。
+  - 增强配置与历史持久化容错：损坏 JSON 自动备份并回退默认值，写入采用临时文件替换，历史记录限制数量与命令长度。
+  - 增强前端错误处理、输入限制提示、Token 显示切换、批量搜索上限和异步操作失败反馈。
+  - Rust 单元测试增加至 11 项，并通过 `npm run build`、`cargo test`、`cargo clippy --all-targets -- -D warnings`、`npm run tauri build -- --no-bundle` 验证。
+
 - **[2026-06-08 19:26:18 +08:00] 新增 OpenCode 依赖风险审计门 Skill**：
   - 在 `.opencode\skills\dependency-risk-audit-gate\SKILL.md` 中新增项目级技能，触发 `npm install`、`pnpm add`、`yarn add`、`pip install`、`poetry add` 等依赖安装场景。
   - 规定安装前必须输出依赖风险审计，覆盖 npm 生命周期脚本、Python 构建钩子、可疑二进制、远程执行、凭据访问和高风险 PowerShell/系统命令特征。

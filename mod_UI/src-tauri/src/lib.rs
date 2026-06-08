@@ -52,6 +52,7 @@ fn load_settings(app: AppHandle) -> Result<Settings, String> {
 
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
+    let settings = settings.normalized()?;
     storage::save_settings(&app, &settings)
 }
 
@@ -63,6 +64,24 @@ fn load_history(app: AppHandle) -> Result<Vec<HistoryRecord>, String> {
 #[tauri::command]
 fn save_history(app: AppHandle, history: Vec<HistoryRecord>) -> Result<(), String> {
     storage::save_history(&app, &history)
+}
+
+#[tauri::command]
+fn open_package_search(app: AppHandle, package_name: String) -> Result<(), String> {
+    let package_name = package_name.trim();
+    if !logic::is_valid_package_name(package_name) || package_name.contains('/') {
+        return Err(format!("无效包名，无法打开浏览器搜索: {package_name}"));
+    }
+    let url = format!(
+        "https://www.google.com/search?q={}",
+        urlencoding::encode(&format!("R package {package_name}"))
+    );
+    if !logic::is_allowed_browser_search_url(&url) {
+        return Err("浏览器搜索 URL 不在允许范围内".to_string());
+    }
+    tauri_plugin_opener::OpenerExt::opener(&app)
+        .open_url(url, None::<&str>)
+        .map_err(|error| format!("打开浏览器失败: {error}"))
 }
 
 #[tauri::command]
@@ -78,6 +97,8 @@ async fn start_search(
     input: String,
     settings: Settings,
 ) -> Result<SearchResponse, String> {
+    logic::validate_input_size(&input)?;
+    let settings = settings.normalized()?;
     if state
         .running
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -111,6 +132,7 @@ pub fn run() {
             save_settings,
             load_history,
             save_history,
+            open_package_search,
             start_search,
             stop_search
         ])

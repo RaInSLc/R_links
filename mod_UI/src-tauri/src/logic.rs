@@ -1,23 +1,40 @@
 use regex::Regex;
 use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
+use url::Url;
 
-use crate::models::{GenerateOptions, HistoryRecord, PackageInput, SearchResult};
+use crate::models::{
+    normalize_http_url, GenerateOptions, HistoryRecord, PackageInput, SearchResult,
+    MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES,
+};
 
-pub fn parse_inputs(input: &str) -> Vec<PackageInput> {
-    input.lines().filter_map(parse_input_line).collect()
+pub fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
+    validate_input_size(input)?;
+    let packages = input
+        .lines()
+        .take(MAX_PACKAGE_LINES + 1)
+        .filter_map(parse_input_line)
+        .collect::<Vec<_>>();
+    if packages.len() > MAX_PACKAGE_LINES {
+        return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+    }
+    Ok(packages)
 }
 
 pub fn parse_input_line(line: &str) -> Option<PackageInput> {
     let raw = line.trim();
-    if raw.is_empty() {
+    if raw.is_empty() || raw.starts_with('#') {
         return None;
     }
 
     if raw.starts_with("http://") || raw.starts_with("https://") {
+        let name = extract_package_name(raw);
+        if !is_valid_package_name(&name) {
+            return None;
+        }
         return Some(PackageInput {
             raw: raw.to_string(),
-            name: extract_package_name(raw),
+            name,
             version: String::new(),
         });
     }
@@ -27,7 +44,14 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
     let package_re =
         Regex::new(r"^\s*([A-Za-z0-9][A-Za-z0-9._\-/]*)").expect("固定包名正则必须有效");
     let captures = package_re.captures(&clean)?;
-    let name = captures.get(1)?.as_str().to_string();
+    let name = captures
+        .get(1)?
+        .as_str()
+        .trim_matches(['"', '\''])
+        .to_string();
+    if !is_valid_package_name(&name) {
+        return None;
+    }
     let remaining = &clean[captures.get(0)?.end()..];
     let version_re = Regex::new(r"([0-9]+[0-9A-Za-z.\-]*)").expect("固定版本正则必须有效");
     let version = version_re
@@ -91,15 +115,15 @@ pub fn generate_script(
     options: &GenerateOptions,
     results: &[SearchResult],
 ) -> Result<String, String> {
-    let packages = parse_inputs(input);
+    let packages = parse_inputs(input)?;
     if packages.is_empty() {
         return Ok("等待输入...".to_string());
     }
 
     let mirror = if options.mirror.trim().is_empty() {
-        "https://cloud.r-project.org"
+        "https://cloud.r-project.org".to_string()
     } else {
-        options.mirror.trim()
+        normalize_http_url(&options.mirror, "CRAN 镜像")?
     };
 
     if options.method == "checkSystem" {
@@ -186,7 +210,7 @@ pub fn generate_script(
             &method,
             &version,
             options.conditional,
-            mirror,
+            &mirror,
             options.install_dependencies,
         )?);
     }
@@ -251,6 +275,9 @@ fn generate_command(
                 .unwrap_or(value)
                 .trim_end_matches('/')
                 .trim_end_matches(".git");
+            if !is_valid_github_repository(repository) {
+                return Err(format!("{value} 不是有效的 GitHub 仓库标识，应为 owner/repo"));
+            }
             package_name = repository.rsplit('/').next().unwrap_or(repository).to_string();
             effective_version.clear();
             format!(
@@ -266,6 +293,9 @@ fn generate_command(
             if version.is_empty() {
                 return Err(format!("{value} 缺少可用于 install_version 的版本号"));
             }
+            if !is_clean_version(version) {
+                return Err(format!("{value} 的版本号格式不适合 install_version: {version}"));
+            }
             format!(
                 "remotes::install_version(\"{escaped_value}\", version = \"{}\", repos = \"{escaped_mirror}\", upgrade = \"never\", dependencies = {dependencies})",
                 escape_r(version)
@@ -277,6 +307,9 @@ fn generate_command(
         "biocGit" => {
             let (real_version, bioc_version) =
                 version.split_once('|').unwrap_or((version, "3.18"));
+            if !is_valid_bioc_version(bioc_version) {
+                return Err(format!("Bioconductor 版本格式无效: {bioc_version}"));
+            }
             effective_version = real_version.to_string();
             let release = format!("RELEASE_{}", bioc_version.replace('.', "_"));
             format!(
@@ -325,6 +358,7 @@ pub fn build_history_records(script: &str) -> Vec<HistoryRecord> {
         .map(str::trim)
         .filter(|line| {
             !line.is_empty()
+                && line.len() <= MAX_HISTORY_COMMAND_CHARS
                 && !line.starts_with('#')
                 && (line.contains("install_")
                     || line.contains("install.packages")
@@ -361,6 +395,7 @@ pub fn build_history_records(script: &str) -> Vec<HistoryRecord> {
                 created_at: now.to_string(),
             }
         })
+        .take(MAX_HISTORY_RECORDS)
         .collect()
 }
 
@@ -392,6 +427,68 @@ fn is_clean_version(version: &str) -> bool {
 
 fn escape_r(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+pub fn validate_input_size(input: &str) -> Result<(), String> {
+    if input.len() > MAX_INPUT_CHARS {
+        return Err(format!("输入内容过长，最多允许 {MAX_INPUT_CHARS} 个字符"));
+    }
+    let line_count = input.lines().filter(|line| !line.trim().is_empty()).count();
+    if line_count > MAX_PACKAGE_LINES {
+        return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+    }
+    Ok(())
+}
+
+pub fn is_valid_package_name(value: &str) -> bool {
+    if value.is_empty() || value.len() > 128 {
+        return false;
+    }
+    if value.contains('/') {
+        return is_valid_github_repository(value);
+    }
+    let mut chars = value.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphanumeric() => {}
+        _ => return false,
+    }
+    chars.all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-'))
+}
+
+pub fn is_valid_github_repository(value: &str) -> bool {
+    if value.len() > 200 || value.contains('\\') || value.contains("..") {
+        return false;
+    }
+    let parts = value.trim_matches('/').split('/').collect::<Vec<_>>();
+    if parts.len() != 2 {
+        return false;
+    }
+    parts.iter().all(|part| {
+        !part.is_empty()
+            && part.len() <= 100
+            && part.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+            })
+    })
+}
+
+pub fn is_allowed_browser_search_url(value: &str) -> bool {
+    Url::parse(value)
+        .ok()
+        .filter(|url| url.scheme() == "https")
+        .and_then(|url| {
+            url.host_str()
+                .map(|host| host.eq_ignore_ascii_case("www.google.com"))
+        })
+        .unwrap_or(false)
+}
+
+fn is_valid_bioc_version(value: &str) -> bool {
+    let parts = value.split('.').collect::<Vec<_>>();
+    parts.len() == 2
+        && parts.iter().all(|part| {
+            !part.is_empty() && part.chars().all(|character| character.is_ascii_digit())
+        })
 }
 
 #[cfg(test)]
@@ -435,5 +532,31 @@ mod tests {
         .expect("应生成命令");
         assert!(output.contains("requireNamespace(\"dplyr\""));
         assert!(output.contains("dependencies = TRUE"));
+    }
+
+    #[test]
+    fn rejects_invalid_github_repository() {
+        assert!(!is_valid_github_repository("owner/repo/extra"));
+        assert!(!is_valid_github_repository("../repo"));
+        assert!(is_valid_github_repository("owner/repo.name"));
+    }
+
+    #[test]
+    fn rejects_oversized_input() {
+        let input = "pkg\n".repeat(MAX_PACKAGE_LINES + 1);
+        assert!(parse_inputs(&input).is_err());
+    }
+
+    #[test]
+    fn validates_browser_search_url_scope() {
+        assert!(is_allowed_browser_search_url(
+            "https://www.google.com/search?q=R%20package%20GSVA"
+        ));
+        assert!(!is_allowed_browser_search_url(
+            "http://www.google.com/search?q=GSVA"
+        ));
+        assert!(!is_allowed_browser_search_url(
+            "https://example.com/search?q=GSVA"
+        ));
     }
 }
