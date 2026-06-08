@@ -872,14 +872,24 @@ fn github_repository_from_url(value: &str) -> Option<String> {
 }
 
 pub fn is_allowed_browser_search_url(value: &str) -> bool {
-    Url::parse(value)
-        .ok()
-        .filter(|url| url.scheme() == "https")
-        .and_then(|url| {
-            url.host_str()
-                .map(|host| host.eq_ignore_ascii_case("www.google.com"))
-        })
-        .unwrap_or(false)
+    let Ok(url) = Url::parse(value) else {
+        return false;
+    };
+    if url.scheme() != "https"
+        || url.host_str() != Some("www.google.com")
+        || url.port().is_some()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+        || url.path() != "/search"
+    {
+        return false;
+    }
+    let pairs = url.query_pairs().collect::<Vec<_>>();
+    pairs.len() == 1
+        && pairs
+            .first()
+            .is_some_and(|(key, value)| key == "q" && !value.trim().is_empty())
 }
 
 fn is_valid_bioc_version(value: &str) -> bool {
@@ -1033,6 +1043,15 @@ mod tests {
         ));
         assert!(!is_allowed_browser_search_url(
             "https://example.com/search?q=GSVA"
+        ));
+        assert!(!is_allowed_browser_search_url(
+            "https://www.google.com/search?q=GSVA&source=desktop"
+        ));
+        assert!(!is_allowed_browser_search_url(
+            "https://www.google.com/preferences?q=GSVA"
+        ));
+        assert!(!is_allowed_browser_search_url(
+            "https://www.google.com/search?q=GSVA#frag"
         ));
     }
 
