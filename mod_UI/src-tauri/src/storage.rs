@@ -261,12 +261,16 @@ fn atomic_write(path: &PathBuf, content: &str) -> Result<(), String> {
         fs::rename(path, &backup).map_err(|error| error.to_string())?;
         if let Err(error) = fs::rename(&tmp, path) {
             let _ = fs::rename(&backup, path);
+            let _ = fs::remove_file(&tmp);
             return Err(error.to_string());
         }
         let _ = fs::remove_file(&backup);
         Ok(())
     } else {
-        fs::rename(&tmp, path).map_err(|error| error.to_string())
+        fs::rename(&tmp, path).map_err(|error| {
+            let _ = fs::remove_file(&tmp);
+            error.to_string()
+        })
     }
 }
 
@@ -518,6 +522,24 @@ mod tests {
         assert!(!path.with_extension("tmp").exists());
         let leftovers = fs::read_dir(&directory)
             .expect("应能列出目录")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .count();
+        assert_eq!(leftovers, 0);
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[test]
+    fn atomic_write_cleans_tmp_when_initial_rename_fails() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-storage-fail-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+        let path = directory.join("missing").join("settings.json");
+
+        assert!(atomic_write(&path, "content").is_err());
+        let leftovers = fs::read_dir(&directory)
+            .expect("应能列出临时目录")
             .filter_map(Result::ok)
             .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
             .count();
