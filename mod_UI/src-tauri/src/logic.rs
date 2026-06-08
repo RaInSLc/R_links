@@ -554,6 +554,17 @@ pub fn build_history_records(script: &str) -> Vec<HistoryRecord> {
         .collect()
 }
 
+pub fn clean_script(script: &str) -> Result<String, String> {
+    validate_script_size(script)?;
+    let cleaned = script
+        .lines()
+        .filter(|line| !line.trim_start().starts_with('#') && !line.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\r\n");
+    validate_script_size(&cleaned)?;
+    Ok(cleaned)
+}
+
 pub fn history_metadata_from_command(command: &str) -> Option<(String, String, String)> {
     let command = supported_history_command(command)?;
     if command.is_empty() {
@@ -962,6 +973,17 @@ mod tests {
         let script = "install.packages(\"demo\")\n".repeat((MAX_SCRIPT_CHARS / 25) + 10);
         assert!(build_history_records(&script).is_empty());
         assert!(validate_script_size(&script).is_err());
+    }
+
+    #[test]
+    fn cleans_script_and_rejects_oversized_cleaned_output() {
+        let cleaned = clean_script("# comment\n\ninstall.packages(\"demo\")\n")
+            .expect("普通脚本应可清理注释");
+        assert_eq!(cleaned, "install.packages(\"demo\")");
+
+        let script = "x\n".repeat((MAX_SCRIPT_CHARS / 3) + 2);
+        assert!(validate_script_size(&script).is_ok());
+        assert!(clean_script(&script).is_err());
     }
 
     #[test]

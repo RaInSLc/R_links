@@ -163,12 +163,7 @@ fn generate_script(
 
 #[tauri::command]
 fn clean_script(script: String) -> Result<String, String> {
-    logic::validate_script_size(&script)?;
-    Ok(script
-        .lines()
-        .filter(|line| !line.trim_start().starts_with('#') && !line.trim().is_empty())
-        .collect::<Vec<_>>()
-        .join("\r\n"))
+    logic::clean_script(&script)
 }
 
 #[tauri::command]
