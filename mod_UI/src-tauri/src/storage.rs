@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Mutex,
@@ -17,6 +17,7 @@ const MAX_PROTECTED_TOKEN_CHARS: usize = MAX_TOKEN_CHARS * 16;
 const MAX_HISTORY_SAVE_RECORDS: usize = MAX_HISTORY_RECORDS * 4;
 const MAX_SETTINGS_FILE_BYTES: u64 = 64 * 1024;
 const MAX_HISTORY_FILE_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_CORRUPT_BACKUPS_PER_FILE: usize = 5;
 const OVERSIZED_BACKUP_NOTICE: &str = "原文件超过安全读取上限，内容未复制到备份。";
 static STORAGE_WRITE_LOCK: Mutex<()> = Mutex::new(());
 static STORAGE_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -274,7 +275,45 @@ fn backup_corrupt_settings_file(app: &AppHandle, content: &str) -> Result<(), St
 
 fn backup_corrupt_file(app: &AppHandle, name: &str, content: &str) -> Result<(), String> {
     let backup = data_file(app, &format!("{name}.corrupt.{}.bak", unique_file_suffix()))?;
-    fs::write(backup, content).map_err(|error| error.to_string())
+    fs::write(backup, content).map_err(|error| error.to_string())?;
+    if let Ok(directory) = app.path().app_data_dir() {
+        prune_corrupt_backups(&directory, name);
+    }
+    Ok(())
+}
+
+fn prune_corrupt_backups(directory: &Path, name: &str) {
+    let prefix = format!("{name}.corrupt.");
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+    let mut backups = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let file_name = entry.file_name().to_string_lossy().into_owned();
+            if !file_name.starts_with(&prefix) || !file_name.ends_with(".bak") {
+                return None;
+            }
+            let metadata = entry.metadata().ok()?;
+            if !metadata.is_file() {
+                return None;
+            }
+            Some((
+                metadata.modified().unwrap_or(UNIX_EPOCH),
+                file_name,
+                entry.path(),
+            ))
+        })
+        .collect::<Vec<_>>();
+
+    if backups.len() <= MAX_CORRUPT_BACKUPS_PER_FILE {
+        return;
+    }
+    backups.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.1.cmp(&right.1)));
+    let delete_count = backups.len() - MAX_CORRUPT_BACKUPS_PER_FILE;
+    for (_, _, path) in backups.into_iter().take(delete_count) {
+        let _ = fs::remove_file(path);
+    }
 }
 
 fn unique_file_suffix() -> String {
@@ -481,6 +520,47 @@ mod tests {
             .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
             .count();
         assert_eq!(leftovers, 0);
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[test]
+    fn prune_corrupt_backups_keeps_recent_limit_per_file() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-corrupt-backups-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+
+        for index in 0..(MAX_CORRUPT_BACKUPS_PER_FILE + 2) {
+            fs::write(
+                directory.join(format!("settings.json.corrupt.{index:02}.bak")),
+                "bad-settings",
+            )
+            .expect("应能写入腐坏备份");
+        }
+        fs::write(directory.join("history.json.corrupt.00.bak"), "bad-history")
+            .expect("应能写入其他备份");
+        fs::write(
+            directory.join("settings.json.corrupt.keep.txt"),
+            "not-a-backup",
+        )
+        .expect("应能写入非备份文件");
+        fs::create_dir(directory.join("settings.json.corrupt.directory.bak"))
+            .expect("应能创建同名目录");
+
+        prune_corrupt_backups(&directory, "settings.json");
+
+        assert!(!directory.join("settings.json.corrupt.00.bak").exists());
+        assert!(!directory.join("settings.json.corrupt.01.bak").exists());
+        for index in 2..(MAX_CORRUPT_BACKUPS_PER_FILE + 2) {
+            assert!(directory
+                .join(format!("settings.json.corrupt.{index:02}.bak"))
+                .exists());
+        }
+        assert!(directory.join("history.json.corrupt.00.bak").exists());
+        assert!(directory.join("settings.json.corrupt.keep.txt").exists());
+        assert!(directory
+            .join("settings.json.corrupt.directory.bak")
+            .is_dir());
 
         fs::remove_dir_all(directory).expect("应能清理临时目录");
     }
