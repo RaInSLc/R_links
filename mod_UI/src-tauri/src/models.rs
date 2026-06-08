@@ -199,8 +199,11 @@ fn normalize_token(value: &str) -> Result<String, String> {
     if trimmed.len() > MAX_TOKEN_CHARS {
         return Err("GitHub Token 长度超过限制".to_string());
     }
-    if trimmed.chars().any(|character| character.is_control()) {
-        return Err("GitHub Token 包含非法控制字符".to_string());
+    if trimmed
+        .chars()
+        .any(|character| !character.is_ascii() || character.is_ascii_whitespace())
+    {
+        return Err("GitHub Token 包含非法字符".to_string());
     }
     Ok(trimmed.to_string())
 }
@@ -288,5 +291,27 @@ mod tests {
             .merged_with_existing_token(&existing)
             .expect("空 Token 应保留旧值");
         assert_eq!(merged.github_token, "ghp_existing");
+    }
+
+    #[test]
+    fn rejects_token_with_whitespace_or_non_ascii() {
+        assert_eq!(
+            Settings {
+                github_token: " ghp_demo\n".to_string(),
+                ..Settings::default()
+            }
+            .normalized()
+            .expect("首尾空白应被清理")
+            .github_token,
+            "ghp_demo"
+        );
+
+        for token in ["ghp_demo token", "ghp_demo\tvalue", "ghp_令牌"] {
+            let settings = Settings {
+                github_token: token.to_string(),
+                ..Settings::default()
+            };
+            assert!(settings.normalized().is_err(), "{token:?}");
+        }
     }
 }
