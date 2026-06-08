@@ -610,9 +610,7 @@ pub fn supported_history_command(command: &str) -> Option<String> {
     }
 
     let patterns = [
-        r#"^install\.packages\("[A-Za-z0-9._-]{1,128}", repos = "https://[^"\r\n]{1,2048}", dependencies = (TRUE|FALSE)\)$"#,
         r#"^packageVersion\("[A-Za-z0-9._-]{1,128}"\)$"#,
-        r#"^remotes::install_version\("[A-Za-z0-9._-]{1,128}", version = "[0-9][0-9A-Za-z.-]{0,63}", repos = "https://[^"\r\n]{1,2048}", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
         r#"^BiocManager::install\("[A-Za-z0-9._-]{1,128}", update = FALSE, ask = FALSE, dependencies = (TRUE|FALSE)\)$"#,
         r#"^remotes::install_github\("[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
         r#"^remotes::install_git\("https://git\.bioconductor\.org/packages/[A-Za-z0-9._-]{1,128}", ref = "RELEASE_[0-9]+_[0-9]+", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
@@ -627,6 +625,10 @@ pub fn supported_history_command(command: &str) -> Option<String> {
     }
 
     if supported_install_url_history_command(command) {
+        return Some(command.to_string());
+    }
+
+    if supported_cran_history_command(command) {
         return Some(command.to_string());
     }
 
@@ -658,6 +660,21 @@ fn supported_install_url_history_command(command: &str) -> bool {
         .captures(command)
         .and_then(|capture| capture.get(2))
         .is_some_and(|url| normalize_install_archive_url(url.as_str()).is_ok())
+}
+
+fn supported_cran_history_command(command: &str) -> bool {
+    let patterns = [
+        r#"^install\.packages\("[A-Za-z0-9._-]{1,128}", repos = "([^"\r\n]{1,2048})", dependencies = (TRUE|FALSE)\)$"#,
+        r#"^remotes::install_version\("[A-Za-z0-9._-]{1,128}", version = "[0-9][0-9A-Za-z.-]{0,63}", repos = "([^"\r\n]{1,2048})", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
+    ];
+
+    patterns.iter().any(|pattern| {
+        Regex::new(pattern)
+            .expect("固定 CRAN 历史命令正则必须有效")
+            .captures(command)
+            .and_then(|capture| capture.get(1))
+            .is_some_and(|mirror| normalize_cran_mirror_url(mirror.as_str()).is_ok())
+    })
 }
 
 pub fn infer_bioc_version(major: i32, minor: i32) -> Option<i32> {
@@ -920,6 +937,18 @@ mod tests {
             "install.packages(\"demo\", repos = \"https://cloud.r-project.org\", dependencies = TRUE)"
         )
         .is_some());
+        assert!(supported_history_command(
+            "install.packages(\"demo\", repos = \"https://cloud.r-project.org?token=secret\", dependencies = TRUE)"
+        )
+        .is_none());
+        assert!(supported_history_command(
+            "remotes::install_version(\"demo\", version = \"1.2.3\", repos = \"https://cloud.r-project.org/\", upgrade = \"never\", dependencies = TRUE)"
+        )
+        .is_some());
+        assert!(supported_history_command(
+            "remotes::install_version(\"demo\", version = \"1.2.3\", repos = \"https://cloud.r-project.org/#cran\", upgrade = \"never\", dependencies = TRUE)"
+        )
+        .is_none());
         assert!(supported_history_command(
             "remotes::install_url(\"https://example.org/src/contrib/demo_1.0.0.tar.gz\", dependencies = TRUE)"
         )
