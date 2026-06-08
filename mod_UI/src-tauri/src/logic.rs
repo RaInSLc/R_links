@@ -1,5 +1,6 @@
 use regex::Regex;
 use std::collections::HashSet;
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 
@@ -17,6 +18,14 @@ const MAX_RESULT_MESSAGE_CHARS: usize = 512;
 const MAX_INSTALL_ARCHIVE_FILE_CHARS: usize = 256;
 const MAX_HISTORY_SCAN_LINES: usize = MAX_HISTORY_RECORDS * 20;
 const INSTALL_ARCHIVE_EXTENSIONS: &[&str] = &[".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".zip"];
+
+static INPUT_URL_RE: OnceLock<Regex> = OnceLock::new();
+static INPUT_PACKAGE_RE: OnceLock<Regex> = OnceLock::new();
+static INPUT_VERSION_RE: OnceLock<Regex> = OnceLock::new();
+static QUOTED_VALUE_RE: OnceLock<Regex> = OnceLock::new();
+static HISTORY_VERSION_RE: OnceLock<Regex> = OnceLock::new();
+static INSTALL_URL_HISTORY_RE: OnceLock<Regex> = OnceLock::new();
+static CRAN_HISTORY_RE: OnceLock<[Regex; 2]> = OnceLock::new();
 
 pub fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
     validate_input_size(input)?;
@@ -62,10 +71,12 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
         });
     }
 
-    let url_re = Regex::new(r"https?://\S+").expect("固定 URL 正则必须有效");
+    let url_re =
+        INPUT_URL_RE.get_or_init(|| Regex::new(r"https?://\S+").expect("固定 URL 正则必须有效"));
     let clean = url_re.replace_all(raw, " ");
-    let package_re =
-        Regex::new(r"^\s*([A-Za-z0-9][A-Za-z0-9._\-/]*)").expect("固定包名正则必须有效");
+    let package_re = INPUT_PACKAGE_RE.get_or_init(|| {
+        Regex::new(r"^\s*([A-Za-z0-9][A-Za-z0-9._\-/]*)").expect("固定包名正则必须有效")
+    });
     let captures = package_re.captures(&clean)?;
     let name = captures
         .get(1)?
@@ -76,7 +87,8 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
         return None;
     }
     let remaining = &clean[captures.get(0)?.end()..];
-    let version_re = Regex::new(r"([0-9]+[0-9A-Za-z.\-]*)").expect("固定版本正则必须有效");
+    let version_re = INPUT_VERSION_RE
+        .get_or_init(|| Regex::new(r"([0-9]+[0-9A-Za-z.\-]*)").expect("固定版本正则必须有效"));
     let version = version_re
         .captures(remaining)
         .and_then(|capture| capture.get(1))
@@ -118,7 +130,8 @@ pub fn extract_package_name(input: &str) -> String {
             .to_string();
     }
 
-    let quote_re = Regex::new(r#""([^"]+)""#).expect("固定引号正则必须有效");
+    let quote_re =
+        QUOTED_VALUE_RE.get_or_init(|| Regex::new(r#""([^"]+)""#).expect("固定引号正则必须有效"));
     if let Some(value) = quote_re
         .captures(value)
         .and_then(|capture| capture.get(1))
@@ -571,7 +584,9 @@ pub fn history_metadata_from_command(command: &str) -> Option<(String, String, S
         return None;
     }
 
-    let version_re = Regex::new(r#"version\s*=\s*"([^"]+)""#).expect("固定历史版本正则必须有效");
+    let version_re = HISTORY_VERSION_RE.get_or_init(|| {
+        Regex::new(r#"version\s*=\s*"([^"]+)""#).expect("固定历史版本正则必须有效")
+    });
     let version = version_re
         .captures(&command)
         .and_then(|capture| capture.get(1))
@@ -652,10 +667,12 @@ fn looks_like_supported_history_command(command: &str) -> bool {
 }
 
 fn supported_install_url_history_command(command: &str) -> bool {
-    let regex = Regex::new(
-        r#"^(remotes|devtools)::install_url\("([^"\r\n]{1,2048})", dependencies = (TRUE|FALSE)\)$"#,
-    )
-    .expect("固定 install_url 历史命令正则必须有效");
+    let regex = INSTALL_URL_HISTORY_RE.get_or_init(|| {
+        Regex::new(
+            r#"^(remotes|devtools)::install_url\("([^"\r\n]{1,2048})", dependencies = (TRUE|FALSE)\)$"#,
+        )
+        .expect("固定 install_url 历史命令正则必须有效")
+    });
     regex
         .captures(command)
         .and_then(|capture| capture.get(2))
@@ -663,18 +680,26 @@ fn supported_install_url_history_command(command: &str) -> bool {
 }
 
 fn supported_cran_history_command(command: &str) -> bool {
-    let patterns = [
-        r#"^install\.packages\("[A-Za-z0-9._-]{1,128}", repos = "([^"\r\n]{1,2048})", dependencies = (TRUE|FALSE)\)$"#,
-        r#"^remotes::install_version\("[A-Za-z0-9._-]{1,128}", version = "[0-9][0-9A-Za-z.-]{0,63}", repos = "([^"\r\n]{1,2048})", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
-    ];
-
-    patterns.iter().any(|pattern| {
-        Regex::new(pattern)
-            .expect("固定 CRAN 历史命令正则必须有效")
-            .captures(command)
+    CRAN_HISTORY_RE
+        .get_or_init(|| {
+            [
+                Regex::new(
+                    r#"^install\.packages\("[A-Za-z0-9._-]{1,128}", repos = "([^"\r\n]{1,2048})", dependencies = (TRUE|FALSE)\)$"#,
+                )
+                .expect("固定 CRAN install.packages 历史命令正则必须有效"),
+                Regex::new(
+                    r#"^remotes::install_version\("[A-Za-z0-9._-]{1,128}", version = "[0-9][0-9A-Za-z.-]{0,63}", repos = "([^"\r\n]{1,2048})", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
+                )
+                .expect("固定 CRAN install_version 历史命令正则必须有效"),
+            ]
+        })
+        .iter()
+        .any(|regex| {
+            regex
+                .captures(command)
             .and_then(|capture| capture.get(1))
             .is_some_and(|mirror| normalize_cran_mirror_url(mirror.as_str()).is_ok())
-    })
+        })
 }
 
 pub fn infer_bioc_version(major: i32, minor: i32) -> Option<i32> {

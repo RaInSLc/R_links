@@ -352,8 +352,7 @@ mod tests {
     #[test]
     fn browser_search_url_rejects_invalid_package_without_echoing_value() {
         let package_name = format!("bad/{}", "x".repeat(4096));
-        let error =
-            browser_search_url_for_package(&package_name).expect_err("非法包名应被拒绝");
+        let error = browser_search_url_for_package(&package_name).expect_err("非法包名应被拒绝");
 
         assert_eq!(error, "无效包名，无法打开浏览器搜索");
         assert!(!error.contains(&package_name));
