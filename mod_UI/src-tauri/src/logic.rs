@@ -1,0 +1,439 @@
+use regex::Regex;
+use std::collections::HashSet;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::models::{GenerateOptions, HistoryRecord, PackageInput, SearchResult};
+
+pub fn parse_inputs(input: &str) -> Vec<PackageInput> {
+    input.lines().filter_map(parse_input_line).collect()
+}
+
+pub fn parse_input_line(line: &str) -> Option<PackageInput> {
+    let raw = line.trim();
+    if raw.is_empty() {
+        return None;
+    }
+
+    if raw.starts_with("http://") || raw.starts_with("https://") {
+        return Some(PackageInput {
+            raw: raw.to_string(),
+            name: extract_package_name(raw),
+            version: String::new(),
+        });
+    }
+
+    let url_re = Regex::new(r"https?://\S+").expect("固定 URL 正则必须有效");
+    let clean = url_re.replace_all(raw, " ");
+    let package_re =
+        Regex::new(r"^\s*([A-Za-z0-9][A-Za-z0-9._\-/]*)").expect("固定包名正则必须有效");
+    let captures = package_re.captures(&clean)?;
+    let name = captures.get(1)?.as_str().to_string();
+    let remaining = &clean[captures.get(0)?.end()..];
+    let version_re = Regex::new(r"([0-9]+[0-9A-Za-z.\-]*)").expect("固定版本正则必须有效");
+    let version = version_re
+        .captures(remaining)
+        .and_then(|capture| capture.get(1))
+        .map(|value| value.as_str().to_string())
+        .unwrap_or_default();
+
+    Some(PackageInput {
+        raw: raw.to_string(),
+        name,
+        version,
+    })
+}
+
+pub fn extract_package_name(input: &str) -> String {
+    let value = input.trim().trim_matches(['"', '\'']);
+    if value.starts_with("http://") || value.starts_with("https://") {
+        if let Some((_, path)) = value.split_once("github.com/") {
+            let parts = path.trim_end_matches('/').split('/').collect::<Vec<_>>();
+            if parts.len() >= 2 {
+                return parts[1].trim_end_matches(".git").to_string();
+            }
+        }
+        let file = value.rsplit('/').next().unwrap_or(value);
+        if let Some((name, _)) = file.split_once('_') {
+            return name.to_string();
+        }
+        return file
+            .trim_end_matches(".tar.gz")
+            .trim_end_matches(".zip")
+            .trim_end_matches(".html")
+            .split('.')
+            .next()
+            .unwrap_or(file)
+            .to_string();
+    }
+
+    let quote_re = Regex::new(r#""([^"]+)""#).expect("固定引号正则必须有效");
+    if let Some(value) = quote_re
+        .captures(value)
+        .and_then(|capture| capture.get(1))
+        .map(|match_| match_.as_str())
+    {
+        if value.starts_with("http") {
+            return extract_package_name(value);
+        }
+        let without_ref = value.split('@').next().unwrap_or(value);
+        return without_ref
+            .rsplit('/')
+            .next()
+            .unwrap_or(without_ref)
+            .to_string();
+    }
+
+    value.rsplit('/').next().unwrap_or(value).to_string()
+}
+
+pub fn generate_script(
+    input: &str,
+    options: &GenerateOptions,
+    results: &[SearchResult],
+) -> Result<String, String> {
+    let packages = parse_inputs(input);
+    if packages.is_empty() {
+        return Ok("等待输入...".to_string());
+    }
+
+    let mirror = if options.mirror.trim().is_empty() {
+        "https://cloud.r-project.org"
+    } else {
+        options.mirror.trim()
+    };
+
+    if options.method == "checkSystem" {
+        let names = packages
+            .iter()
+            .map(|item| format!("\"{}\"", escape_r(&item.name)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Ok(format!(
+            "# 1. 定义需要检查的包列表\r\npackages_to_check <- c(\r\n  {names}\r\n)\r\n\r\n# 2. 获取系统中已安装的包\r\ninstalled_pkgs <- installed.packages()[, \"Package\"]\r\n\r\n# 3. 计算缺失包\r\nmissing_pkgs <- packages_to_check[!(packages_to_check %in% installed_pkgs)]\r\n\r\n# 4. 输出结果\r\nif (length(missing_pkgs) == 0) {{\r\n  cat(\"所有包均已安装。\\n\")\r\n}} else {{\r\n  cat(\"以下包尚未安装：\\n\")\r\n  print(missing_pkgs)\r\n}}\r\n"
+        ));
+    }
+
+    let mut output = Vec::new();
+    for package in packages {
+        let mut value = if matches!(options.method.as_str(), "devtools" | "remotes") {
+            package.raw.clone()
+        } else {
+            package.name.clone()
+        };
+        let mut version = package.version.clone();
+        let mut method = options.method.clone();
+
+        if let Some(best) = choose_best_result(&package.name, results) {
+            let source_label = source_label(&best.source);
+            if version.is_empty() {
+                output.push(format!(
+                    "# [{source_label} 已验证: v{} | 自动同步]",
+                    best.latest_version
+                ));
+                if is_clean_version(&best.latest_version) {
+                    version = best.latest_version.clone();
+                }
+            } else {
+                output.push(format!(
+                    "# [{source_label} 最新版本: v{} | 保留指定版本]",
+                    best.latest_version
+                ));
+                if best.source == "bioc"
+                    && !best.latest_version.is_empty()
+                    && best.latest_version != version
+                {
+                    output.push(format!(
+                        "# [提示: Bioconductor 未匹配版本 {version}，将使用 Release]"
+                    ));
+                }
+            }
+
+            if options.method == "auto" {
+                match best.source.as_str() {
+                    "biocGit" => {
+                        method = "biocGit".to_string();
+                        version = format!("{}|{}", best.latest_version, best.repository);
+                    }
+                    "bioc" => method = "biocManager".to_string(),
+                    "github" => {
+                        method = "github".to_string();
+                        if !best.repository.is_empty() {
+                            value = best.repository.clone();
+                        }
+                    }
+                    _ => method = "remotesVersion".to_string(),
+                }
+            }
+        } else if results
+            .iter()
+            .any(|result| result.package.eq_ignore_ascii_case(&package.name))
+        {
+            output.push("# [提示: CRAN/Bioconductor/GitHub 均未找到]".to_string());
+        }
+
+        if options.method == "auto"
+            && !matches!(method.as_str(), "github" | "biocManager" | "biocGit")
+        {
+            method = if is_clean_version(&version) {
+                "remotesVersion".to_string()
+            } else {
+                "base".to_string()
+            };
+        }
+
+        output.push(generate_command(
+            &value,
+            &method,
+            &version,
+            options.conditional,
+            mirror,
+            options.install_dependencies,
+        )?);
+    }
+
+    Ok(output.join("\r\n") + "\r\n")
+}
+
+fn choose_best_result<'a>(package: &str, results: &'a [SearchResult]) -> Option<&'a SearchResult> {
+    let mut candidates = results
+        .iter()
+        .filter(|result| result.found && result.package.eq_ignore_ascii_case(package))
+        .collect::<Vec<_>>();
+    candidates.sort_by_key(|result| {
+        let strict_name = if result.real_name == package { 0 } else { 1 };
+        let exact_repo = result
+            .repository
+            .rsplit('/')
+            .next()
+            .map(|repo| repo.eq_ignore_ascii_case(package))
+            .unwrap_or(false);
+        let source = match result.source.as_str() {
+            "biocGit" => 0,
+            "cran" => 1,
+            "bioc" => 2,
+            "github" => 3,
+            _ => 4,
+        };
+        (strict_name, source, if exact_repo { 0 } else { 1 })
+    });
+    candidates.into_iter().next()
+}
+
+fn generate_command(
+    value: &str,
+    method: &str,
+    version: &str,
+    conditional: bool,
+    mirror: &str,
+    install_dependencies: bool,
+) -> Result<String, String> {
+    let dependencies = if install_dependencies {
+        "TRUE"
+    } else {
+        "FALSE"
+    };
+    let escaped_value = escape_r(value);
+    let escaped_mirror = escape_r(mirror);
+    let mut package_name = extract_package_name(value);
+    let mut effective_version = version.to_string();
+
+    let raw = match method {
+        "devtools" => format!(
+            "devtools::install_url(\"{escaped_value}\", dependencies = {dependencies})"
+        ),
+        "remotes" => format!(
+            "remotes::install_url(\"{escaped_value}\", dependencies = {dependencies})"
+        ),
+        "github" => {
+            let repository = value
+                .split_once("github.com/")
+                .map(|(_, path)| path)
+                .unwrap_or(value)
+                .trim_end_matches('/')
+                .trim_end_matches(".git");
+            package_name = repository.rsplit('/').next().unwrap_or(repository).to_string();
+            effective_version.clear();
+            format!(
+                "remotes::install_github(\"{}\", upgrade = \"never\", dependencies = {dependencies})",
+                escape_r(repository)
+            )
+        }
+        "base" => format!(
+            "install.packages(\"{escaped_value}\", repos = \"{escaped_mirror}\", dependencies = {dependencies})"
+        ),
+        "version" => return Ok(format!("packageVersion(\"{escaped_value}\")")),
+        "remotesVersion" => {
+            if version.is_empty() {
+                return Err(format!("{value} 缺少可用于 install_version 的版本号"));
+            }
+            format!(
+                "remotes::install_version(\"{escaped_value}\", version = \"{}\", repos = \"{escaped_mirror}\", upgrade = \"never\", dependencies = {dependencies})",
+                escape_r(version)
+            )
+        }
+        "biocManager" => format!(
+            "BiocManager::install(\"{escaped_value}\", update = FALSE, ask = FALSE, dependencies = {dependencies})"
+        ),
+        "biocGit" => {
+            let (real_version, bioc_version) =
+                version.split_once('|').unwrap_or((version, "3.18"));
+            effective_version = real_version.to_string();
+            let release = format!("RELEASE_{}", bioc_version.replace('.', "_"));
+            format!(
+                "remotes::install_git(\"https://git.bioconductor.org/packages/{escaped_value}\", ref = \"{release}\", upgrade = \"never\", dependencies = {dependencies})"
+            )
+        }
+        "auto" => format!(
+            "install.packages(\"{escaped_value}\", repos = \"{escaped_mirror}\", dependencies = {dependencies})"
+        ),
+        _ => return Err(format!("不支持的安装方式: {method}")),
+    };
+
+    if !conditional || package_name.is_empty() {
+        return Ok(raw);
+    }
+
+    let version_check = if !effective_version.is_empty() && method != "biocManager" {
+        format!(
+            " || packageVersion(\"{}\") != \"{}\"",
+            escape_r(&package_name),
+            escape_r(&effective_version)
+        )
+    } else {
+        String::new()
+    };
+    let display_version = if effective_version.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", escape_r(&effective_version))
+    };
+    Ok(format!(
+        "if (!requireNamespace(\"{}\", quietly = TRUE){version_check}) {{\r\n  {raw}\r\n}} else {{\r\n  message(\"{}{display_version} 已存在，跳过安装。\")\r\n}}",
+        escape_r(&package_name),
+        escape_r(&package_name)
+    ))
+}
+
+pub fn build_history_records(script: &str) -> Vec<HistoryRecord> {
+    let mut seen = HashSet::new();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    script
+        .lines()
+        .map(str::trim)
+        .filter(|line| {
+            !line.is_empty()
+                && !line.starts_with('#')
+                && (line.contains("install_")
+                    || line.contains("install.packages")
+                    || line.contains("BiocManager::install")
+                    || line.contains("packageVersion"))
+        })
+        .filter(|line| seen.insert((*line).to_string()))
+        .enumerate()
+        .map(|(index, command)| {
+            let version_re =
+                Regex::new(r#"version\s*=\s*"([^"]+)""#).expect("固定历史版本正则必须有效");
+            let version = version_re
+                .captures(command)
+                .and_then(|capture| capture.get(1))
+                .map(|value| value.as_str().to_string())
+                .unwrap_or_default();
+            let tool_name = if command.contains("install_github") {
+                "GitHub"
+            } else if command.contains("BiocManager") || command.contains("install_git") {
+                "Bioconductor"
+            } else if command.contains("remotes") {
+                "remotes"
+            } else if command.contains("devtools") {
+                "devtools"
+            } else {
+                "base R"
+            };
+            HistoryRecord {
+                id: format!("{now}-{index}"),
+                command: command.to_string(),
+                package_name: extract_package_name(command),
+                version,
+                tool_name: tool_name.to_string(),
+                created_at: now.to_string(),
+            }
+        })
+        .collect()
+}
+
+pub fn infer_bioc_version(major: i32, minor: i32) -> Option<i32> {
+    match major {
+        1 if minor >= 50 && minor % 2 == 0 => Some((minor - 50) / 2 + 18),
+        1 if (34..50).contains(&minor) && minor % 2 == 0 => Some((minor - 34) / 2 + 10),
+        2 if minor >= 0 && minor % 2 == 0 => Some(minor / 2 + 21),
+        _ => None,
+    }
+}
+
+fn source_label(source: &str) -> &str {
+    match source {
+        "cran" => "CRAN",
+        "bioc" => "Bioconductor",
+        "biocGit" => "Bioconductor 历史版本",
+        "github" => "GitHub",
+        _ => "未知来源",
+    }
+}
+
+fn is_clean_version(version: &str) -> bool {
+    !version.is_empty()
+        && version
+            .chars()
+            .all(|character| character.is_ascii_digit() || matches!(character, '.' | '-'))
+}
+
+fn escape_r(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_package_and_version() {
+        let value = parse_input_line("GSVA 1.50.0 说明").expect("应解析包输入");
+        assert_eq!(value.name, "GSVA");
+        assert_eq!(value.version, "1.50.0");
+    }
+
+    #[test]
+    fn extracts_github_repository_name() {
+        assert_eq!(
+            extract_package_name("https://github.com/buenrostrolab/FigR/"),
+            "FigR"
+        );
+    }
+
+    #[test]
+    fn infers_bioconductor_versions() {
+        assert_eq!(infer_bioc_version(1, 50), Some(18));
+        assert_eq!(infer_bioc_version(1, 34), Some(10));
+        assert_eq!(infer_bioc_version(2, 2), Some(22));
+    }
+
+    #[test]
+    fn generates_conditional_cran_command() {
+        let output = generate_script(
+            "dplyr",
+            &GenerateOptions {
+                method: "base".to_string(),
+                conditional: true,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[],
+        )
+        .expect("应生成命令");
+        assert!(output.contains("requireNamespace(\"dplyr\""));
+        assert!(output.contains("dependencies = TRUE"));
+    }
+}

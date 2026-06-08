@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [2026-06-08]
+
+### Added
+- **[2026-06-08 19:14:30 +08:00] 新增独立 Tauri 2 桌面项目 `mod_UI\`**：
+  - 使用 React 19、TypeScript、Vite、Tauri 2 与 Rust 建立独立工程，不读取、不修改 `cpp_src\` 源码及旧配置。
+  - 新增工作台、检索报告、命令历史和网络设置四个功能视图，支持响应式桌面布局。
+  - 在 Rust 后端重构 R 包输入解析、安装命令生成、条件安装、依赖安装、批量系统检查、注释清理与历史记录提取逻辑。
+  - 新增 CRAN、Bioconductor Release、Bioconductor 历史版本、r-universe 和 GitHub 多源异步检索，支持快速/全量模式、代理、GitHub Token、任务停止与实时事件回传。
+  - 新增剪贴板读写、批量浏览器搜索、CRAN 镜像选择，以及应用数据目录中的独立 JSON 配置和历史持久化。
+  - 新增 6 个 Rust 单元测试，并完成 TypeScript 编译、Vite 生产构建、Clippy 严格检查和 Tauri Release 集成构建。
+
 ## [2026-06-07]
 
 ### Added
