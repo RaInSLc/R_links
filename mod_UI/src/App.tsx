@@ -621,7 +621,7 @@ function App() {
                 <PanelHeader step="网络" title="连接设置" meta="独立配置" />
                 <label className="field">
                   <span>网络代理</span>
-                  <small>支持 127.0.0.1:7890 或完整代理 URL</small>
+                  <small>支持 127.0.0.1:7890 或无凭据代理 URL，不允许路径或查询参数</small>
                   <input
                     value={settings.proxy}
                     onChange={(event) => setSettings({ ...settings, proxy: event.currentTarget.value })}

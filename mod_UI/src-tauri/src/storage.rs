@@ -254,7 +254,7 @@ fn redact_settings_backup_content(content: &str) -> String {
             .unwrap_or_else(|_| OVERSIZED_BACKUP_NOTICE.to_string());
     }
 
-    ["githubTokenProtected", "githubToken"]
+    ["githubTokenProtected", "githubToken", "proxy"]
         .into_iter()
         .fold(content.to_string(), redact_json_string_field)
 }
@@ -263,7 +263,7 @@ fn redact_settings_value(value: &mut serde_json::Value) {
     match value {
         serde_json::Value::Object(map) => {
             for (key, child) in map.iter_mut() {
-                if key == "githubToken" || key == "githubTokenProtected" {
+                if key == "githubToken" || key == "githubTokenProtected" || key == "proxy" {
                     *child = serde_json::Value::String("[redacted]".to_string());
                 } else {
                     redact_settings_value(child);
@@ -388,7 +388,7 @@ mod tests {
     #[test]
     fn redacts_sensitive_settings_backup_fields() {
         let content = r#"{
-            "proxy": "",
+            "proxy": "http://user:pass@127.0.0.1:7890",
             "githubToken": "legacy-secret",
             "githubTokenProtected": "dpapi:encrypted-secret",
             "cranMirror": "https://cloud.r-project.org",
@@ -399,20 +399,24 @@ mod tests {
 
         assert!(!redacted.contains("legacy-secret"));
         assert!(!redacted.contains("dpapi:encrypted-secret"));
+        assert!(!redacted.contains("user:pass"));
         assert!(redacted.contains("\"githubToken\": \"[redacted]\""));
         assert!(redacted.contains("\"githubTokenProtected\": \"[redacted]\""));
+        assert!(redacted.contains("\"proxy\": \"[redacted]\""));
     }
 
     #[test]
     fn redacts_sensitive_fields_from_malformed_settings_backup() {
-        let content = r#"{"githubToken":"legacy-secret","githubTokenProtected":"dpapi:encrypted-secret","broken":true"#;
+        let content = r#"{"proxy":"http://user:pass@127.0.0.1:7890","githubToken":"legacy-secret","githubTokenProtected":"dpapi:encrypted-secret","broken":true"#;
 
         let redacted = redact_settings_backup_content(content);
 
         assert!(!redacted.contains("legacy-secret"));
         assert!(!redacted.contains("dpapi:encrypted-secret"));
+        assert!(!redacted.contains("user:pass"));
         assert!(redacted.contains("\"githubToken\":\"[redacted]\""));
         assert!(redacted.contains("\"githubTokenProtected\":\"[redacted]\""));
+        assert!(redacted.contains("\"proxy\":\"[redacted]\""));
     }
 
     #[test]

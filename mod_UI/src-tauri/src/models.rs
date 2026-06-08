@@ -173,6 +173,13 @@ fn normalize_proxy(value: &str) -> Result<String, String> {
     if parsed.host_str().is_none() {
         return Err("网络代理缺少主机名".to_string());
     }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("网络代理不允许包含用户名或密码".to_string());
+    }
+    if !matches!(parsed.path(), "" | "/") || parsed.query().is_some() || parsed.fragment().is_some()
+    {
+        return Err("网络代理不允许包含路径、查询参数或片段".to_string());
+    }
     Ok(candidate)
 }
 
@@ -201,6 +208,22 @@ mod tests {
             settings.normalized().expect("代理应合法").proxy,
             "http://127.0.0.1:7890"
         );
+    }
+
+    #[test]
+    fn rejects_credentialed_or_scoped_proxy_url() {
+        for proxy in [
+            "http://user:pass@127.0.0.1:7890",
+            "https://127.0.0.1:7890/proxy",
+            "socks5://127.0.0.1:7890?target=example",
+            "socks5h://127.0.0.1:7890#fragment",
+        ] {
+            let settings = Settings {
+                proxy: proxy.to_string(),
+                ..Settings::default()
+            };
+            assert!(settings.normalized().is_err());
+        }
     }
 
     #[test]
