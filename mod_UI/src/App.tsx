@@ -401,6 +401,24 @@ function App() {
     }
   }
 
+  async function clearSavedToken() {
+    try {
+      const publicSettings = await invoke<PublicSettings>("clear_github_token");
+      setTokenConfigured(false);
+      setSettings((current) => ({
+        ...current,
+        proxy: publicSettings.proxy,
+        githubToken: "",
+        cranMirror: publicSettings.cranMirror,
+        fullSearch: publicSettings.fullSearch,
+      }));
+      setShowToken(false);
+      setStatus("已清除保存的 GitHub Token");
+    } catch (error) {
+      setStatus(`Token 清除失败: ${formatError(error)}`);
+    }
+  }
+
   async function copyHistoryRecord(record: HistoryRecord) {
     try {
       await writeText(record.command);
@@ -674,6 +692,11 @@ function App() {
                       {showToken ? "隐藏" : "显示"}
                     </button>
                   </div>
+                  {tokenConfigured && !settings.githubToken.trim() && (
+                    <button type="button" className="text-button danger-text" onClick={clearSavedToken}>
+                      清除已保存 Token
+                    </button>
+                  )}
                 </label>
                 <Toggle
                   checked={settings.fullSearch}

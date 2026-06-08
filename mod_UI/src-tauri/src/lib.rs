@@ -185,6 +185,15 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn clear_github_token(app: AppHandle) -> Result<PublicSettings, String> {
+    let mut settings = storage::load_existing_settings(&app)?.unwrap_or_default();
+    settings.github_token.clear();
+    let settings = settings.normalized()?;
+    storage::save_settings(&app, &settings)?;
+    Ok(settings.public_view())
+}
+
+#[tauri::command]
 fn load_history(app: AppHandle) -> Result<Vec<HistoryRecord>, String> {
     storage::load_history(&app)
 }
@@ -266,6 +275,7 @@ pub fn run() {
             build_history_records,
             load_settings,
             save_settings,
+            clear_github_token,
             load_history,
             save_history,
             open_package_search,
@@ -395,5 +405,25 @@ mod tests {
         let merged = merge_runtime_settings(incoming, &existing).expect("设置应可合并");
 
         assert_eq!(merged.github_token, "ghp_new");
+    }
+
+    #[test]
+    fn clearing_token_preserves_other_settings() {
+        let mut settings = Settings {
+            proxy: "127.0.0.1:7890".to_string(),
+            github_token: "ghp_saved".to_string(),
+            cran_mirror: "https://cloud.r-project.org".to_string(),
+            full_search: true,
+        }
+        .normalized()
+        .expect("设置应可规范化");
+
+        settings.github_token.clear();
+        let public = settings.public_view();
+
+        assert_eq!(settings.proxy, "http://127.0.0.1:7890");
+        assert_eq!(settings.cran_mirror, "https://cloud.r-project.org/");
+        assert!(settings.full_search);
+        assert!(!public.github_token_configured);
     }
 }
