@@ -8,7 +8,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use url::Url;
 
-use crate::logic::{infer_bioc_version, is_valid_github_repository, parse_inputs};
+use crate::logic::{infer_bioc_version, normalize_github_repository, parse_inputs};
 use crate::models::{PackageInput, SearchResponse, SearchResult, Settings};
 
 const BIOC_VERSIONS: &[&str] = &[
@@ -271,16 +271,16 @@ async fn search_explicit_github(
     logs: &mut Vec<String>,
 ) -> Option<SearchResult> {
     log(app, logs, "验证指定 GitHub 仓库");
-    if !is_valid_github_repository(&package.name) {
+    let Some(repository) = normalize_github_repository(&package.name) else {
         log(app, logs, "GitHub 仓库格式无效，已跳过");
         return None;
-    }
-    let version = github_description_version(client, &package.name, settings, cancelled).await?;
-    let real_name = package.name.rsplit('/').next().unwrap_or(&package.name);
+    };
+    let version = github_description_version(client, &repository, settings, cancelled).await?;
+    let real_name = repository.rsplit('/').next().unwrap_or(&repository);
     Some(found_result(
         package,
         &version,
-        &package.name,
+        &repository,
         real_name,
         "github",
     ))
@@ -314,15 +314,18 @@ async fn search_github(
             let repository = object
                 .get("RemoteUrl")
                 .and_then(Value::as_str)
-                .and_then(|url| url.split_once("github.com/").map(|(_, path)| path))
-                .unwrap_or_default()
-                .trim_end_matches(".git")
-                .trim_end_matches('/');
-            if !repository.is_empty() {
+                .and_then(normalize_github_repository);
+            if let Some(repository) = repository {
                 seen.insert(repository.to_ascii_lowercase());
-                results.push(found_result(
-                    package, version, repository, real_name, "github",
-                ));
+                if let Some(version) = clean_version(version) {
+                    results.push(found_result(
+                        package,
+                        &version,
+                        repository.as_str(),
+                        real_name,
+                        "github",
+                    ));
+                }
             }
         }
     }
@@ -374,15 +377,15 @@ async fn search_github(
         {
             continue;
         }
-        if is_valid_github_repository(&repository.full_name) {
+        if let Some(repository_name) = normalize_github_repository(&repository.full_name) {
             if let Some(version) =
-                github_description_version(client, &repository.full_name, settings, cancelled).await
+                github_description_version(client, &repository_name, settings, cancelled).await
             {
-                seen.insert(repository.full_name.to_ascii_lowercase());
+                seen.insert(repository_name.to_ascii_lowercase());
                 results.push(found_result(
                     package,
                     &version,
-                    &repository.full_name,
+                    &repository_name,
                     repo_name,
                     "github",
                 ));
@@ -498,17 +501,24 @@ fn extract_html_version(html: &str) -> Option<String> {
     regex
         .captures(html)
         .and_then(|capture| capture.get(1))
-        .map(|value| value.as_str().trim().to_string())
-        .filter(|value| !value.is_empty())
+        .and_then(|value| clean_version(value.as_str()))
 }
 
 fn extract_description_version(description: &str) -> Option<String> {
-    description.lines().find_map(|line| {
-        line.strip_prefix("Version:")
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToString::to_string)
-    })
+    description
+        .lines()
+        .find_map(|line| line.strip_prefix("Version:").and_then(clean_version))
+}
+
+fn clean_version(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.len() > 64 {
+        return None;
+    }
+    trimmed
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_'))
+        .then(|| trimmed.to_string())
 }
 
 fn find_package_object(value: &Value) -> Option<&serde_json::Map<String, Value>> {
@@ -601,5 +611,25 @@ mod tests {
             "https://raw.githubusercontent.com/owner/repo/HEAD/DESCRIPTION",
             &settings
         ));
+    }
+
+    #[test]
+    fn rejects_untrusted_github_repository_hosts() {
+        assert_eq!(
+            normalize_github_repository("https://github.com/owner/repo.git"),
+            Some("owner/repo".to_string())
+        );
+        assert!(normalize_github_repository("https://example.com/github.com/owner/repo").is_none());
+        assert!(normalize_github_repository("https://github.com/owner/repo/issues").is_none());
+        assert!(normalize_github_repository("https://github.com/owner/repo?tab=readme").is_none());
+    }
+
+    #[test]
+    fn rejects_unbounded_or_controlled_versions() {
+        assert_eq!(clean_version(" 1.2.3-rc1 "), Some("1.2.3-rc1".to_string()));
+        assert!(clean_version("1.2.3\nInjected: yes").is_none());
+        assert!(clean_version(&"1".repeat(65)).is_none());
+        assert!(extract_description_version("Version: 1.0.0\n").is_some());
+        assert!(extract_description_version("Version: 1.0.0<script>\n").is_none());
     }
 }

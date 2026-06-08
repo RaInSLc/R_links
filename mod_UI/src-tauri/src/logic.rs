@@ -84,11 +84,12 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
 pub fn extract_package_name(input: &str) -> String {
     let value = input.trim().trim_matches(['"', '\'']);
     if value.starts_with("http://") || value.starts_with("https://") {
-        if let Some((_, path)) = value.split_once("github.com/") {
-            let parts = path.trim_end_matches('/').split('/').collect::<Vec<_>>();
-            if parts.len() >= 2 {
-                return parts[1].trim_end_matches(".git").to_string();
-            }
+        if let Some(repository) = normalize_github_repository(value) {
+            return repository
+                .rsplit('/')
+                .next()
+                .unwrap_or(&repository)
+                .to_string();
         }
         let file = value.rsplit('/').next().unwrap_or(value);
         if let Some((name, _)) = file.split_once('_') {
@@ -291,20 +292,18 @@ fn generate_command(
             )
         }
         "github" => {
-            let repository = value
-                .split_once("github.com/")
-                .map(|(_, path)| path)
-                .unwrap_or(value)
-                .trim_end_matches('/')
-                .trim_end_matches(".git");
-            if !is_valid_github_repository(repository) {
+            let Some(repository) = normalize_github_repository(value) else {
                 return Err(format!("{value} 不是有效的 GitHub 仓库标识，应为 owner/repo"));
-            }
-            package_name = repository.rsplit('/').next().unwrap_or(repository).to_string();
+            };
+            package_name = repository
+                .rsplit('/')
+                .next()
+                .unwrap_or(&repository)
+                .to_string();
             effective_version.clear();
             format!(
                 "remotes::install_github(\"{}\", upgrade = \"never\", dependencies = {dependencies})",
-                escape_r(repository)
+                escape_r(&repository)
             )
         }
         "base" => format!(
@@ -503,6 +502,44 @@ pub fn is_valid_github_repository(value: &str) -> bool {
                 character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
             })
     })
+}
+
+pub fn normalize_github_repository(value: &str) -> Option<String> {
+    let trimmed = value.trim().trim_matches(['"', '\'']).trim_end_matches('/');
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if trimmed.contains("://") {
+        return github_repository_from_url(trimmed);
+    }
+
+    let repository = trimmed.trim_end_matches(".git");
+    is_valid_github_repository(repository).then(|| repository.to_string())
+}
+
+fn github_repository_from_url(value: &str) -> Option<String> {
+    let parsed = Url::parse(value).ok()?;
+    if parsed.scheme() != "https" || parsed.host_str()? != "github.com" {
+        return None;
+    }
+    if !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return None;
+    }
+    let segments = parsed
+        .path_segments()?
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>();
+    if segments.len() != 2 {
+        return None;
+    }
+
+    let repository = format!("{}/{}", segments[0], segments[1].trim_end_matches(".git"));
+    is_valid_github_repository(&repository).then_some(repository)
 }
 
 pub fn is_allowed_browser_search_url(value: &str) -> bool {

@@ -3,6 +3,11 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 22:21:08 +08:00] `mod_UI\` GitHub 仓库与版本元数据边界加固**：
+  - 新增 GitHub 仓库归一化逻辑，严格校验 HTTPS、`github.com` 主机、两段式 `owner/repo` 路径，拒绝查询参数、片段、额外路径和伪造 host 字符串。
+  - r-universe `RemoteUrl`、显式 GitHub 输入和脚本生成统一复用仓库归一化逻辑，移除基于 `github.com/` 子串的仓库提取。
+  - 对远端 HTML、DESCRIPTION 与 JSON 来源的版本字符串增加长度和字符约束，新增 2 项单元测试，Rust 测试总数提升至 29 项。
+
 - **[2026-06-08 22:01:32 +08:00] `mod_UI\` 持久化备份与读取边界加固**：
   - 配置文件损坏备份前脱敏 `githubToken` 与 `githubTokenProtected` 字段，避免旧版明文 Token 或 DPAPI 密文进入 `.corrupt.*.bak`。
   - 为设置文件与历史文件读取增加大小上限，超限时只写入占位备份并回退默认状态，避免异常大 JSON 被一次性载入。
