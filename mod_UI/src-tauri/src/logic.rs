@@ -299,7 +299,11 @@ fn choose_best_result<'a>(package: &str, results: &'a [SearchResult]) -> Option<
         .filter(|result| result.found && result.package.eq_ignore_ascii_case(package))
         .collect::<Vec<_>>();
     candidates.sort_by_key(|result| {
-        let strict_name = if result.real_name == package { 0 } else { 1 };
+        let strict_name = if result.real_name.eq_ignore_ascii_case(package) {
+            0
+        } else {
+            1
+        };
         let exact_repo = result
             .repository
             .rsplit('/')
@@ -1260,6 +1264,45 @@ mod tests {
         assert!(output.contains("install.packages(\"demo\""));
         assert!(!output.contains("install_github"));
         assert!(!output.contains("evil/demo"));
+    }
+
+    #[test]
+    fn prefers_case_insensitive_real_name_matches() {
+        let output = generate_script(
+            "demo",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[
+                SearchResult {
+                    package: "demo".to_string(),
+                    requested_version: String::new(),
+                    latest_version: "1.0.0".to_string(),
+                    repository: "https://github.com/other/demo".to_string(),
+                    real_name: "not-demo".to_string(),
+                    source: "github".to_string(),
+                    found: true,
+                    message: "验证成功".to_string(),
+                },
+                SearchResult {
+                    package: "demo".to_string(),
+                    requested_version: String::new(),
+                    latest_version: "2.0.0".to_string(),
+                    repository: String::new(),
+                    real_name: "Demo".to_string(),
+                    source: "cran".to_string(),
+                    found: true,
+                    message: "验证成功".to_string(),
+                },
+            ],
+        )
+        .expect("大小写差异的真实包名应参与优先排序");
+
+        assert!(output.contains("remotes::install_version(\"demo\", version = \"2.0.0\""));
+        assert!(!output.contains("install_github"));
     }
 
     #[test]
