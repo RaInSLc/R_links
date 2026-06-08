@@ -398,9 +398,16 @@ function App() {
 
   async function persistSettings() {
     try {
-      await invoke("save_settings", { settings });
-      setTokenConfigured(settings.githubToken.trim().length > 0 || tokenConfigured);
-      setSettings((current) => ({ ...current, githubToken: "" }));
+      const publicSettings = sanitizePublicSettings(
+        await invoke<PublicSettings>("save_settings", { settings }),
+      );
+      setTokenConfigured(publicSettings.githubTokenConfigured);
+      setSettings({
+        proxy: publicSettings.proxy,
+        githubToken: "",
+        cranMirror: publicSettings.cranMirror,
+        fullSearch: publicSettings.fullSearch,
+      });
       setShowToken(false);
       setStatus("设置已保存并立即生效");
     } catch (error) {

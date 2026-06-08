@@ -178,10 +178,11 @@ fn load_settings(app: AppHandle) -> Result<PublicSettings, String> {
 }
 
 #[tauri::command]
-fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
+fn save_settings(app: AppHandle, settings: Settings) -> Result<PublicSettings, String> {
     let existing = storage::load_existing_settings(&app)?.unwrap_or_default();
     let settings = merge_runtime_settings(settings, &existing)?;
-    storage::save_settings(&app, &settings)
+    storage::save_settings(&app, &settings)?;
+    Ok(settings.public_view())
 }
 
 #[tauri::command]
@@ -405,6 +406,26 @@ mod tests {
         let merged = merge_runtime_settings(incoming, &existing).expect("设置应可合并");
 
         assert_eq!(merged.github_token, "ghp_new");
+    }
+
+    #[test]
+    fn runtime_settings_public_view_reflects_normalized_values() {
+        let existing = Settings::default();
+        let incoming = Settings {
+            proxy: "127.0.0.1:7890".to_string(),
+            github_token: "ghp_new".to_string(),
+            cran_mirror: "https://cloud.r-project.org".to_string(),
+            full_search: true,
+        };
+
+        let public = merge_runtime_settings(incoming, &existing)
+            .expect("设置应可规范化")
+            .public_view();
+
+        assert_eq!(public.proxy, "http://127.0.0.1:7890");
+        assert_eq!(public.cran_mirror, "https://cloud.r-project.org/");
+        assert!(public.full_search);
+        assert!(public.github_token_configured);
     }
 
     #[test]
