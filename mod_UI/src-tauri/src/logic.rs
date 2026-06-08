@@ -490,6 +490,9 @@ fn generate_command(
         "biocGit" => {
             let (real_version, bioc_version) =
                 version.split_once('|').unwrap_or((version, "3.18"));
+            if !is_valid_package_name(value) || value.contains('/') {
+                return Err(format!("{value} 不是有效的 Bioconductor 包名"));
+            }
             if !is_valid_bioc_version(bioc_version) {
                 return Err(format!("Bioconductor 版本格式无效: {bioc_version}"));
             }
@@ -1265,6 +1268,43 @@ mod tests {
 
         assert!(output.contains("remotes::install_github(\"owner/demo\""));
         assert!(!output.contains("https://github.com/owner/demo.git"));
+    }
+
+    #[test]
+    fn rejects_invalid_bioc_git_package_names() {
+        let output = generate_script(
+            "demo",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[SearchResult {
+                package: "demo".to_string(),
+                requested_version: String::new(),
+                latest_version: "1.2.3".to_string(),
+                repository: "3.18".to_string(),
+                real_name: "demo".to_string(),
+                source: "biocGit".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            }],
+        )
+        .expect("合法 Bioconductor 历史版本结果应可生成安装命令");
+        assert!(output.contains("https://git.bioconductor.org/packages/demo"));
+
+        let error = generate_command(
+            "owner/demo",
+            "biocGit",
+            "1.2.3|3.18",
+            false,
+            "https://cloud.r-project.org/",
+            true,
+        )
+        .expect_err("仓库式路径不应进入 Bioconductor Git URL");
+
+        assert!(error.contains("不是有效的 Bioconductor 包名"));
     }
 
     #[test]
