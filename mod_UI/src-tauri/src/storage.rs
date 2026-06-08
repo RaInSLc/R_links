@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
-use crate::models::{HistoryRecord, Settings, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS};
+use crate::models::{
+    HistoryRecord, Settings, MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS,
+};
 
 fn data_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
     let directory = app
@@ -68,18 +70,41 @@ fn sanitize_history(history: Vec<HistoryRecord>) -> Vec<HistoryRecord> {
         .filter(|record| {
             !record.command.trim().is_empty()
                 && record.command.len() <= MAX_HISTORY_COMMAND_CHARS
-                && !record.command.chars().any(|character| {
-                    character.is_control() && !matches!(character, '\r' | '\n' | '\t')
-                })
+                && clean_history_field(&record.package_name, MAX_FIELD_CHARS)
+                && clean_history_field(&record.version, MAX_FIELD_CHARS)
+                && clean_history_field(&record.tool_name, MAX_FIELD_CHARS)
+                && clean_history_field(&record.created_at, MAX_FIELD_CHARS)
+                && clean_history_field(&record.id, MAX_FIELD_CHARS)
+                && !record.command.chars().any(is_forbidden_control)
         })
         .take(MAX_HISTORY_RECORDS)
         .collect()
 }
 
+fn clean_history_field(value: &str, limit: usize) -> bool {
+    value.len() <= limit && !value.chars().any(char::is_control)
+}
+
+fn is_forbidden_control(character: char) -> bool {
+    character.is_control() && !matches!(character, '\r' | '\n' | '\t')
+}
+
 fn atomic_write(path: &PathBuf, content: &str) -> Result<(), String> {
     let tmp = path.with_extension("tmp");
+    let backup = path.with_extension("bak");
     fs::write(&tmp, content).map_err(|error| error.to_string())?;
-    fs::rename(&tmp, path).map_err(|error| error.to_string())
+    if path.exists() {
+        let _ = fs::remove_file(&backup);
+        fs::rename(path, &backup).map_err(|error| error.to_string())?;
+        if let Err(error) = fs::rename(&tmp, path) {
+            let _ = fs::rename(&backup, path);
+            return Err(error.to_string());
+        }
+        let _ = fs::remove_file(&backup);
+        Ok(())
+    } else {
+        fs::rename(&tmp, path).map_err(|error| error.to_string())
+    }
 }
 
 fn backup_corrupt_file(app: &AppHandle, name: &str, content: &str) -> Result<(), String> {

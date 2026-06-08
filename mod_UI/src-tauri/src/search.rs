@@ -6,6 +6,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+use url::Url;
 
 use crate::logic::{infer_bioc_version, is_valid_github_repository, parse_inputs};
 use crate::models::{PackageInput, SearchResponse, SearchResult, Settings};
@@ -346,7 +347,14 @@ async fn search_github(
         log(app, logs, "GitHub API 已触发频率限制");
         return results;
     }
-    let body = match response.json::<GithubSearchResponse>().await {
+    let text = match read_limited_text(response, MAX_JSON_RESPONSE_BYTES).await {
+        Ok(value) => value,
+        Err(error) => {
+            log(app, logs, &format!("GitHub 响应读取失败: {error}"));
+            return results;
+        }
+    };
+    let body = match serde_json::from_str::<GithubSearchResponse>(&text) {
         Ok(value) => value,
         Err(error) => {
             log(app, logs, &format!("GitHub 响应解析失败: {error}"));
@@ -412,10 +420,10 @@ fn authorized_get(client: &Client, url: &str, settings: &Settings) -> reqwest::R
     let request = client
         .get(url)
         .header("Accept", "application/vnd.github+json");
-    if settings.github_token.trim().is_empty() {
-        request
-    } else {
+    if should_attach_github_token(url, settings) {
         request.bearer_auth(settings.github_token.trim())
+    } else {
+        request
     }
 }
 
@@ -448,20 +456,40 @@ async fn get_json(
     serde_json::from_str(&text).ok()
 }
 
-async fn read_limited_text(response: reqwest::Response, limit: usize) -> Result<String, String> {
+async fn read_limited_text(
+    mut response: reqwest::Response,
+    limit: usize,
+) -> Result<String, String> {
     if let Some(length) = response.content_length() {
         if length > limit as u64 {
             return Err("响应内容超过大小限制".to_string());
         }
     }
-    let bytes = response
-        .bytes()
+
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
         .await
-        .map_err(|_| "读取响应失败".to_string())?;
-    if bytes.len() > limit {
-        return Err("响应内容超过大小限制".to_string());
+        .map_err(|_| "读取响应失败".to_string())?
+    {
+        if bytes.len().saturating_add(chunk.len()) > limit {
+            return Err("响应内容超过大小限制".to_string());
+        }
+        bytes.extend_from_slice(&chunk);
     }
-    String::from_utf8(bytes.to_vec()).map_err(|_| "响应不是有效 UTF-8".to_string())
+    String::from_utf8(bytes).map_err(|_| "响应不是有效 UTF-8".to_string())
+}
+
+fn should_attach_github_token(url: &str, settings: &Settings) -> bool {
+    !settings.github_token.trim().is_empty()
+        && Url::parse(url)
+            .ok()
+            .and_then(|parsed| {
+                parsed
+                    .host_str()
+                    .map(|host| host.eq_ignore_ascii_case("api.github.com"))
+            })
+            .unwrap_or(false)
 }
 
 fn extract_html_version(html: &str) -> Option<String> {
@@ -553,5 +581,25 @@ mod tests {
     fn accepts_major_minor_request() {
         assert!(version_compatible("1.50.2", "1.50"));
         assert!(!version_compatible("1.52.0", "1.50"));
+    }
+
+    #[test]
+    fn sends_token_only_to_github_api() {
+        let settings = Settings {
+            github_token: "ghp_demo".to_string(),
+            ..Settings::default()
+        };
+        assert!(should_attach_github_token(
+            "https://api.github.com/search/repositories?q=demo",
+            &settings
+        ));
+        assert!(!should_attach_github_token(
+            "https://r-universe.dev/api/search?q=package:demo",
+            &settings
+        ));
+        assert!(!should_attach_github_token(
+            "https://raw.githubusercontent.com/owner/repo/HEAD/DESCRIPTION",
+            &settings
+        ));
     }
 }

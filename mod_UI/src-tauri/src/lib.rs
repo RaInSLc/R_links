@@ -32,17 +32,19 @@ fn generate_script(
 }
 
 #[tauri::command]
-fn clean_script(script: String) -> String {
-    script
+fn clean_script(script: String) -> Result<String, String> {
+    logic::validate_script_size(&script)?;
+    Ok(script
         .lines()
         .filter(|line| !line.trim_start().starts_with('#') && !line.trim().is_empty())
         .collect::<Vec<_>>()
-        .join("\r\n")
+        .join("\r\n"))
 }
 
 #[tauri::command]
-fn build_history_records(script: String) -> Vec<HistoryRecord> {
-    logic::build_history_records(&script)
+fn build_history_records(script: String) -> Result<Vec<HistoryRecord>, String> {
+    logic::validate_script_size(&script)?;
+    Ok(logic::build_history_records(&script))
 }
 
 #[tauri::command]

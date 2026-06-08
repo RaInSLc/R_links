@@ -7,6 +7,7 @@ pub const MAX_FIELD_CHARS: usize = 2_048;
 pub const MAX_TOKEN_CHARS: usize = 512;
 pub const MAX_HISTORY_RECORDS: usize = 100;
 pub const MAX_HISTORY_COMMAND_CHARS: usize = 8_000;
+pub const MAX_SCRIPT_CHARS: usize = 1_000_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

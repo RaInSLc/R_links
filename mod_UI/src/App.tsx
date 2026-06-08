@@ -61,6 +61,7 @@ const defaultSettings: Settings = {
 const MAX_INPUT_CHARS = 100_000;
 const MAX_PACKAGE_LINES = 500;
 const MAX_SEARCH_TABS = 30;
+const MAX_SCRIPT_CHARS = 1_000_000;
 
 const methods: Array<{
   id: Method;
@@ -112,6 +113,7 @@ function App() {
     [input],
   );
   const inputTooLarge = input.length > MAX_INPUT_CHARS || packageCount > MAX_PACKAGE_LINES;
+  const scriptTooLarge = script.length > MAX_SCRIPT_CHARS;
   const foundCount = results.filter((result) => result.found).length;
   const uniqueFoundCount = new Set(
     results.filter((result) => result.found).map((result) => result.package),
@@ -147,6 +149,10 @@ function App() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      if (inputTooLarge) {
+        setScript("输入超出限制，无法生成脚本。");
+        return;
+      }
       invoke<string>("generate_script", {
         input,
         options: {
@@ -168,6 +174,7 @@ function App() {
     installDependencies,
     settings.cranMirror,
     results,
+    inputTooLarge,
   ]);
 
   useEffect(() => {
@@ -230,6 +237,10 @@ function App() {
     if (!script || script === "等待输入...") {
       return;
     }
+    if (scriptTooLarge) {
+      setStatus(`脚本内容过长，最多允许 ${MAX_SCRIPT_CHARS} 个字符`);
+      return;
+    }
     try {
       await writeText(script);
       const records = await invoke<HistoryRecord[]>("build_history_records", {
@@ -265,6 +276,10 @@ function App() {
   }
 
   async function cleanComments() {
+    if (scriptTooLarge) {
+      setStatus(`脚本内容过长，最多允许 ${MAX_SCRIPT_CHARS} 个字符`);
+      return;
+    }
     try {
       const cleaned = await invoke<string>("clean_script", { script });
       setScript(cleaned);
@@ -468,9 +483,14 @@ function App() {
               <section className="panel script-panel">
                 <PanelHeader step="03" title="脚本预览" meta="R Script" />
                 <pre>{script}</pre>
+                {scriptTooLarge && (
+                  <div className="inline-warning">
+                    脚本内容超出限制：最多 {MAX_SCRIPT_CHARS} 个字符。
+                  </div>
+                )}
                 <div className="script-actions">
-                  <button className="button ghost" onClick={cleanComments}>移除注释</button>
-                  <button className="button primary copy-button" onClick={copyScript} disabled={!script || script === "等待输入..."}>
+                  <button className="button ghost" onClick={cleanComments} disabled={scriptTooLarge}>移除注释</button>
+                  <button className="button primary copy-button" onClick={copyScript} disabled={!script || script === "等待输入..." || scriptTooLarge}>
                     复制完整脚本
                   </button>
                 </div>

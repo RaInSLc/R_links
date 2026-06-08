@@ -3,6 +3,14 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 20:13:07 +08:00] `mod_UI\` 边界条件与凭据隔离加固**：
+  - 为脚本清理与历史记录提取命令增加后端脚本体积上限，前端同步显示脚本超限提示并禁用高风险操作。
+  - 将 HTTP 响应读取改为分块限流，避免服务端缺少 `Content-Length` 时先完整载入超大响应。
+  - 将 GitHub Token 附加范围限制为 `api.github.com`，避免凭据随 r-universe 或 raw 内容请求外带。
+  - 收紧历史记录持久化字段清洗，限制元数据字段长度并拒绝控制字符。
+  - 调整配置与历史 JSON 写入流程，兼容 Windows 已存在目标文件时的替换语义，并保留失败回滚。
+  - 新增 2 项 Rust 单元测试，完成 `npm run build`、`cargo test`、`cargo clippy --all-targets -- -D warnings`、`npm run tauri build -- --no-bundle` 和 `npm audit --audit-level=moderate` 验证。
+
 - **[2026-06-08 19:50:41 +08:00] `mod_UI\` 工程加固与启动文档完善**：
   - 重写 `mod_UI\README.md`，补充 Windows 首次启动、日常开发、构建、验证、常见问题、数据位置和安全边界说明。
   - 收紧 Tauri 权限与 CSP：移除前端 `opener` 插件权限，生产环境禁用远程脚本、对象、iframe 和表单提交，仅保留剪贴板读写与受控 Rust 搜索命令。

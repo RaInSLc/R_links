@@ -6,6 +6,7 @@ use url::Url;
 use crate::models::{
     normalize_http_url, GenerateOptions, HistoryRecord, PackageInput, SearchResult,
     MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES,
+    MAX_SCRIPT_CHARS,
 };
 
 pub fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
@@ -348,6 +349,10 @@ fn generate_command(
 }
 
 pub fn build_history_records(script: &str) -> Vec<HistoryRecord> {
+    if script.len() > MAX_SCRIPT_CHARS {
+        return Vec::new();
+    }
+
     let mut seen = HashSet::new();
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -436,6 +441,13 @@ pub fn validate_input_size(input: &str) -> Result<(), String> {
     let line_count = input.lines().filter(|line| !line.trim().is_empty()).count();
     if line_count > MAX_PACKAGE_LINES {
         return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+    }
+    Ok(())
+}
+
+pub fn validate_script_size(script: &str) -> Result<(), String> {
+    if script.len() > MAX_SCRIPT_CHARS {
+        return Err(format!("脚本内容过长，最多允许 {MAX_SCRIPT_CHARS} 个字符"));
     }
     Ok(())
 }
@@ -558,5 +570,12 @@ mod tests {
         assert!(!is_allowed_browser_search_url(
             "https://example.com/search?q=GSVA"
         ));
+    }
+
+    #[test]
+    fn rejects_oversized_history_script() {
+        let script = "install.packages(\"demo\")\n".repeat((MAX_SCRIPT_CHARS / 25) + 10);
+        assert!(build_history_records(&script).is_empty());
+        assert!(validate_script_size(&script).is_err());
     }
 }
