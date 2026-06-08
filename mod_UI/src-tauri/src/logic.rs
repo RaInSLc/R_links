@@ -231,7 +231,9 @@ pub fn generate_script(
         )?);
     }
 
-    Ok(output.join("\r\n") + "\r\n")
+    let script = output.join("\r\n") + "\r\n";
+    validate_script_size(&script)?;
+    Ok(script)
 }
 
 fn choose_best_result<'a>(package: &str, results: &'a [SearchResult]) -> Option<&'a SearchResult> {
@@ -808,6 +810,28 @@ mod tests {
         let script = "install.packages(\"demo\")\n".repeat((MAX_SCRIPT_CHARS / 25) + 10);
         assert!(build_history_records(&script).is_empty());
         assert!(validate_script_size(&script).is_err());
+    }
+
+    #[test]
+    fn rejects_oversized_generated_script() {
+        let input = (0..MAX_PACKAGE_LINES)
+            .map(|index| format!("package{index:03}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let oversized_mirror = format!("https://{}.example.org/CRAN/", "a".repeat(1900));
+
+        let result = generate_script(
+            &input,
+            &GenerateOptions {
+                method: "base".to_string(),
+                conditional: true,
+                install_dependencies: true,
+                mirror: oversized_mirror,
+            },
+            &[],
+        );
+
+        assert!(result.is_err());
     }
 
     #[test]
