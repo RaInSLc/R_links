@@ -9,6 +9,12 @@ use crate::models::{
     MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
 };
 
+const MAX_GENERATE_METHOD_CHARS: usize = 32;
+const MAX_GENERATE_SEARCH_RESULTS: usize = MAX_PACKAGE_LINES * 16;
+const MAX_RESULT_VERSION_CHARS: usize = 64;
+const MAX_RESULT_SOURCE_CHARS: usize = 16;
+const MAX_RESULT_MESSAGE_CHARS: usize = 512;
+
 pub fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
     validate_input_size(input)?;
 
@@ -130,6 +136,8 @@ pub fn generate_script(
     options: &GenerateOptions,
     results: &[SearchResult],
 ) -> Result<String, String> {
+    let requested_method = normalize_generate_method(&options.method)?;
+    validate_search_results_count(results)?;
     let packages = parse_inputs(input)?;
     if packages.is_empty() {
         return Ok("等待输入...".to_string());
@@ -142,7 +150,7 @@ pub fn generate_script(
         normalize_https_url(&options.mirror, "CRAN 镜像")?
     };
 
-    if options.method == "checkSystem" {
+    if requested_method == "checkSystem" {
         let names = packages
             .iter()
             .map(|item| format!("\"{}\"", escape_r(&item.name)))
@@ -155,13 +163,13 @@ pub fn generate_script(
 
     let mut output = Vec::new();
     for package in packages {
-        let mut value = if matches!(options.method.as_str(), "devtools" | "remotes") {
+        let mut value = if matches!(requested_method, "devtools" | "remotes") {
             package.raw.clone()
         } else {
             package.name.clone()
         };
         let mut version = package.version.clone();
-        let mut method = options.method.clone();
+        let mut method = requested_method.to_string();
 
         if let Some(best) = choose_best_result(&package.name, &results) {
             let source_label = source_label(&best.source);
@@ -188,7 +196,7 @@ pub fn generate_script(
                 }
             }
 
-            if options.method == "auto" {
+            if requested_method == "auto" {
                 match best.source.as_str() {
                     "biocGit" => {
                         method = "biocGit".to_string();
@@ -211,7 +219,7 @@ pub fn generate_script(
             output.push("# [提示: CRAN/Bioconductor/GitHub 均未找到]".to_string());
         }
 
-        if options.method == "auto"
+        if requested_method == "auto"
             && !matches!(method.as_str(), "github" | "biocManager" | "biocGit")
         {
             method = if is_clean_version(&version) {
@@ -234,6 +242,34 @@ pub fn generate_script(
     let script = output.join("\r\n") + "\r\n";
     validate_script_size(&script)?;
     Ok(script)
+}
+
+fn normalize_generate_method(value: &str) -> Result<&'static str, String> {
+    if value.len() > MAX_GENERATE_METHOD_CHARS
+        || value.chars().any(|character| character.is_control())
+    {
+        return Err("安装方式无效".to_string());
+    }
+    match value.trim() {
+        "auto" => Ok("auto"),
+        "devtools" => Ok("devtools"),
+        "remotes" => Ok("remotes"),
+        "github" => Ok("github"),
+        "base" => Ok("base"),
+        "version" => Ok("version"),
+        "biocManager" => Ok("biocManager"),
+        "checkSystem" => Ok("checkSystem"),
+        _ => Err("不支持的安装方式".to_string()),
+    }
+}
+
+fn validate_search_results_count(results: &[SearchResult]) -> Result<(), String> {
+    if results.len() > MAX_GENERATE_SEARCH_RESULTS {
+        return Err(format!(
+            "检索结果数量过多，最多允许 {MAX_GENERATE_SEARCH_RESULTS} 条"
+        ));
+    }
+    Ok(())
 }
 
 fn choose_best_result<'a>(package: &str, results: &'a [SearchResult]) -> Option<&'a SearchResult> {
@@ -270,6 +306,9 @@ fn sanitize_search_results(results: &[SearchResult]) -> Vec<SearchResult> {
 }
 
 fn sanitize_search_result(result: &SearchResult) -> Option<SearchResult> {
+    if !search_result_fields_within_bounds(result) {
+        return None;
+    }
     let package = clean_result_package(&result.package)?;
     let requested_version = clean_result_version(&result.requested_version).unwrap_or_default();
     let latest_version = clean_result_version(&result.latest_version).unwrap_or_default();
@@ -292,6 +331,16 @@ fn sanitize_search_result(result: &SearchResult) -> Option<SearchResult> {
         found: result.found,
         message,
     })
+}
+
+fn search_result_fields_within_bounds(result: &SearchResult) -> bool {
+    result.package.len() <= MAX_FIELD_CHARS
+        && result.requested_version.len() <= MAX_RESULT_VERSION_CHARS
+        && result.latest_version.len() <= MAX_RESULT_VERSION_CHARS
+        && result.repository.len() <= MAX_FIELD_CHARS
+        && result.real_name.len() <= MAX_FIELD_CHARS
+        && result.source.len() <= MAX_RESULT_SOURCE_CHARS
+        && result.message.len() <= MAX_RESULT_MESSAGE_CHARS
 }
 
 fn clean_result_package(value: &str) -> Option<String> {
@@ -835,6 +884,56 @@ mod tests {
     }
 
     #[test]
+    fn rejects_invalid_generate_method_without_echoing_value() {
+        let method = format!("bad{}\n{}", "x".repeat(128), "system(\"calc.exe\")");
+        let error = generate_script(
+            "demo",
+            &GenerateOptions {
+                method: method.clone(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[],
+        )
+        .expect_err("非法安装方式应被拒绝");
+
+        assert_eq!(error, "安装方式无效");
+        assert!(!error.contains(&method));
+        assert!(!error.contains("calc.exe"));
+    }
+
+    #[test]
+    fn rejects_unbounded_generate_search_results() {
+        let results = (0..=MAX_GENERATE_SEARCH_RESULTS)
+            .map(|index| SearchResult {
+                package: format!("demo{index}"),
+                requested_version: String::new(),
+                latest_version: "1.0.0".to_string(),
+                repository: String::new(),
+                real_name: format!("demo{index}"),
+                source: "cran".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            })
+            .collect::<Vec<_>>();
+
+        let error = generate_script(
+            "demo",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &results,
+        )
+        .expect_err("超出上限的检索结果应被拒绝");
+
+        assert!(error.contains("检索结果数量过多"));
+    }
+
+    #[test]
     fn rejects_unsafe_install_url_inputs() {
         assert!(parse_input_line("https://user:pass@example.com/pkg_1.0.tar.gz").is_none());
         assert!(parse_input_line("http://example.com/pkg_1.0.tar.gz").is_none());
@@ -944,5 +1043,34 @@ mod tests {
         assert!(output.contains("install.packages(\"demo\""));
         assert!(!output.contains("install_version"));
         assert!(!output.contains("Injected"));
+    }
+
+    #[test]
+    fn ignores_search_results_with_oversized_fields() {
+        let huge_repository = format!("https://github.com/owner/{}", "a".repeat(MAX_FIELD_CHARS));
+        let output = generate_script(
+            "demo",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[SearchResult {
+                package: "demo".to_string(),
+                requested_version: String::new(),
+                latest_version: "1.2.3".to_string(),
+                repository: huge_repository.clone(),
+                real_name: "demo".to_string(),
+                source: "github".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            }],
+        )
+        .expect("超大字段结果应被忽略并回退基础安装");
+
+        assert!(output.contains("install.packages(\"demo\""));
+        assert!(!output.contains("install_github"));
+        assert!(!output.contains(&huge_repository));
     }
 }
