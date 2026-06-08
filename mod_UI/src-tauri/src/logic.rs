@@ -24,6 +24,7 @@ static INPUT_PACKAGE_RE: OnceLock<Regex> = OnceLock::new();
 static INPUT_VERSION_RE: OnceLock<Regex> = OnceLock::new();
 static QUOTED_VALUE_RE: OnceLock<Regex> = OnceLock::new();
 static HISTORY_VERSION_RE: OnceLock<Regex> = OnceLock::new();
+static BASE_HISTORY_RE: OnceLock<[Regex; 4]> = OnceLock::new();
 static INSTALL_URL_HISTORY_RE: OnceLock<Regex> = OnceLock::new();
 static CRAN_HISTORY_RE: OnceLock<[Regex; 2]> = OnceLock::new();
 
@@ -624,18 +625,28 @@ pub fn supported_history_command(command: &str) -> Option<String> {
         return None;
     }
 
-    let patterns = [
-        r#"^packageVersion\("[A-Za-z0-9._-]{1,128}"\)$"#,
-        r#"^BiocManager::install\("[A-Za-z0-9._-]{1,128}", update = FALSE, ask = FALSE, dependencies = (TRUE|FALSE)\)$"#,
-        r#"^remotes::install_github\("[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
-        r#"^remotes::install_git\("https://git\.bioconductor\.org/packages/[A-Za-z0-9._-]{1,128}", ref = "RELEASE_[0-9]+_[0-9]+", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
-    ];
-
-    if patterns.iter().any(|pattern| {
-        Regex::new(pattern)
-            .expect("固定历史命令正则必须有效")
-            .is_match(command)
-    }) {
+    if BASE_HISTORY_RE
+        .get_or_init(|| {
+            [
+                Regex::new(r#"^packageVersion\("[A-Za-z0-9._-]{1,128}"\)$"#)
+                    .expect("固定 packageVersion 历史命令正则必须有效"),
+                Regex::new(
+                    r#"^BiocManager::install\("[A-Za-z0-9._-]{1,128}", update = FALSE, ask = FALSE, dependencies = (TRUE|FALSE)\)$"#,
+                )
+                .expect("固定 BiocManager 历史命令正则必须有效"),
+                Regex::new(
+                    r#"^remotes::install_github\("[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
+                )
+                .expect("固定 install_github 历史命令正则必须有效"),
+                Regex::new(
+                    r#"^remotes::install_git\("https://git\.bioconductor\.org/packages/[A-Za-z0-9._-]{1,128}", ref = "RELEASE_[0-9]+_[0-9]+", upgrade = "never", dependencies = (TRUE|FALSE)\)$"#,
+                )
+                .expect("固定 install_git 历史命令正则必须有效"),
+            ]
+        })
+        .iter()
+        .any(|regex| regex.is_match(command))
+    {
         return Some(command.to_string());
     }
 

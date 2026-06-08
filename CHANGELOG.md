@@ -3,6 +3,11 @@
 ## [2026-06-09]
 
 ### Added
+- **[2026-06-09 04:35:50 +08:00] `mod_UI\` 基础历史命令正则缓存加固**：
+  - `packageVersion`、`BiocManager::install`、`install_github` 与 `install_git` 历史命令白名单正则改用 `OnceLock` 缓存。
+  - 降低历史记录构建和保存清洗路径中重复编译固定正则的开销。
+  - 保持历史命令白名单规则不变，继续复用既有合法/非法历史命令测试覆盖行为一致性。
+
 - **[2026-06-09 04:28:05 +08:00] `mod_UI\` 检索 HTML 版本正则缓存加固**：
   - `search.rs` 中 CRAN 与 Bioconductor HTML 版本提取的固定正则改用 `OnceLock` 缓存。
   - 减少多包、多源检索时重复编译正则造成的 CPU 与分配开销。
