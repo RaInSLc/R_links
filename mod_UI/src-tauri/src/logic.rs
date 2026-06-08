@@ -5,9 +5,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 
 use crate::models::{
-    normalize_cran_mirror_url, normalize_https_url, GenerateOptions, HistoryRecord, PackageInput,
-    SearchResult, MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS,
-    MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
+    normalize_cran_mirror_url, normalize_https_url, url_has_explicit_port, GenerateOptions,
+    HistoryRecord, PackageInput, SearchResult, MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS,
+    MAX_HISTORY_RECORDS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
 };
 
 const MAX_GENERATE_METHOD_CHARS: usize = 32;
@@ -858,6 +858,8 @@ fn github_repository_from_url(value: &str) -> Option<String> {
     }
     if !parsed.username().is_empty()
         || parsed.password().is_some()
+        || parsed.port().is_some()
+        || url_has_explicit_port(value)
         || parsed.query().is_some()
         || parsed.fragment().is_some()
     {
@@ -1007,6 +1009,10 @@ mod tests {
         )
         .is_some());
         assert!(supported_history_command(
+            "remotes::install_url(\"https://example.org:443/src/contrib/demo_1.0.0.tar.gz\", dependencies = TRUE)"
+        )
+        .is_none());
+        assert!(supported_history_command(
             "remotes::install_url(\"https://github.com/owner/demo\", dependencies = TRUE)"
         )
         .is_none());
@@ -1021,6 +1027,7 @@ mod tests {
         assert!(!is_valid_github_repository("owner/repo/extra"));
         assert!(!is_valid_github_repository("../repo"));
         assert!(is_valid_github_repository("owner/repo.name"));
+        assert!(normalize_github_repository("https://github.com:443/owner/repo").is_none());
     }
 
     #[test]
@@ -1170,6 +1177,7 @@ mod tests {
     fn rejects_unsafe_install_url_inputs() {
         assert!(parse_input_line("https://example.org/src/contrib/demo_1.0.0.tar.gz").is_some());
         assert!(parse_input_line("https://user:pass@example.com/pkg_1.0.tar.gz").is_none());
+        assert!(parse_input_line("https://example.org:443/pkg_1.0.tar.gz").is_none());
         assert!(parse_input_line("http://example.com/pkg_1.0.tar.gz").is_none());
         assert!(parse_input_line("ftp://example.com/pkg_1.0.tar.gz").is_none());
         assert!(parse_input_line("https://github.com/owner/demo").is_none());

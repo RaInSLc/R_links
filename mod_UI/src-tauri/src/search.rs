@@ -12,7 +12,7 @@ use url::Url;
 use crate::logic::{
     infer_bioc_version, is_valid_package_name, normalize_github_repository, parse_inputs,
 };
-use crate::models::{PackageInput, SearchResponse, SearchResult, Settings};
+use crate::models::{url_has_explicit_port, PackageInput, SearchResponse, SearchResult, Settings};
 
 const BIOC_VERSIONS: &[&str] = &[
     "3.23", "3.22", "3.21", "3.20", "3.19", "3.18", "3.17", "3.16", "3.15", "3.14", "3.13", "3.12",
@@ -611,6 +611,7 @@ fn validate_search_request_url(value: &str) -> Result<(), String> {
     let parsed = Url::parse(value).map_err(|_| "检索 URL 无效，已阻止请求".to_string())?;
     if parsed.scheme() != "https"
         || parsed.port().is_some()
+        || url_has_explicit_port(value)
         || !parsed.username().is_empty()
         || parsed.password().is_some()
         || parsed.fragment().is_some()
@@ -1011,6 +1012,7 @@ mod tests {
             "http://cloud.r-project.org/web/packages/demo/index.html",
             "https://user:pass@api.github.com/search/repositories?q=demo",
             "https://api.github.com:443/search/repositories?q=demo",
+            "https://cloud.r-project.org:443/web/packages/demo/index.html",
             "https://api.github.com/search/repositories?q=demo#token",
             "https://example.com/search/repositories?q=demo",
             "https://raw.githubusercontent.com/owner/repo/HEAD/DESCRIPTION?token=secret",

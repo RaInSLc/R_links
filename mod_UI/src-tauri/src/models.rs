@@ -136,6 +136,9 @@ pub fn normalize_http_url(value: &str, field_name: &str) -> Result<String, Strin
     if parsed.host_str().is_none() {
         return Err(format!("{field_name}缺少主机名"));
     }
+    if parsed.port().is_some() || url_has_explicit_port(trimmed) {
+        return Err(format!("{field_name}不允许包含显式端口"));
+    }
     if !parsed.username().is_empty() || parsed.password().is_some() {
         return Err(format!("{field_name}不允许包含用户名或密码"));
     }
@@ -208,6 +211,30 @@ fn normalize_token(value: &str) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
+pub fn url_has_explicit_port(value: &str) -> bool {
+    let trimmed = value.trim();
+    let Some(scheme_end) = trimmed.find("://") else {
+        return false;
+    };
+    let authority_start = scheme_end + 3;
+    let authority_end = trimmed[authority_start..]
+        .find(['/', '?', '#'])
+        .map(|index| authority_start + index)
+        .unwrap_or(trimmed.len());
+    let authority = &trimmed[authority_start..authority_end];
+    let host_port = authority
+        .rsplit_once('@')
+        .map(|(_, host_port)| host_port)
+        .unwrap_or(authority);
+
+    if let Some(rest) = host_port.strip_prefix('[') {
+        return rest
+            .find(']')
+            .is_some_and(|index| rest[index + 1..].starts_with(':'));
+    }
+    host_port.contains(':')
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -255,12 +282,25 @@ mod tests {
         assert!(normalize_cran_mirror_url("https://cloud.r-project.org?token=secret").is_err());
         assert!(normalize_cran_mirror_url("https://cloud.r-project.org/#cran").is_err());
         assert!(normalize_cran_mirror_url("https://user:pass@example.com/CRAN/").is_err());
+        assert!(normalize_cran_mirror_url("https://cloud.r-project.org:443/").is_err());
     }
 
     #[test]
     fn rejects_plain_http_package_source_url() {
         assert!(normalize_https_url("http://example.com/pkg_1.0.tar.gz", "安装 URL").is_err());
         assert!(normalize_https_url("https://example.com/pkg_1.0.tar.gz", "安装 URL").is_ok());
+        assert!(normalize_https_url("https://example.com:443/pkg_1.0.tar.gz", "安装 URL").is_err());
+    }
+
+    #[test]
+    fn detects_explicit_url_ports_before_url_normalization() {
+        assert!(url_has_explicit_port("https://example.com:443/path"));
+        assert!(url_has_explicit_port(
+            "https://user:pass@example.com:443/path"
+        ));
+        assert!(url_has_explicit_port("https://[::1]:443/path"));
+        assert!(!url_has_explicit_port("https://example.com/path"));
+        assert!(!url_has_explicit_port("https://[::1]/path"));
     }
 
     #[test]
