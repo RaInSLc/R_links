@@ -87,6 +87,7 @@ const MAX_RESULT_FIELD_CHARS = 2_048;
 const MAX_VERSION_CHARS = 64;
 const MAX_SOURCE_CHARS = 16;
 const MAX_HISTORY_FIELD_CHARS = 8_000;
+const utf8Encoder = new TextEncoder();
 
 const methods: Array<{
   id: Method;
@@ -152,7 +153,8 @@ function App() {
     () => input.split(/\r?\n/).filter((line) => line.trim()).length,
     [input],
   );
-  const inputTooLarge = input.length > MAX_INPUT_CHARS || packageCount > MAX_PACKAGE_LINES;
+  const inputBytes = useMemo(() => utf8Length(input), [input]);
+  const inputTooLarge = inputBytes > MAX_INPUT_CHARS || packageCount > MAX_PACKAGE_LINES;
   const scriptTooLarge = script.length > MAX_SCRIPT_CHARS;
   const foundCount = results.filter((result) => result.found).length;
   const uniqueFoundCount = new Set(
@@ -254,7 +256,7 @@ function App() {
   async function startSearch() {
     if (!input.trim() || searching || inputTooLarge) {
       if (inputTooLarge) {
-        setStatus(`输入超出限制：最多 ${MAX_PACKAGE_LINES} 行、${MAX_INPUT_CHARS} 个字符`);
+        setStatus(`输入超出限制：最多 ${MAX_PACKAGE_LINES} 行、${MAX_INPUT_CHARS} 字节`);
       }
       return;
     }
@@ -336,8 +338,8 @@ function App() {
     try {
       const value = await readText();
       if (value) {
-        if (value.length > MAX_INPUT_CHARS) {
-          setStatus(`剪贴板内容过长，最多允许 ${MAX_INPUT_CHARS} 个字符`);
+        if (utf8Length(value) > MAX_INPUT_CHARS) {
+          setStatus(`剪贴板内容过长，最多允许 ${MAX_INPUT_CHARS} 字节`);
           return;
         }
         setInput(value);
@@ -524,7 +526,7 @@ function App() {
                 />
                 {inputTooLarge && (
                   <div className="inline-warning">
-                    输入超出限制：最多 {MAX_PACKAGE_LINES} 行、{MAX_INPUT_CHARS} 个字符。
+                    输入超出限制：最多 {MAX_PACKAGE_LINES} 行、{MAX_INPUT_CHARS} 字节。
                   </div>
                 )}
                 <div className="input-actions">
@@ -841,6 +843,10 @@ function safeText(value: unknown, limit: number) {
     .trim()
     .replace(/[\p{C}]/gu, "")
     .slice(0, limit);
+}
+
+function utf8Length(value: string) {
+  return utf8Encoder.encode(value).length;
 }
 
 function safeSource(value: unknown) {
