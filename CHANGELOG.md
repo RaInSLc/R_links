@@ -3,6 +3,11 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 20:33:35 +08:00] `mod_UI\` 安装 URL 与解析失败处理加固**：
+  - 包输入解析改为对非空非注释行执行显式失败返回，避免非法输入被静默丢弃后生成误导性空脚本。
+  - 对 `devtools::install_url` 与 `remotes::install_url` 的 URL 输入复用后端 URL 规范化校验，拒绝非 HTTP/HTTPS、带凭据或含控制字符的安装地址。
+  - 新增 URL 安全校验单元测试，完成 `npm run build`、`cargo test`、`cargo clippy --all-targets -- -D warnings` 与 `npm run tauri build -- --no-bundle` 验证。
+
 - **[2026-06-08 20:22:10 +08:00] `mod_UI\` Tauri 外壳安全策略收紧**：
   - 生产 CSP 移除 `style-src 'unsafe-inline'`，保持脚本、对象、iframe、表单和远程连接默认禁用。
   - 主窗口显式关闭拖放、DevTools，并启用 incognito WebView，减少非必要 WebView 状态面。

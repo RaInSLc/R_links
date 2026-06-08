@@ -11,13 +11,19 @@ use crate::models::{
 
 pub fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
     validate_input_size(input)?;
-    let packages = input
-        .lines()
-        .take(MAX_PACKAGE_LINES + 1)
-        .filter_map(parse_input_line)
-        .collect::<Vec<_>>();
-    if packages.len() > MAX_PACKAGE_LINES {
-        return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+
+    let mut packages = Vec::new();
+    for (index, line) in input.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let package = parse_input_line(trimmed)
+            .ok_or_else(|| format!("第 {} 行输入格式无效或包含不允许的字符", index + 1))?;
+        packages.push(package);
+        if packages.len() > MAX_PACKAGE_LINES {
+            return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+        }
     }
     Ok(packages)
 }
@@ -28,7 +34,14 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
         return None;
     }
 
+    if raw.contains("://") && !raw.starts_with("http://") && !raw.starts_with("https://") {
+        return None;
+    }
+
     if raw.starts_with("http://") || raw.starts_with("https://") {
+        if normalize_http_url(raw, "安装 URL").is_err() {
+            return None;
+        }
         let name = extract_package_name(raw);
         if !is_valid_package_name(&name) {
             return None;
@@ -263,12 +276,20 @@ fn generate_command(
     let mut effective_version = version.to_string();
 
     let raw = match method {
-        "devtools" => format!(
-            "devtools::install_url(\"{escaped_value}\", dependencies = {dependencies})"
-        ),
-        "remotes" => format!(
-            "remotes::install_url(\"{escaped_value}\", dependencies = {dependencies})"
-        ),
+        "devtools" => {
+            let url = normalize_http_url(value, "安装 URL")?;
+            format!(
+                "devtools::install_url(\"{}\", dependencies = {dependencies})",
+                escape_r(&url)
+            )
+        }
+        "remotes" => {
+            let url = normalize_http_url(value, "安装 URL")?;
+            format!(
+                "remotes::install_url(\"{}\", dependencies = {dependencies})",
+                escape_r(&url)
+            )
+        }
         "github" => {
             let repository = value
                 .split_once("github.com/")
@@ -577,5 +598,22 @@ mod tests {
         let script = "install.packages(\"demo\")\n".repeat((MAX_SCRIPT_CHARS / 25) + 10);
         assert!(build_history_records(&script).is_empty());
         assert!(validate_script_size(&script).is_err());
+    }
+
+    #[test]
+    fn rejects_unsafe_install_url_inputs() {
+        assert!(parse_input_line("https://user:pass@example.com/pkg_1.0.tar.gz").is_none());
+        assert!(parse_input_line("ftp://example.com/pkg_1.0.tar.gz").is_none());
+        assert!(generate_script(
+            "https://user:pass@example.com/pkg_1.0.tar.gz",
+            &GenerateOptions {
+                method: "remotes".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[],
+        )
+        .is_err());
     }
 }
