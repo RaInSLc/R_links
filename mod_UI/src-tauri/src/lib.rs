@@ -6,7 +6,9 @@ mod storage;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Manager, State};
 
-use models::{GenerateOptions, HistoryRecord, SearchResponse, SearchResult, Settings};
+use models::{
+    GenerateOptions, HistoryRecord, PublicSettings, SearchResponse, SearchResult, Settings,
+};
 
 pub struct SearchState {
     running: AtomicBool,
@@ -48,13 +50,14 @@ fn build_history_records(script: String) -> Result<Vec<HistoryRecord>, String> {
 }
 
 #[tauri::command]
-fn load_settings(app: AppHandle) -> Result<Settings, String> {
-    storage::load_settings(&app)
+fn load_settings(app: AppHandle) -> Result<PublicSettings, String> {
+    storage::load_settings(&app).map(|settings| settings.public_view())
 }
 
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
-    let settings = settings.normalized()?;
+    let existing = storage::load_settings(&app).unwrap_or_default();
+    let settings = settings.merged_with_existing_token(&existing)?;
     storage::save_settings(&app, &settings)
 }
 

@@ -18,6 +18,15 @@ pub struct Settings {
     pub full_search: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicSettings {
+    pub proxy: String,
+    pub github_token_configured: bool,
+    pub cran_mirror: String,
+    pub full_search: bool,
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -41,6 +50,23 @@ impl Settings {
             cran_mirror,
             full_search: self.full_search,
         })
+    }
+
+    pub fn public_view(&self) -> PublicSettings {
+        PublicSettings {
+            proxy: self.proxy.clone(),
+            github_token_configured: !self.github_token.trim().is_empty(),
+            cran_mirror: self.cran_mirror.clone(),
+            full_search: self.full_search,
+        }
+    }
+
+    pub fn merged_with_existing_token(&self, existing: &Settings) -> Result<Self, String> {
+        let mut normalized = self.normalized()?;
+        if normalized.github_token.is_empty() {
+            normalized.github_token = existing.github_token.clone();
+        }
+        Ok(normalized)
     }
 }
 
@@ -185,5 +211,35 @@ mod tests {
     fn rejects_plain_http_package_source_url() {
         assert!(normalize_https_url("http://example.com/pkg_1.0.tar.gz", "安装 URL").is_err());
         assert!(normalize_https_url("https://example.com/pkg_1.0.tar.gz", "安装 URL").is_ok());
+    }
+
+    #[test]
+    fn public_settings_do_not_expose_token() {
+        let settings = Settings {
+            github_token: "ghp_secret".to_string(),
+            ..Settings::default()
+        };
+        let public = settings.public_view();
+        assert!(public.github_token_configured);
+        let encoded = serde_json::to_string(&public).expect("公开设置应可序列化");
+        assert!(!encoded.contains("ghp_secret"));
+        assert!(!encoded.contains("githubToken\":\""));
+        assert!(encoded.contains("githubTokenConfigured"));
+    }
+
+    #[test]
+    fn empty_token_preserves_existing_saved_token() {
+        let existing = Settings {
+            github_token: "ghp_existing".to_string(),
+            ..Settings::default()
+        };
+        let incoming = Settings {
+            github_token: String::new(),
+            ..Settings::default()
+        };
+        let merged = incoming
+            .merged_with_existing_token(&existing)
+            .expect("空 Token 应保留旧值");
+        assert_eq!(merged.github_token, "ghp_existing");
     }
 }

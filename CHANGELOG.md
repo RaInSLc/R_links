@@ -3,6 +3,11 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 21:11:36 +08:00] `mod_UI\` GitHub Token IPC 暴露面加固**：
+  - `load_settings` 改为只返回公开设置视图，前端不再通过 IPC 回读 GitHub Token 明文。
+  - 保存设置时若 Token 输入为空则保留已保存 Token，保存后前端立即清空 Token 输入框并仅显示已配置状态。
+  - 新增公开设置不含 Token 明文与空 Token 保留旧值单元测试，完成 `cargo test --locked`、`cargo clippy --all-targets --locked -- -D warnings` 和 `npm run tauri build -- --no-bundle` 验证。
+
 - **[2026-06-08 21:01:22 +08:00] `mod_UI\` 包源传输安全加固**：
   - CRAN 镜像和 `devtools::install_url` / `remotes::install_url` 输入强制使用 HTTPS，拒绝明文 HTTP、带凭据或含控制字符的包源地址。
   - 前端安装 URL 自动识别同步收紧为 HTTPS，README 安全边界补充包源传输要求。

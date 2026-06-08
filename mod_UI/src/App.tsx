@@ -25,6 +25,13 @@ interface Settings {
   fullSearch: boolean;
 }
 
+interface PublicSettings {
+  proxy: string;
+  githubTokenConfigured: boolean;
+  cranMirror: string;
+  fullSearch: boolean;
+}
+
 interface SearchResult {
   package: string;
   requestedVersion: string;
@@ -107,6 +114,7 @@ function App() {
   const [searching, setSearching] = useState(false);
   const [status, setStatus] = useState("就绪");
   const [showToken, setShowToken] = useState(false);
+  const [tokenConfigured, setTokenConfigured] = useState(false);
 
   const packageCount = useMemo(
     () => input.split(/\r?\n/).filter((line) => line.trim()).length,
@@ -121,11 +129,17 @@ function App() {
 
   useEffect(() => {
     Promise.all([
-      invoke<Settings>("load_settings"),
+      invoke<PublicSettings>("load_settings"),
       invoke<HistoryRecord[]>("load_history"),
     ])
       .then(([savedSettings, savedHistory]) => {
-        setSettings(savedSettings);
+        setSettings({
+          proxy: savedSettings.proxy,
+          githubToken: "",
+          cranMirror: savedSettings.cranMirror,
+          fullSearch: savedSettings.fullSearch,
+        });
+        setTokenConfigured(savedSettings.githubTokenConfigured);
         setHistory(savedHistory);
       })
       .catch((error) => setStatus(`初始化失败: ${formatError(error)}`));
@@ -319,6 +333,9 @@ function App() {
   async function persistSettings() {
     try {
       await invoke("save_settings", { settings });
+      setTokenConfigured(settings.githubToken.trim().length > 0 || tokenConfigured);
+      setSettings((current) => ({ ...current, githubToken: "" }));
+      setShowToken(false);
       setStatus("设置已保存并立即生效");
     } catch (error) {
       setStatus(`设置保存失败: ${formatError(error)}`);
@@ -582,7 +599,11 @@ function App() {
                 </label>
                 <label className="field">
                   <span>GitHub Token</span>
-                  <small>仅保存在本应用的数据目录，用于提高 API 配额</small>
+                  <small>
+                    {tokenConfigured
+                      ? "已保存 Token；留空保存会继续保留现有 Token"
+                      : "仅保存在本应用的数据目录，用于提高 API 配额"}
+                  </small>
                   <div className="secret-field">
                     <input
                       type={showToken ? "text" : "password"}
