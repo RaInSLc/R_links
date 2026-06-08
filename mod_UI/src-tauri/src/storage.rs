@@ -233,13 +233,15 @@ fn read_limited_to_string(
 
     let file = fs::File::open(path).map_err(|error| error.to_string())?;
     let mut reader = file.take(max_bytes + 1);
-    let mut content = String::new();
+    let mut bytes = Vec::new();
     reader
-        .read_to_string(&mut content)
+        .read_to_end(&mut bytes)
         .map_err(|error| error.to_string())?;
-    if content.len() as u64 > max_bytes {
+    if bytes.len() as u64 > max_bytes {
         return Ok(None);
     }
+    let content = String::from_utf8(bytes)
+        .unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned());
     Ok(Some(content))
 }
 
@@ -520,6 +522,23 @@ mod tests {
             .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
             .count();
         assert_eq!(leftovers, 0);
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[test]
+    fn read_limited_to_string_treats_invalid_utf8_as_recoverable_content() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-invalid-utf8-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+        let path = directory.join("settings.json");
+        fs::write(&path, [b'{', 0xff, b'}']).expect("应能写入非法 UTF-8 内容");
+
+        let content = read_limited_to_string(&path, MAX_SETTINGS_FILE_BYTES, "设置文件")
+            .expect("非法 UTF-8 应进入可恢复内容路径")
+            .expect("未超过读取上限应返回内容");
+
+        assert!(content.contains('\u{fffd}'));
 
         fs::remove_dir_all(directory).expect("应能清理临时目录");
     }
