@@ -3,6 +3,11 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 19:26:18 +08:00] 新增 OpenCode 依赖风险审计门 Skill**：
+  - 在 `.opencode\skills\dependency-risk-audit-gate\SKILL.md` 中新增项目级技能，触发 `npm install`、`pnpm add`、`yarn add`、`pip install`、`poetry add` 等依赖安装场景。
+  - 规定安装前必须输出依赖风险审计，覆盖 npm 生命周期脚本、Python 构建钩子、可疑二进制、远程执行、凭据访问和高风险 PowerShell/系统命令特征。
+  - 提供允许、需要人工确认、拒绝三类判定标准，并给出 `--ignore-scripts`、`--only-binary=:all:`、`--require-hashes` 等安全替代命令。
+
 - **[2026-06-08 19:14:30 +08:00] 新增独立 Tauri 2 桌面项目 `mod_UI\`**：
   - 使用 React 19、TypeScript、Vite、Tauri 2 与 Rust 建立独立工程，不读取、不修改 `cpp_src\` 源码及旧配置。
   - 新增工作台、检索报告、命令历史和网络设置四个功能视图，支持响应式桌面布局。
