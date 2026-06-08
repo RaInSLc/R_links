@@ -15,15 +15,15 @@ name = "mod_ui_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "=2.6.2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-clipboard-manager = "2"
-tauri-plugin-opener = "2"
-regex = "1"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-url = "2"
-urlencoding = "2"
+tauri = { version = "=2.11.2", features = [] }
+tauri-plugin-clipboard-manager = "=2.3.2"
+tauri-plugin-opener = "=2.5.4"
+regex = "=1.12.3"
+reqwest = { version = "=0.12.28", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
+url = "=2.5.8"
+urlencoding = "=2.1.3"

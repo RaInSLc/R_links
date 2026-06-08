@@ -3,6 +3,11 @@
 ## [2026-06-08]
 
 ### Added
+- **[2026-06-08 20:52:32 +08:00] `mod_UI\` Rust 依赖可复现性加固**：
+  - 将 `src-tauri\Cargo.toml` 直接依赖从 Cargo 默认兼容范围改为与 `Cargo.lock` 一致的精确版本。
+  - README 验证命令增加 `--locked`，避免测试和 Clippy 在验证时隐式更新 Rust 依赖解析结果。
+  - 通过 `cargo update --workspace --locked`、`cargo test --locked`、`cargo clippy --all-targets --locked -- -D warnings`、`npm run build` 与 `npm run tauri build -- --no-bundle` 验证。
+
 - **[2026-06-08 20:43:02 +08:00] `mod_UI\` 前端依赖可复现性加固**：
   - 将 `package.json` 顶层 npm 依赖从 `^` / `~` 范围改为与 `package-lock.json` 一致的精确版本，降低后续安装时的供应链漂移。
   - 同步 `package-lock.json` 根依赖声明，并将 README 首次安装和故障处理命令改为 `npm ci`。

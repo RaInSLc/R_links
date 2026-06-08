@@ -80,8 +80,8 @@ $env:PATH = "C:\Users\rainsc\.cargo\bin;$env:PATH"
 ```powershell
 Set-Location -LiteralPath "Z:\R_links\mod_UI"
 npm run build
-cargo test --manifest-path .\src-tauri\Cargo.toml
-cargo clippy --manifest-path .\src-tauri\Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path .\src-tauri\Cargo.toml --locked
+cargo clippy --manifest-path .\src-tauri\Cargo.toml --all-targets --locked -- -D warnings
 npm run tauri build -- --no-bundle
 ```
 
