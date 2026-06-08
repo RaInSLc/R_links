@@ -627,14 +627,8 @@ fn validate_search_request_url(value: &str) -> Result<(), String> {
         .ok_or_else(|| "检索 URL 缺少主机名，已阻止请求".to_string())?;
     let path = parsed.path();
     let allowed = match host {
-        "cloud.r-project.org" => {
-            parsed.query().is_none()
-                && path.starts_with("/web/packages/")
-                && path.ends_with("/index.html")
-        }
-        "bioconductor.org" => {
-            parsed.query().is_none() && path.starts_with("/packages/") && path.ends_with(".html")
-        }
+        "cloud.r-project.org" => parsed.query().is_none() && is_allowed_cran_package_path(&parsed),
+        "bioconductor.org" => parsed.query().is_none() && is_allowed_bioc_package_path(&parsed),
         "r-universe.dev" => path == "/api/search" && is_allowed_r_universe_query(&parsed),
         "api.github.com" => {
             path == "/search/repositories" && is_allowed_github_search_query(&parsed)
@@ -658,6 +652,51 @@ fn validate_search_request_url(value: &str) -> Result<(), String> {
     } else {
         Err("检索 URL 不在允许范围内，已阻止请求".to_string())
     }
+}
+
+fn is_allowed_cran_package_path(url: &Url) -> bool {
+    url.path_segments().is_some_and(|segments| {
+        let segments = segments.collect::<Vec<_>>();
+        segments.len() == 4
+            && segments[0] == "web"
+            && segments[1] == "packages"
+            && is_valid_search_package_query(segments[2])
+            && segments[3] == "index.html"
+    })
+}
+
+fn is_allowed_bioc_package_path(url: &Url) -> bool {
+    url.path_segments().is_some_and(|segments| {
+        let segments = segments.collect::<Vec<_>>();
+        if segments.len() < 5
+            || segments[0] != "packages"
+            || !is_allowed_bioc_release_segment(segments[1])
+        {
+            return false;
+        }
+        match segments.as_slice() {
+            [_, _, "bioc" | "workflows", "html", file] => is_allowed_bioc_package_file(file),
+            [_, _, "data", "annotation" | "experiment", "html", file] => {
+                is_allowed_bioc_package_file(file)
+            }
+            _ => false,
+        }
+    })
+}
+
+fn is_allowed_bioc_release_segment(value: &str) -> bool {
+    value == "release"
+        || value.split_once('.').is_some_and(|(major, minor)| {
+            !major.is_empty()
+                && !minor.is_empty()
+                && major.chars().all(|character| character.is_ascii_digit())
+                && minor.chars().all(|character| character.is_ascii_digit())
+        })
+}
+
+fn is_allowed_bioc_package_file(file: &str) -> bool {
+    file.strip_suffix(".html")
+        .is_some_and(is_valid_search_package_query)
 }
 
 fn is_allowed_r_universe_query(url: &Url) -> bool {
@@ -941,6 +980,8 @@ mod tests {
             "https://cloud.r-project.org/web/packages/demo/index.html",
             "https://bioconductor.org/packages/release/bioc/html/demo.html",
             "https://bioconductor.org/packages/3.18/bioc/html/demo.html",
+            "https://bioconductor.org/packages/release/data/annotation/html/demo.html",
+            "https://bioconductor.org/packages/3.18/data/experiment/html/demo.html",
             "https://r-universe.dev/api/search?q=package%3Ademo&limit=1",
             "https://api.github.com/search/repositories?q=demo+language%3AR&sort=stars&per_page=10",
             "https://raw.githubusercontent.com/owner/repo/HEAD/DESCRIPTION",
@@ -956,6 +997,12 @@ mod tests {
             "https://example.com/search/repositories?q=demo",
             "https://raw.githubusercontent.com/owner/repo/HEAD/DESCRIPTION?token=secret",
             "https://cloud.r-project.org/web/packages/demo/index.html?mirror=evil",
+            "https://cloud.r-project.org/web/packages/owner/repo/index.html",
+            "https://cloud.r-project.org/web/packages/demo/extra/index.html",
+            "https://bioconductor.org/packages/release/bioc/html/owner/repo.html",
+            "https://bioconductor.org/packages/release/unknown/html/demo.html",
+            "https://bioconductor.org/packages/release/data/unknown/html/demo.html",
+            "https://bioconductor.org/packages/release/bioc/html/demo.html/extra",
             "https://r-universe.dev/api/search?q=package%3Ademo&limit=100",
             "https://r-universe.dev/api/search?q=owner%2Frepo&limit=1",
             "https://api.github.com/search/repositories?q=demo+language%3AR&sort=updated&per_page=10",

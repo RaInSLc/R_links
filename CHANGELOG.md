@@ -3,6 +3,11 @@
 ## [2026-06-09]
 
 ### Added
+- **[2026-06-09 05:49:32 +08:00] `mod_UI\` 检索源路径段白名单加固**：
+  - CRAN 与 Bioconductor 检索 URL 不再只依赖路径前缀/后缀判断，改为按路径段结构校验。
+  - CRAN 要求固定 `/web/packages/{包名}/index.html` 结构，Bioconductor 要求固定 release/版本、类别和 `{包名}.html` 结构。
+  - 扩展网络出口单元测试，覆盖 CRAN 额外路径段、GitHub 仓库式包名、Bioconductor 非法类别和非固定 HTML 路径拒绝行为。
+
 - **[2026-06-09 05:36:50 +08:00] `mod_UI\` GitHub Token 字符集校验加固**：
   - 后端 `normalize_token` 收紧为仅接受无内部空白的 ASCII Token，继续允许空 Token 表示保留已有凭据。
   - 首尾粘贴空白会被规范化清理，内部空格、制表或非 ASCII 字符会被拒绝，避免异常 Authorization 头输入进入运行时设置。
