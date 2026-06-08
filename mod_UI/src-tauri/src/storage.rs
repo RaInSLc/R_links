@@ -254,7 +254,7 @@ fn atomic_write(path: &PathBuf, content: &str) -> Result<(), String> {
         .and_then(|name| name.to_str())
         .ok_or_else(|| "存储文件名无效".to_string())?;
     let tmp = path.with_file_name(format!("{file_name}.{}.tmp", unique_file_suffix()));
-    let backup = path.with_extension("bak");
+    let backup = path.with_file_name(format!("{file_name}.{}.bak", unique_file_suffix()));
     if path.exists() {
         let metadata = fs::metadata(path).map_err(|error| error.to_string())?;
         if !metadata.is_file() {
@@ -287,7 +287,7 @@ fn backup_corrupt_settings_file(app: &AppHandle, content: &str) -> Result<(), St
 
 fn backup_corrupt_file(app: &AppHandle, name: &str, content: &str) -> Result<(), String> {
     let backup = data_file(app, &format!("{name}.corrupt.{}.bak", unique_file_suffix()))?;
-    fs::write(backup, content).map_err(|error| error.to_string())?;
+    atomic_write(&backup, content)?;
     if let Ok(directory) = app.path().app_data_dir() {
         prune_corrupt_backups(&directory, name);
     }
@@ -587,6 +587,27 @@ mod tests {
             .expect("未超过读取上限应返回内容");
 
         assert!(content.contains('\u{fffd}'));
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[test]
+    fn atomic_write_replaces_existing_corrupt_backup_without_tmp() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-corrupt-write-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+        let path = directory.join("settings.json.corrupt.demo.bak");
+        fs::write(&path, "old").expect("应能写入旧备份");
+
+        atomic_write(&path, "new").expect("应能覆盖旧备份");
+
+        assert_eq!(fs::read_to_string(&path).expect("应能读取备份"), "new");
+        let leftovers = fs::read_dir(&directory)
+            .expect("应能列出临时目录")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .count();
+        assert_eq!(leftovers, 0);
 
         fs::remove_dir_all(directory).expect("应能清理临时目录");
     }
