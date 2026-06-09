@@ -84,6 +84,7 @@ const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
 const MAX_SEARCH_LOGS = 1_000;
 const MAX_STATUS_CHARS = 512;
 const MAX_RESULT_FIELD_CHARS = 2_048;
+const MAX_TOKEN_CHARS = 512;
 const MAX_VERSION_CHARS = 64;
 const MAX_SOURCE_CHARS = 16;
 const MAX_HISTORY_FIELD_CHARS = 8_000;
@@ -205,6 +206,22 @@ function App() {
       return false;
     }
     setInput(value);
+    return true;
+  }
+
+  function acceptSettingValue(field: keyof Pick<Settings, "proxy" | "githubToken" | "cranMirror">, value: string) {
+    const nextValue = field === "proxy" ? value : value.trim();
+    const label = settingsFieldLabel(field);
+    const limit = field === "githubToken" ? MAX_TOKEN_CHARS : MAX_RESULT_FIELD_CHARS;
+    if (settingsValueTooLargeOrUnsafe(nextValue, limit)) {
+      setStatus(`${label}包含非法字符或长度过长，最多允许 ${limit} 字节`);
+      return false;
+    }
+    if (field === "githubToken" && !githubTokenTextAllowed(nextValue)) {
+      setStatus("GitHub Token 仅允许可见 ASCII 字符，不能包含空白字符");
+      return false;
+    }
+    setSettings((current) => ({ ...current, [field]: nextValue }));
     return true;
   }
 
@@ -807,8 +824,9 @@ function App() {
                   <small>支持 127.0.0.1:7890 或无凭据代理 URL，不允许路径或查询参数</small>
                   <input
                     value={settings.proxy}
-                    onChange={(event) => setSettings({ ...settings, proxy: event.currentTarget.value })}
+                    onChange={(event) => acceptSettingValue("proxy", event.currentTarget.value)}
                     placeholder="不使用代理"
+                    maxLength={MAX_RESULT_FIELD_CHARS}
                   />
                 </label>
                 <label className="field">
@@ -822,11 +840,11 @@ function App() {
                     <input
                       type={showToken ? "text" : "password"}
                       value={settings.githubToken}
-                      onChange={(event) => setSettings({ ...settings, githubToken: event.currentTarget.value.trim() })}
+                      onChange={(event) => acceptSettingValue("githubToken", event.currentTarget.value)}
                       placeholder="ghp_..."
                       autoComplete="off"
                       spellCheck={false}
-                      maxLength={512}
+                      maxLength={MAX_TOKEN_CHARS}
                     />
                     <button type="button" onClick={() => setShowToken((value) => !value)}>
                       {showToken ? "隐藏" : "显示"}
@@ -864,8 +882,9 @@ function App() {
                   <span>自定义镜像</span>
                   <input
                     value={settings.cranMirror}
-                    onChange={(event) => setSettings({ ...settings, cranMirror: event.currentTarget.value.trim() })}
+                    onChange={(event) => acceptSettingValue("cranMirror", event.currentTarget.value)}
                     placeholder="https://cloud.r-project.org"
+                    maxLength={MAX_RESULT_FIELD_CHARS}
                   />
                 </label>
                 <button className="button primary save-button" onClick={persistSettings}>保存设置</button>
@@ -992,6 +1011,25 @@ function inputValueTooLarge(value: string) {
     nonEmptyLineCountExceeds(value, MAX_PACKAGE_LINES) ||
     utf8Length(value) > MAX_INPUT_CHARS
   );
+}
+
+function settingsValueTooLargeOrUnsafe(value: string, limit: number) {
+  return value.length > limit || utf8Length(value) > limit || /[\p{C}]/u.test(value);
+}
+
+function githubTokenTextAllowed(value: string) {
+  return /^[\x21-\x7E]*$/.test(value);
+}
+
+function settingsFieldLabel(field: keyof Pick<Settings, "proxy" | "githubToken" | "cranMirror">) {
+  switch (field) {
+    case "proxy":
+      return "网络代理";
+    case "githubToken":
+      return "GitHub Token";
+    case "cranMirror":
+      return "CRAN 镜像";
+  }
 }
 
 function nonEmptyLineCountExceeds(value: string, limit: number) {

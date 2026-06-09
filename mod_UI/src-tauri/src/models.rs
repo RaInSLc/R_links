@@ -204,7 +204,7 @@ fn normalize_token(value: &str) -> Result<String, String> {
     }
     if trimmed
         .chars()
-        .any(|character| !character.is_ascii() || character.is_ascii_whitespace())
+        .any(|character| !character.is_ascii_graphic())
     {
         return Err("GitHub Token 包含非法字符".to_string());
     }
@@ -346,7 +346,13 @@ mod tests {
             "ghp_demo"
         );
 
-        for token in ["ghp_demo token", "ghp_demo\tvalue", "ghp_令牌"] {
+        for token in [
+            "ghp_demo token",
+            "ghp_demo\tvalue",
+            "ghp_demo\rvalue",
+            "ghp_demo\u{7f}value",
+            "ghp_令牌",
+        ] {
             let settings = Settings {
                 github_token: token.to_string(),
                 ..Settings::default()
