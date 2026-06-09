@@ -552,9 +552,14 @@ function App() {
   }
 
   async function copyHistoryRecord(record: HistoryRecord) {
+    const cleanRecord = sanitizeHistoryRecord(record);
+    if (!cleanRecord.command) {
+      setStatus("历史命令为空，无法复制");
+      return;
+    }
     try {
-      await writeText(record.command);
-      setStatus(`已复制 ${record.packageName || "历史命令"}`);
+      await writeText(cleanRecord.command);
+      setStatus(`已复制 ${cleanRecord.packageName || "历史命令"}`);
     } catch (error) {
       setStatus(`历史复制失败: ${formatError(error)}`);
     }
