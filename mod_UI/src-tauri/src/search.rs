@@ -21,6 +21,8 @@ const BIOC_VERSIONS: &[&str] = &[
 const BIOC_CATEGORIES: &[&str] = &["bioc", "data/annotation", "data/experiment", "workflows"];
 const MAX_TEXT_RESPONSE_BYTES: usize = 512 * 1024;
 const MAX_DESCRIPTION_BYTES: usize = 64 * 1024;
+const MAX_DESCRIPTION_LINES: usize = 1_000;
+const MAX_DESCRIPTION_LINE_CHARS: usize = 2_048;
 const MAX_JSON_RESPONSE_BYTES: usize = 1024 * 1024;
 const MAX_SEARCH_HTTP_REQUESTS: usize = 200;
 const MAX_RESULT_MESSAGE_CHARS: usize = 256;
@@ -790,7 +792,10 @@ fn extract_description_metadata(description: &str) -> Option<GithubDescription> 
     let mut version = None;
     let mut continuation_allowed = false;
 
-    for raw_line in description.lines() {
+    for (line_index, raw_line) in description.lines().enumerate() {
+        if line_index >= MAX_DESCRIPTION_LINES || raw_line.len() > MAX_DESCRIPTION_LINE_CHARS {
+            return None;
+        }
         let line = raw_line.trim_end_matches('\r');
         if line.trim().is_empty() {
             continuation_allowed = false;
@@ -1215,6 +1220,26 @@ mod tests {
         assert!(!github_package_name_matches_request("demo\nbad", "demo"));
         assert!(extract_description_metadata("Package: demo\nVersion: 1.2.3\n").is_some());
         assert!(extract_description_metadata("Package: demo\nbad\nVersion: 1.2.3\n").is_none());
+    }
+
+    #[test]
+    fn bounds_github_description_metadata_scan() {
+        assert!(extract_description_metadata(
+            "Package: demo\nTitle: Demo package\n  continuation is allowed\nVersion: 1.2.3\n"
+        )
+        .is_some());
+
+        let too_many_lines = format!(
+            "{}Package: demo\nVersion: 1.2.3\n",
+            "Author: demo\n".repeat(MAX_DESCRIPTION_LINES)
+        );
+        assert!(extract_description_metadata(&too_many_lines).is_none());
+
+        let oversized_line = format!(
+            "Package: demo\nTitle: {}\nVersion: 1.2.3\n",
+            "x".repeat(MAX_DESCRIPTION_LINE_CHARS + 1)
+        );
+        assert!(extract_description_metadata(&oversized_line).is_none());
     }
 
     #[test]
