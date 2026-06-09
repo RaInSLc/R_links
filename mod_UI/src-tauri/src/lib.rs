@@ -179,7 +179,7 @@ fn load_settings(app: AppHandle) -> Result<PublicSettings, String> {
 
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings) -> Result<PublicSettings, String> {
-    let existing = storage::load_existing_settings(&app)?.unwrap_or_default();
+    let existing = load_existing_settings_for_save(&app)?;
     let settings = merge_runtime_settings(settings, &existing)?;
     storage::save_settings(&app, &settings)?;
     Ok(settings.public_view())
@@ -256,6 +256,20 @@ async fn start_search(
 
 fn merge_runtime_settings(incoming: Settings, existing: &Settings) -> Result<Settings, String> {
     incoming.merged_with_existing_token(existing)
+}
+
+fn load_existing_settings_for_save(app: &AppHandle) -> Result<Settings, String> {
+    match storage::load_existing_settings(app) {
+        Ok(Some(settings)) => Ok(settings),
+        Ok(None) => Ok(Settings::default()),
+        Err(error) if is_recoverable_settings_read_error(&error) => Ok(Settings::default()),
+        Err(error) => Err(error),
+    }
+}
+
+fn is_recoverable_settings_read_error(error: &str) -> bool {
+    error.starts_with("设置文件超过安全读取上限，已备份")
+        || error.starts_with("设置文件损坏，已备份")
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -426,6 +440,29 @@ mod tests {
         assert_eq!(public.cran_mirror, "https://cloud.r-project.org/");
         assert!(public.full_search);
         assert!(public.github_token_configured);
+    }
+
+    #[test]
+    fn recoverable_settings_read_errors_do_not_preserve_token() {
+        assert!(is_recoverable_settings_read_error(
+            "设置文件损坏，已备份；请重新确认设置后再保存"
+        ));
+        assert!(is_recoverable_settings_read_error(
+            "设置文件超过安全读取上限，已备份；请重新确认设置后再保存"
+        ));
+        assert!(!is_recoverable_settings_read_error("存储目录无效"));
+
+        let incoming = Settings {
+            proxy: "127.0.0.1:7890".to_string(),
+            github_token: String::new(),
+            cran_mirror: "https://cloud.r-project.org".to_string(),
+            full_search: false,
+        };
+        let merged = merge_runtime_settings(incoming, &Settings::default())
+            .expect("损坏旧设置恢复保存时不应要求旧 Token");
+
+        assert!(merged.github_token.is_empty());
+        assert_eq!(merged.proxy, "http://127.0.0.1:7890");
     }
 
     #[test]
