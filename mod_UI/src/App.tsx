@@ -87,6 +87,7 @@ const MAX_RESULT_FIELD_CHARS = 2_048;
 const MAX_VERSION_CHARS = 64;
 const MAX_SOURCE_CHARS = 16;
 const MAX_HISTORY_FIELD_CHARS = 8_000;
+const HISTORY_LOAD_WAIT_TIMEOUT_MS = 5_000;
 const utf8Encoder = new TextEncoder();
 
 const methods: Array<{
@@ -543,7 +544,10 @@ function App() {
   ) {
     historyActionSeq.current += 1;
     const task = historySaveQueue.current.then(async () => {
-      await historyLoadReadyRef.current;
+      const historyLoadReady = await waitForInitialHistoryLoad();
+      if (!historyLoadReady) {
+        setStatus("历史加载等待超时，已使用当前历史继续保存");
+      }
       const nextHistory = buildNext(latestHistoryRef.current).map(sanitizeHistoryRecord);
       const savedHistory = await invoke<HistoryRecord[]>("save_history", { history: nextHistory });
       setHistory(savedHistory);
@@ -553,6 +557,15 @@ function App() {
       () => undefined,
     );
     await task;
+  }
+
+  async function waitForInitialHistoryLoad() {
+    return Promise.race([
+      historyLoadReadyRef.current?.then(() => true) ?? Promise.resolve(true),
+      new Promise<boolean>((resolve) =>
+        window.setTimeout(() => resolve(false), HISTORY_LOAD_WAIT_TIMEOUT_MS),
+      ),
+    ]);
   }
 
   function isMethodDisabled(candidate: Method) {
