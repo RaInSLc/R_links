@@ -331,7 +331,6 @@ function App() {
       return;
     }
     try {
-      await writeText(script);
       const records = await invoke<HistoryRecord[]>("build_history_records", {
         script,
       });
@@ -342,6 +341,7 @@ function App() {
         ...history.filter((record) => !commands.has(record.command)),
       ].slice(0, 100);
       const savedHistory = await invoke<HistoryRecord[]>("save_history", { history: merged });
+      await writeText(script);
       setHistory(takeBounded(asArray(savedHistory).map(sanitizeHistoryRecord), 100));
       setStatus(`已复制脚本并记录 ${records.length} 条命令`);
     } catch (error) {
