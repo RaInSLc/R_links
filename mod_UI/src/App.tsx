@@ -250,7 +250,7 @@ function App() {
   );
   const inputBytes = useMemo(() => utf8Length(input), [input]);
   const inputTooLarge = inputBytes > MAX_INPUT_CHARS || packageCount > MAX_PACKAGE_LINES;
-  const scriptTooLarge = script.length > MAX_SCRIPT_CHARS;
+  const scriptTooLarge = useMemo(() => scriptValueTooLarge(script), [script]);
   const foundCount = results.filter((result) => result.found).length;
   const uniqueFoundCount = new Set(
     results.filter((result) => result.found).map((result) => result.package),
@@ -424,8 +424,8 @@ function App() {
     if (!scriptSnapshot || scriptSnapshot === "等待输入...") {
       return;
     }
-    if (scriptSnapshot.length > MAX_SCRIPT_CHARS) {
-      setStatus(`脚本内容过长，最多允许 ${MAX_SCRIPT_CHARS} 个字符`);
+    if (scriptValueTooLarge(scriptSnapshot)) {
+      setStatus(`脚本内容过长，最多允许 ${MAX_SCRIPT_CHARS} 字节`);
       return;
     }
     try {
@@ -462,8 +462,8 @@ function App() {
 
   async function cleanComments() {
     const sourceScript = latestScriptRef.current;
-    if (sourceScript.length > MAX_SCRIPT_CHARS) {
-      setStatus(`脚本内容过长，最多允许 ${MAX_SCRIPT_CHARS} 个字符`);
+    if (scriptValueTooLarge(sourceScript)) {
+      setStatus(`脚本内容过长，最多允许 ${MAX_SCRIPT_CHARS} 字节`);
       return;
     }
     const requestSeq = scriptRequestSeq.current + 1;
@@ -733,7 +733,7 @@ function App() {
                 <pre>{script}</pre>
                 {scriptTooLarge && (
                   <div className="inline-warning">
-                    脚本内容超出限制：最多 {MAX_SCRIPT_CHARS} 个字符。
+                    脚本内容超出限制：最多 {MAX_SCRIPT_CHARS} 字节。
                   </div>
                 )}
                 <div className="script-actions">
@@ -1011,6 +1011,10 @@ function inputValueTooLarge(value: string) {
     nonEmptyLineCountExceeds(value, MAX_PACKAGE_LINES) ||
     utf8Length(value) > MAX_INPUT_CHARS
   );
+}
+
+function scriptValueTooLarge(value: string) {
+  return value.length > MAX_SCRIPT_CHARS || utf8Length(value) > MAX_SCRIPT_CHARS;
 }
 
 function settingsValueTooLargeOrUnsafe(value: string, limit: number) {

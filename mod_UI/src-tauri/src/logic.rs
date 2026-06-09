@@ -840,7 +840,7 @@ pub fn validate_input_size(input: &str) -> Result<(), String> {
 
 pub fn validate_script_size(script: &str) -> Result<(), String> {
     if script.len() > MAX_SCRIPT_CHARS {
-        return Err(format!("脚本内容过长，最多允许 {MAX_SCRIPT_CHARS} 个字符"));
+        return Err(format!("脚本内容过长，最多允许 {MAX_SCRIPT_CHARS} 字节"));
     }
     Ok(())
 }
@@ -1221,6 +1221,16 @@ mod tests {
         let script = "install.packages(\"demo\")\n".repeat((MAX_SCRIPT_CHARS / 25) + 10);
         assert!(build_history_records(&script).is_empty());
         assert!(validate_script_size(&script).is_err());
+    }
+
+    #[test]
+    fn rejects_oversized_multibyte_script_by_bytes() {
+        let script = "注".repeat((MAX_SCRIPT_CHARS / "注".len()) + 1);
+        assert!(script.chars().count() < MAX_SCRIPT_CHARS);
+        assert!(script.len() > MAX_SCRIPT_CHARS);
+        assert!(validate_script_size(&script).is_err());
+        assert!(build_history_records(&script).is_empty());
+        assert!(clean_script(&script).is_err());
     }
 
     #[test]
