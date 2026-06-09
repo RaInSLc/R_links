@@ -456,12 +456,28 @@ fn clean_result_repository(source: &str, value: &str) -> Option<String> {
 }
 
 fn clean_result_text(value: &str) -> String {
-    value
-        .trim()
-        .chars()
-        .filter(|character| !character.is_control())
-        .take(256)
-        .collect()
+    truncate_utf8_bytes(
+        &value
+            .trim()
+            .chars()
+            .filter(|character| !character.is_control())
+            .collect::<String>(),
+        MAX_RESULT_MESSAGE_CHARS,
+    )
+}
+
+fn truncate_utf8_bytes(value: &str, limit: usize) -> String {
+    let mut bytes = 0usize;
+    let mut output = String::new();
+    for character in value.chars() {
+        let next_bytes = character.len_utf8();
+        if bytes + next_bytes > limit {
+            break;
+        }
+        bytes += next_bytes;
+        output.push(character);
+    }
+    output
 }
 
 fn generate_command(
@@ -1234,6 +1250,14 @@ mod tests {
 
         assert!(parse_input_line(&input).is_none());
         assert!(parse_inputs(&input).is_err());
+    }
+
+    #[test]
+    fn bounds_result_message_by_utf8_bytes() {
+        let message = clean_result_text(&"注".repeat(MAX_RESULT_MESSAGE_CHARS));
+
+        assert!(message.len() <= MAX_RESULT_MESSAGE_CHARS);
+        assert!(message.ends_with('注'));
     }
 
     #[test]
