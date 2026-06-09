@@ -251,9 +251,9 @@ fn read_limited_to_string(
     if bytes.len() as u64 > max_bytes {
         return Ok(None);
     }
-    let content = String::from_utf8(bytes)
-        .unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned());
-    Ok(Some(content))
+    String::from_utf8(bytes)
+        .map(Some)
+        .map_err(|_| format!("{file_label}不是有效 UTF-8"))
 }
 
 fn atomic_write(path: &PathBuf, content: &str) -> Result<(), String> {
@@ -586,18 +586,17 @@ mod tests {
     }
 
     #[test]
-    fn read_limited_to_string_treats_invalid_utf8_as_recoverable_content() {
+    fn read_limited_to_string_rejects_invalid_utf8() {
         let directory =
             std::env::temp_dir().join(format!("mod-ui-invalid-utf8-{}", unique_file_suffix()));
         fs::create_dir_all(&directory).expect("应能创建临时目录");
         let path = directory.join("settings.json");
         fs::write(&path, [b'{', 0xff, b'}']).expect("应能写入非法 UTF-8 内容");
 
-        let content = read_limited_to_string(&path, MAX_SETTINGS_FILE_BYTES, "设置文件")
-            .expect("非法 UTF-8 应进入可恢复内容路径")
-            .expect("未超过读取上限应返回内容");
+        let error = read_limited_to_string(&path, MAX_SETTINGS_FILE_BYTES, "设置文件")
+            .expect_err("非法 UTF-8 应被拒绝");
 
-        assert!(content.contains('\u{fffd}'));
+        assert_eq!(error, "设置文件不是有效 UTF-8");
 
         fs::remove_dir_all(directory).expect("应能清理临时目录");
     }
