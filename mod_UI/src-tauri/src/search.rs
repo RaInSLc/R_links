@@ -806,7 +806,18 @@ fn found_result(
     let latest_version = clean_version(version).unwrap_or_default();
     let source = clean_result_source(source);
     let repository = clean_result_repository(&source, repository).unwrap_or_default();
-    let real_name = clean_result_package_name(real_name).unwrap_or_else(|| package_name.clone());
+    let Some(real_name) = clean_result_real_name(&source, real_name, &package_name) else {
+        return SearchResult {
+            package: package_name.clone(),
+            requested_version: package.version.clone(),
+            latest_version: String::new(),
+            repository: String::new(),
+            real_name: package_name,
+            source: "none".to_string(),
+            found: false,
+            message: "结果真实包名无效，已忽略".to_string(),
+        };
+    };
     SearchResult {
         package: package_name,
         requested_version: package.version.clone(),
@@ -822,6 +833,14 @@ fn found_result(
 fn clean_result_package_name(value: &str) -> Option<String> {
     let trimmed = value.trim();
     is_valid_package_name(trimmed).then(|| trimmed.to_string())
+}
+
+fn clean_result_real_name(source: &str, value: &str, fallback: &str) -> Option<String> {
+    match clean_result_package_name(value) {
+        Some(real_name) => Some(real_name),
+        None if source == "github" => None,
+        None => Some(fallback.to_string()),
+    }
 }
 
 fn clean_result_repository(source: &str, value: &str) -> Option<String> {
@@ -1169,6 +1188,22 @@ mod tests {
 
         assert_eq!(result.repository, "3.18");
         assert_eq!(result.source, "biocGit");
+    }
+
+    #[test]
+    fn invalid_github_real_name_downgrades_result() {
+        let package = PackageInput {
+            raw: "demo".to_string(),
+            name: "demo".to_string(),
+            version: String::new(),
+        };
+
+        let result = found_result(&package, "1.2.3", "owner/demo", "demo\nbad", "github");
+
+        assert!(!result.found);
+        assert_eq!(result.source, "none");
+        assert!(result.repository.is_empty());
+        assert_eq!(result.real_name, "demo");
     }
 
     #[test]
