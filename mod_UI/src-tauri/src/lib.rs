@@ -179,7 +179,7 @@ fn load_settings(app: AppHandle) -> Result<PublicSettings, String> {
 
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings) -> Result<PublicSettings, String> {
-    let existing = load_existing_settings_for_save(&app)?;
+    let existing = load_existing_settings_for_runtime(&app)?;
     let settings = merge_runtime_settings(settings, &existing)?;
     storage::save_settings(&app, &settings)?;
     Ok(settings.public_view())
@@ -187,7 +187,7 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<PublicSettings, S
 
 #[tauri::command]
 fn clear_github_token(app: AppHandle) -> Result<PublicSettings, String> {
-    let settings = clear_github_token_settings(load_existing_settings_for_save(&app)?)?;
+    let settings = clear_github_token_settings(load_existing_settings_for_runtime(&app)?)?;
     storage::save_settings(&app, &settings)?;
     Ok(settings.public_view())
 }
@@ -244,7 +244,7 @@ async fn start_search(
     settings: Settings,
 ) -> Result<SearchResponse, String> {
     logic::validate_input_size(&input)?;
-    let existing = storage::load_existing_settings(&app)?.unwrap_or_default();
+    let existing = load_existing_settings_for_runtime(&app)?;
     let settings = merge_runtime_settings(settings, &existing)?;
     let run = state.try_begin(run_id)?;
     let result = search::search_packages(&app, run_id, run.cancelled(), &input, &settings).await;
@@ -256,8 +256,14 @@ fn merge_runtime_settings(incoming: Settings, existing: &Settings) -> Result<Set
     incoming.merged_with_existing_token(existing)
 }
 
-fn load_existing_settings_for_save(app: &AppHandle) -> Result<Settings, String> {
-    match storage::load_existing_settings(app) {
+fn load_existing_settings_for_runtime(app: &AppHandle) -> Result<Settings, String> {
+    recover_existing_settings_for_runtime(storage::load_existing_settings(app))
+}
+
+fn recover_existing_settings_for_runtime(
+    load_result: Result<Option<Settings>, String>,
+) -> Result<Settings, String> {
+    match load_result {
         Ok(Some(settings)) => Ok(settings),
         Ok(None) => Ok(Settings::default()),
         Err(error) if is_recoverable_settings_read_error(&error) => Ok(Settings::default()),
@@ -466,6 +472,40 @@ mod tests {
 
         assert!(merged.github_token.is_empty());
         assert_eq!(merged.proxy, "http://127.0.0.1:7890");
+    }
+
+    #[test]
+    fn runtime_settings_recover_from_corrupt_saved_settings() {
+        let recovered = recover_existing_settings_for_runtime(Err(
+            "设置文件损坏，已备份；请重新确认设置后再保存".to_string(),
+        ))
+        .expect("可恢复的设置读取错误应回退默认设置");
+
+        assert!(recovered.proxy.is_empty());
+        assert!(recovered.github_token.is_empty());
+        assert_eq!(recovered.cran_mirror, "https://cloud.r-project.org");
+        assert!(!recovered.full_search);
+
+        let incoming = Settings {
+            proxy: "127.0.0.1:7890".to_string(),
+            github_token: String::new(),
+            cran_mirror: "https://cloud.r-project.org".to_string(),
+            full_search: true,
+        };
+        let merged =
+            merge_runtime_settings(incoming, &recovered).expect("默认恢复设置应可参与运行时合并");
+
+        assert!(merged.github_token.is_empty());
+        assert_eq!(merged.proxy, "http://127.0.0.1:7890");
+        assert!(merged.full_search);
+    }
+
+    #[test]
+    fn runtime_settings_keep_unrecoverable_saved_settings_error() {
+        let error = recover_existing_settings_for_runtime(Err("存储目录无效".to_string()))
+            .expect_err("不可恢复的设置读取错误不应被吞掉");
+
+        assert_eq!(error, "存储目录无效");
     }
 
     #[test]
