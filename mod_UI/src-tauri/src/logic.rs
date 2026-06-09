@@ -445,9 +445,10 @@ fn generate_command(
     } else {
         "FALSE"
     };
-    let escaped_value = escape_r(value);
+    let local_value = local_package_name(value);
+    let escaped_value = escape_r(&local_value);
     let escaped_mirror = escape_r(mirror);
-    let mut package_name = extract_package_name(value);
+    let mut package_name = local_package_name(&extract_package_name(value));
     let mut effective_version = version.to_string();
 
     let raw = match method {
@@ -1022,6 +1023,47 @@ mod tests {
 
         assert!(output.contains("\"demo\""));
         assert!(!output.contains("\"owner/demo\""));
+    }
+
+    #[test]
+    fn local_install_methods_use_local_name_for_explicit_github_repository() {
+        for method in ["base", "version", "biocManager"] {
+            let output = generate_script(
+                "owner/demo",
+                &GenerateOptions {
+                    method: method.to_string(),
+                    conditional: true,
+                    install_dependencies: true,
+                    mirror: "https://cloud.r-project.org".to_string(),
+                },
+                &[],
+            )
+            .expect("本地安装类方法应可规范化显式仓库名");
+
+            assert!(output.contains("\"demo\""), "{method}");
+            assert!(!output.contains("\"owner/demo\""), "{method}");
+        }
+    }
+
+    #[test]
+    fn install_url_condition_still_uses_archive_package_name() {
+        let output = generate_script(
+            "https://example.org/src/contrib/demo_1.0.0.tar.gz",
+            &GenerateOptions {
+                method: "remotes".to_string(),
+                conditional: true,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[],
+        )
+        .expect("归档 URL 条件安装应保留从文件名提取的包名");
+
+        assert!(output.contains("requireNamespace(\"demo\""));
+        assert!(output.contains(
+            "remotes::install_url(\"https://example.org/src/contrib/demo_1.0.0.tar.gz\""
+        ));
+        assert!(!output.contains("requireNamespace(\"https://"));
     }
 
     #[test]
