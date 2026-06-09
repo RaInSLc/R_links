@@ -16,6 +16,7 @@ const MAX_VERSION_CHARS: usize = 64;
 const MAX_RESULT_SOURCE_CHARS: usize = 16;
 const MAX_RESULT_MESSAGE_CHARS: usize = 512;
 const MAX_INSTALL_ARCHIVE_FILE_CHARS: usize = 256;
+const MAX_INPUT_LINE_BYTES: usize = 2_048;
 const MAX_HISTORY_SCAN_LINES: usize = MAX_HISTORY_RECORDS * 20;
 const INSTALL_ARCHIVE_EXTENSIONS: &[&str] = &[".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".zip"];
 
@@ -837,9 +838,20 @@ pub fn validate_input_size(input: &str) -> Result<(), String> {
     {
         return Err("输入内容包含非法控制字符".to_string());
     }
-    let line_count = input.lines().filter(|line| !line.trim().is_empty()).count();
-    if line_count > MAX_PACKAGE_LINES {
-        return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+    let mut line_count = 0usize;
+    for line in input.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        if line.len() > MAX_INPUT_LINE_BYTES {
+            return Err(format!(
+                "单行输入过长，最多允许 {MAX_INPUT_LINE_BYTES} 字节"
+            ));
+        }
+        line_count += 1;
+        if line_count > MAX_PACKAGE_LINES {
+            return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+        }
     }
     Ok(())
 }
@@ -1200,6 +1212,20 @@ mod tests {
         assert!(validate_input_size(&multibyte).is_err());
         assert!(parse_inputs("demo\u{7f}\n").is_err());
         assert!(parse_inputs("demo\t1.2.3").is_ok());
+    }
+
+    #[test]
+    fn rejects_oversized_input_line_before_parse() {
+        let long_line = format!("demo {}", "1".repeat(MAX_INPUT_LINE_BYTES));
+        assert!(validate_input_size(&long_line).is_err());
+
+        let multibyte_line = format!(
+            "demo {}",
+            "注".repeat((MAX_INPUT_LINE_BYTES / "注".len()) + 1)
+        );
+        assert!(multibyte_line.chars().count() < MAX_INPUT_LINE_BYTES);
+        assert!(multibyte_line.len() > MAX_INPUT_LINE_BYTES);
+        assert!(parse_inputs(&multibyte_line).is_err());
     }
 
     #[test]
