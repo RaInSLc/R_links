@@ -200,7 +200,7 @@ fn load_history(app: AppHandle) -> Result<Vec<HistoryRecord>, String> {
 }
 
 #[tauri::command]
-fn save_history(app: AppHandle, history: Vec<HistoryRecord>) -> Result<(), String> {
+fn save_history(app: AppHandle, history: Vec<HistoryRecord>) -> Result<Vec<HistoryRecord>, String> {
     storage::save_history(&app, &history)
 }
 

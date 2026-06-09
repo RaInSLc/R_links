@@ -341,8 +341,8 @@ function App() {
         ...cleanRecords,
         ...history.filter((record) => !commands.has(record.command)),
       ].slice(0, 100);
-      await invoke("save_history", { history: merged });
-      setHistory(merged);
+      const savedHistory = await invoke<HistoryRecord[]>("save_history", { history: merged });
+      setHistory(takeBounded(asArray(savedHistory).map(sanitizeHistoryRecord), 100));
       setStatus(`已复制脚本并记录 ${records.length} 条命令`);
     } catch (error) {
       setStatus(`复制失败: ${formatError(error)}`);
@@ -456,8 +456,8 @@ function App() {
   async function deleteHistoryRecord(id: string) {
     const next = history.filter((record) => record.id !== id).map(sanitizeHistoryRecord);
     try {
-      await invoke("save_history", { history: next });
-      setHistory(next);
+      const savedHistory = await invoke<HistoryRecord[]>("save_history", { history: next });
+      setHistory(takeBounded(asArray(savedHistory).map(sanitizeHistoryRecord), 100));
       setStatus("历史记录已删除");
     } catch (error) {
       setStatus(`历史保存失败: ${formatError(error)}`);

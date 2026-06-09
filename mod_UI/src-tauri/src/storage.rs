@@ -146,12 +146,23 @@ pub fn load_history(app: &AppHandle) -> Result<Vec<HistoryRecord>, String> {
     }
 }
 
-pub fn save_history(app: &AppHandle, history: &[HistoryRecord]) -> Result<(), String> {
+pub fn save_history(
+    app: &AppHandle,
+    history: &[HistoryRecord],
+) -> Result<Vec<HistoryRecord>, String> {
     validate_history_save_count(history.len())?;
     let path = data_file(app, "history.json")?;
+    save_history_to_path(&path, history)
+}
+
+fn save_history_to_path(
+    path: &PathBuf,
+    history: &[HistoryRecord],
+) -> Result<Vec<HistoryRecord>, String> {
     let limited = sanitize_history(history.to_vec());
     let content = serde_json::to_string_pretty(&limited).map_err(|error| error.to_string())?;
-    atomic_write(&path, &content)
+    atomic_write(path, &content)?;
+    Ok(limited)
 }
 
 fn validate_history_save_count(count: usize) -> Result<(), String> {
@@ -685,6 +696,38 @@ mod tests {
         assert_eq!(history[0].version, "");
         assert_eq!(history[0].tool_name, "GitHub");
         assert_eq!(history[0].created_at, "123456");
+    }
+
+    #[test]
+    fn save_history_returns_sanitized_written_records() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-history-save-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+        let path = directory.join("history.json");
+        let history = vec![HistoryRecord {
+            id: "bad id".to_string(),
+            command:
+                "remotes::install_github(\"owner/demo\", upgrade = \"never\", dependencies = TRUE)"
+                    .to_string(),
+            package_name: "forged".to_string(),
+            version: "9.9.9".to_string(),
+            tool_name: "forged".to_string(),
+            created_at: "bad-time".to_string(),
+        }];
+
+        let saved = save_history_to_path(&path, &history).expect("历史应可保存");
+        let written = serde_json::from_str::<Vec<HistoryRecord>>(
+            &fs::read_to_string(&path).expect("应能读取历史文件"),
+        )
+        .expect("写入历史应可解析");
+
+        assert_eq!(written, saved);
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].package_name, "demo");
+        assert_ne!(saved[0].id, "bad id");
+        assert_ne!(saved[0].created_at, "bad-time");
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
     }
 
     #[test]
