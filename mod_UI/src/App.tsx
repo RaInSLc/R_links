@@ -326,13 +326,14 @@ function App() {
     if (!script || script === "等待输入...") {
       return;
     }
+    const scriptSnapshot = script;
     if (scriptTooLarge) {
       setStatus(`脚本内容过长，最多允许 ${MAX_SCRIPT_CHARS} 个字符`);
       return;
     }
     try {
       const records = await invoke<HistoryRecord[]>("build_history_records", {
-        script,
+        script: scriptSnapshot,
       });
       const cleanRecords = records.map(sanitizeHistoryRecord);
       const commands = new Set(cleanRecords.map((record) => record.command));
@@ -341,8 +342,10 @@ function App() {
         ...history.filter((record) => !commands.has(record.command)),
       ].slice(0, 100);
       const savedHistory = await invoke<HistoryRecord[]>("save_history", { history: merged });
-      await writeText(script);
-      setHistory(takeBounded(asArray(savedHistory).map(sanitizeHistoryRecord), 100));
+      await writeText(scriptSnapshot);
+      if (scriptSnapshot === script) {
+        setHistory(takeBounded(asArray(savedHistory).map(sanitizeHistoryRecord), 100));
+      }
       setStatus(`已复制脚本并记录 ${records.length} 条命令`);
     } catch (error) {
       setStatus(`复制失败: ${formatError(error)}`);
