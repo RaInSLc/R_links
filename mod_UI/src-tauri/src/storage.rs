@@ -9,12 +9,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
 use crate::logic;
-use crate::models::{HistoryRecord, Settings, MAX_HISTORY_RECORDS, MAX_TOKEN_CHARS};
+use crate::models::{
+    HistoryRecord, Settings, MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS,
+    MAX_TOKEN_CHARS,
+};
 use crate::secrets;
 use serde::{Deserialize, Serialize};
 
 const MAX_PROTECTED_TOKEN_CHARS: usize = MAX_TOKEN_CHARS * 16;
 const MAX_HISTORY_SAVE_RECORDS: usize = MAX_HISTORY_RECORDS * 4;
+const MAX_HISTORY_SAVE_BYTES: usize = 1024 * 1024;
+const MAX_HISTORY_ID_CHARS: usize = 64;
+const MAX_HISTORY_VERSION_CHARS: usize = 64;
+const MAX_HISTORY_TIMESTAMP_CHARS: usize = 32;
 const MAX_SETTINGS_FILE_BYTES: u64 = 64 * 1024;
 const MAX_HISTORY_FILE_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_CORRUPT_BACKUPS_PER_FILE: usize = 5;
@@ -138,7 +145,7 @@ pub fn load_history(app: &AppHandle) -> Result<Vec<HistoryRecord>, String> {
         return Ok(Vec::new());
     };
     match serde_json::from_str::<Vec<HistoryRecord>>(&content) {
-        Ok(history) => Ok(sanitize_history(history)),
+        Ok(history) => Ok(sanitize_history(&history)),
         Err(_) => {
             backup_corrupt_file(app, "history.json", &content)?;
             Ok(Vec::new())
@@ -150,7 +157,6 @@ pub fn save_history(
     app: &AppHandle,
     history: &[HistoryRecord],
 ) -> Result<Vec<HistoryRecord>, String> {
-    validate_history_save_count(history.len())?;
     let path = data_file(app, "history.json")?;
     save_history_to_path(&path, history)
 }
@@ -159,28 +165,84 @@ fn save_history_to_path(
     path: &PathBuf,
     history: &[HistoryRecord],
 ) -> Result<Vec<HistoryRecord>, String> {
-    let limited = sanitize_history(history.to_vec());
+    validate_history_save_payload(history)?;
+    let limited = sanitize_history(history);
     let content = serde_json::to_string_pretty(&limited).map_err(|error| error.to_string())?;
     atomic_write(path, &content)?;
     Ok(limited)
 }
 
-fn validate_history_save_count(count: usize) -> Result<(), String> {
-    if count > MAX_HISTORY_SAVE_RECORDS {
+fn validate_history_save_payload(history: &[HistoryRecord]) -> Result<(), String> {
+    if history.len() > MAX_HISTORY_SAVE_RECORDS {
         return Err(format!(
             "历史记录数量过多，最多允许 {MAX_HISTORY_SAVE_RECORDS} 条"
         ));
     }
+
+    let mut total_bytes = 0usize;
+    for record in history {
+        total_bytes = total_bytes
+            .saturating_add(validate_history_save_field(
+                "历史记录 ID",
+                &record.id,
+                MAX_HISTORY_ID_CHARS,
+            )?)
+            .saturating_add(validate_history_save_field(
+                "历史记录命令",
+                &record.command,
+                MAX_HISTORY_COMMAND_CHARS,
+            )?)
+            .saturating_add(validate_history_save_field(
+                "历史记录包名",
+                &record.package_name,
+                MAX_FIELD_CHARS,
+            )?)
+            .saturating_add(validate_history_save_field(
+                "历史记录版本",
+                &record.version,
+                MAX_HISTORY_VERSION_CHARS,
+            )?)
+            .saturating_add(validate_history_save_field(
+                "历史记录工具名",
+                &record.tool_name,
+                MAX_FIELD_CHARS,
+            )?)
+            .saturating_add(validate_history_save_field(
+                "历史记录时间戳",
+                &record.created_at,
+                MAX_HISTORY_TIMESTAMP_CHARS,
+            )?);
+        if total_bytes > MAX_HISTORY_SAVE_BYTES {
+            return Err(format!(
+                "历史记录总大小过大，最多允许 {MAX_HISTORY_SAVE_BYTES} 字节"
+            ));
+        }
+    }
     Ok(())
 }
 
-fn sanitize_history(history: Vec<HistoryRecord>) -> Vec<HistoryRecord> {
+fn validate_history_save_field(
+    label: &str,
+    value: &str,
+    max_bytes: usize,
+) -> Result<usize, String> {
+    let length = value.len();
+    if length > max_bytes {
+        return Err(format!("{label}长度过长，最多允许 {max_bytes} 字节"));
+    }
+    if value.chars().any(char::is_control) {
+        return Err(format!("{label}包含非法控制字符"));
+    }
+    Ok(length)
+}
+
+fn sanitize_history(history: &[HistoryRecord]) -> Vec<HistoryRecord> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     history
-        .into_iter()
+        .iter()
         .enumerate()
         .filter_map(|(index, record)| sanitize_history_record(record, index, now))
         .take(MAX_HISTORY_RECORDS)
@@ -188,19 +250,19 @@ fn sanitize_history(history: Vec<HistoryRecord>) -> Vec<HistoryRecord> {
 }
 
 fn sanitize_history_record(
-    record: HistoryRecord,
+    record: &HistoryRecord,
     index: usize,
     now: u128,
 ) -> Option<HistoryRecord> {
     let command = logic::supported_history_command(&record.command)?;
     let (package_name, version, tool_name) = logic::history_metadata_from_command(&command)?;
     let id = if is_clean_history_id(&record.id) {
-        record.id
+        record.id.clone()
     } else {
         format!("{now}-{index}")
     };
     let created_at = if is_clean_timestamp(&record.created_at) {
-        record.created_at
+        record.created_at.clone()
     } else {
         now.to_string()
     };
@@ -217,7 +279,7 @@ fn sanitize_history_record(
 
 fn is_clean_history_id(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 64
+        && value.len() <= MAX_HISTORY_ID_CHARS
         && value
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
@@ -225,7 +287,7 @@ fn is_clean_history_id(value: &str) -> bool {
 
 fn is_clean_timestamp(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 32
+        && value.len() <= MAX_HISTORY_TIMESTAMP_CHARS
         && value.chars().all(|character| character.is_ascii_digit())
 }
 
@@ -784,21 +846,22 @@ mod tests {
 
     #[test]
     fn sanitize_history_rejects_unsupported_commands() {
-        let history = sanitize_history(vec![HistoryRecord {
+        let records = vec![HistoryRecord {
             id: "1".to_string(),
             command: "system(\"calc.exe\")".to_string(),
             package_name: "demo".to_string(),
             version: String::new(),
             tool_name: "base R".to_string(),
             created_at: "1".to_string(),
-        }]);
+        }];
+        let history = sanitize_history(&records);
 
         assert!(history.is_empty());
     }
 
     #[test]
     fn sanitize_history_recomputes_frontend_metadata() {
-        let history = sanitize_history(vec![HistoryRecord {
+        let records = vec![HistoryRecord {
             id: "history-1".to_string(),
             command:
                 "remotes::install_github(\"owner/demo\", upgrade = \"never\", dependencies = TRUE)"
@@ -807,7 +870,8 @@ mod tests {
             version: "9.9.9".to_string(),
             tool_name: "forged".to_string(),
             created_at: "123456".to_string(),
-        }]);
+        }];
+        let history = sanitize_history(&records);
 
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].package_name, "demo");
@@ -850,7 +914,77 @@ mod tests {
 
     #[test]
     fn rejects_unbounded_history_save_payload() {
-        assert!(validate_history_save_count(MAX_HISTORY_SAVE_RECORDS).is_ok());
-        assert!(validate_history_save_count(MAX_HISTORY_SAVE_RECORDS + 1).is_err());
+        let record = HistoryRecord {
+            id: "history-1".to_string(),
+            command:
+                "remotes::install_github(\"owner/demo\", upgrade = \"never\", dependencies = TRUE)"
+                    .to_string(),
+            package_name: "demo".to_string(),
+            version: String::new(),
+            tool_name: "GitHub".to_string(),
+            created_at: "1".to_string(),
+        };
+        let bounded = vec![record.clone(); MAX_HISTORY_SAVE_RECORDS];
+        let unbounded = vec![record; MAX_HISTORY_SAVE_RECORDS + 1];
+
+        assert!(validate_history_save_payload(&bounded).is_ok());
+        assert!(validate_history_save_payload(&unbounded).is_err());
+    }
+
+    #[test]
+    fn rejects_oversized_history_save_fields() {
+        let history = vec![HistoryRecord {
+            id: "history-1".to_string(),
+            command: "x".repeat(MAX_HISTORY_COMMAND_CHARS + 1),
+            package_name: "demo".to_string(),
+            version: String::new(),
+            tool_name: "GitHub".to_string(),
+            created_at: "1".to_string(),
+        }];
+
+        let error =
+            validate_history_save_payload(&history).expect_err("超长历史命令应在清洗前被拒绝");
+
+        assert!(error.contains("历史记录命令长度过长"));
+    }
+
+    #[test]
+    fn rejects_history_save_fields_with_control_characters() {
+        let history = vec![HistoryRecord {
+            id: "history-1".to_string(),
+            command:
+                "remotes::install_github(\"owner/demo\", upgrade = \"never\", dependencies = TRUE)"
+                    .to_string(),
+            package_name: "demo\nbad".to_string(),
+            version: String::new(),
+            tool_name: "GitHub".to_string(),
+            created_at: "1".to_string(),
+        }];
+
+        let error =
+            validate_history_save_payload(&history).expect_err("控制字符字段应在清洗前被拒绝");
+
+        assert!(error.contains("历史记录包名包含非法控制字符"));
+    }
+
+    #[test]
+    fn rejects_history_save_payload_total_bytes() {
+        let history = (0..MAX_HISTORY_SAVE_RECORDS)
+            .map(|index| HistoryRecord {
+                id: format!("history-{index}"),
+                command: format!(
+                    "install.packages(\"demo{index}\", repos = \"https://cloud.r-project.org/\", dependencies = TRUE)"
+                ),
+                package_name: "p".repeat(MAX_FIELD_CHARS),
+                version: "1.0.0".to_string(),
+                tool_name: "t".repeat(MAX_FIELD_CHARS),
+                created_at: "1".to_string(),
+            })
+            .collect::<Vec<_>>();
+
+        let error = validate_history_save_payload(&history)
+            .expect_err("总大小过大的历史保存 payload 应被拒绝");
+
+        assert!(error.contains("历史记录总大小过大"));
     }
 }
