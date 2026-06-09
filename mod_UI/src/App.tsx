@@ -197,6 +197,17 @@ function App() {
     setScriptState(nextScript);
   }
 
+  function acceptInputValue(value: string, source: "manual" | "clipboard") {
+    if (inputValueTooLarge(value)) {
+      setStatus(
+        `${source === "clipboard" ? "剪贴板内容" : "输入"}超出限制：最多 ${MAX_PACKAGE_LINES} 行、${MAX_INPUT_CHARS} 字节`,
+      );
+      return false;
+    }
+    setInput(value);
+    return true;
+  }
+
   function sanitizeHistoryList(nextHistory: unknown) {
     const cleanHistory = takeBounded(asArray(nextHistory).map(sanitizeHistoryRecord), 100);
     return cleanHistory;
@@ -423,12 +434,9 @@ function App() {
     try {
       const value = await readText();
       if (value) {
-        if (utf8Length(value) > MAX_INPUT_CHARS) {
-          setStatus(`剪贴板内容过长，最多允许 ${MAX_INPUT_CHARS} 字节`);
-          return;
+        if (acceptInputValue(value, "clipboard")) {
+          setStatus("已从剪贴板粘贴");
         }
-        setInput(value);
-        setStatus("已从剪贴板粘贴");
       }
     } catch (error) {
       setStatus(`粘贴失败: ${formatError(error)}`);
@@ -648,7 +656,7 @@ function App() {
                 />
                 <textarea
                   value={input}
-                  onChange={(event) => setInput(event.currentTarget.value)}
+                  onChange={(event) => acceptInputValue(event.currentTarget.value, "manual")}
                   placeholder={"每行一个包，例如：\nSeurat 5.2.1\nGSVA 1.50\nbuenrostrolab/FigR\nhttps://example.org/pkg_1.0.tar.gz"}
                   spellCheck={false}
                   maxLength={MAX_INPUT_CHARS + 1}
@@ -976,6 +984,27 @@ function safeText(value: unknown, limit: number) {
 
 function utf8Length(value: string) {
   return utf8Encoder.encode(value).length;
+}
+
+function inputValueTooLarge(value: string) {
+  return (
+    value.length > MAX_INPUT_CHARS ||
+    nonEmptyLineCountExceeds(value, MAX_PACKAGE_LINES) ||
+    utf8Length(value) > MAX_INPUT_CHARS
+  );
+}
+
+function nonEmptyLineCountExceeds(value: string, limit: number) {
+  let count = 0;
+  for (const line of value.split(/\r?\n/)) {
+    if (line.trim()) {
+      count += 1;
+      if (count > limit) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function safeBoolean(value: unknown) {
