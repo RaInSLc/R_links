@@ -128,6 +128,35 @@ function appendBounded<T>(items: T[], item: T, limit: number) {
   return [...items, item];
 }
 
+function upsertBoundedResult(items: SearchResult[], item: SearchResult, limit: number) {
+  const key = resultIdentityKey(item);
+  const index = items.findIndex((current) => resultIdentityKey(current) === key);
+  if (index >= 0) {
+    const next = [...items];
+    next[index] = item;
+    return next;
+  }
+  if (items.length >= limit) {
+    return items;
+  }
+  return [...items, item];
+}
+
+function dedupeBoundedResults(items: SearchResult[], limit: number) {
+  const results: SearchResult[] = [];
+  for (const item of items) {
+    const cleanItem = sanitizeSearchResult(item);
+    const key = resultIdentityKey(cleanItem);
+    const index = results.findIndex((current) => resultIdentityKey(current) === key);
+    if (index >= 0) {
+      results[index] = cleanItem;
+    } else if (results.length < limit) {
+      results.push(cleanItem);
+    }
+  }
+  return results;
+}
+
 function takeBounded<T>(items: T[], limit: number) {
   return items.length > limit ? items.slice(0, limit) : items;
 }
@@ -236,7 +265,7 @@ function App() {
           return;
         }
         setResults((current) =>
-          appendBounded(current, sanitizeSearchResult(payload.result), MAX_SEARCH_RESULTS),
+          upsertBoundedResult(current, sanitizeSearchResult(payload.result), MAX_SEARCH_RESULTS),
         );
       },
     );
@@ -974,10 +1003,19 @@ function sanitizeSearchResponse(value: unknown): SearchResponse {
   const response = asRecord(value);
   return {
     runId: safeRunId(response.runId),
-    results: takeBounded(asArray(response.results).map(sanitizeSearchResult), MAX_SEARCH_RESULTS),
+    results: dedupeBoundedResults(asArray(response.results), MAX_SEARCH_RESULTS),
     logs: takeBounded(asArray(response.logs).map(safeStatusText), MAX_SEARCH_LOGS),
     stopped: safeBoolean(response.stopped),
   };
+}
+
+function resultIdentityKey(result: SearchResult) {
+  return [
+    result.package.toLocaleLowerCase(),
+    result.source,
+    result.repository.toLocaleLowerCase(),
+    result.realName.toLocaleLowerCase(),
+  ].join("\u0001");
 }
 
 function sanitizePublicSettings(value: unknown): PublicSettings {
