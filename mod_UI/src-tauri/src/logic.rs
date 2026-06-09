@@ -829,7 +829,13 @@ fn escape_r(value: &str) -> String {
 
 pub fn validate_input_size(input: &str) -> Result<(), String> {
     if input.len() > MAX_INPUT_CHARS {
-        return Err(format!("输入内容过长，最多允许 {MAX_INPUT_CHARS} 个字符"));
+        return Err(format!("输入内容过长，最多允许 {MAX_INPUT_CHARS} 字节"));
+    }
+    if input
+        .chars()
+        .any(|character| character.is_control() && !matches!(character, '\r' | '\n' | '\t'))
+    {
+        return Err("输入内容包含非法控制字符".to_string());
     }
     let line_count = input.lines().filter(|line| !line.trim().is_empty()).count();
     if line_count > MAX_PACKAGE_LINES {
@@ -1184,6 +1190,16 @@ mod tests {
     fn rejects_oversized_input() {
         let input = "pkg\n".repeat(MAX_PACKAGE_LINES + 1);
         assert!(parse_inputs(&input).is_err());
+    }
+
+    #[test]
+    fn rejects_oversized_or_controlled_input_before_parse() {
+        let multibyte = "注".repeat((MAX_INPUT_CHARS / "注".len()) + 1);
+        assert!(multibyte.chars().count() < MAX_INPUT_CHARS);
+        assert!(multibyte.len() > MAX_INPUT_CHARS);
+        assert!(validate_input_size(&multibyte).is_err());
+        assert!(parse_inputs("demo\u{7f}\n").is_err());
+        assert!(parse_inputs("demo\t1.2.3").is_ok());
     }
 
     #[test]
