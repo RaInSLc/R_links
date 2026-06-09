@@ -987,22 +987,43 @@ function formatError(error: unknown) {
 }
 
 function safeStatusText(value: unknown) {
-  const text = String(value ?? "")
-    .trim()
-    .replace(/[\p{C}]/gu, "")
-    .slice(0, MAX_STATUS_CHARS);
+  const text = truncateUtf8Bytes(
+    String(value ?? "")
+      .trim()
+      .replace(/[\p{C}]/gu, ""),
+    MAX_STATUS_CHARS,
+  );
   return text || "未知错误";
 }
 
 function safeText(value: unknown, limit: number) {
-  return String(value ?? "")
-    .trim()
-    .replace(/[\p{C}]/gu, "")
-    .slice(0, limit);
+  return truncateUtf8Bytes(
+    String(value ?? "")
+      .trim()
+      .replace(/[\p{C}]/gu, ""),
+    limit,
+  );
 }
 
 function utf8Length(value: string) {
   return utf8Encoder.encode(value).length;
+}
+
+function truncateUtf8Bytes(value: string, limit: number) {
+  if (utf8Length(value) <= limit) {
+    return value;
+  }
+  let bytes = 0;
+  let output = "";
+  for (const character of value) {
+    const nextBytes = utf8Length(character);
+    if (bytes + nextBytes > limit) {
+      break;
+    }
+    bytes += nextBytes;
+    output += character;
+  }
+  return output;
 }
 
 function inputValueTooLarge(value: string) {
