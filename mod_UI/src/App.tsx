@@ -139,7 +139,7 @@ function App() {
   const [conditional, setConditional] = useState(true);
   const [installDependencies, setInstallDependencies] = useState(true);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
-  const [script, setScript] = useState("等待输入...");
+  const [script, setScriptState] = useState("等待输入...");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
   const [history, setHistory] = useState<HistoryRecord[]>([]);
@@ -149,6 +149,12 @@ function App() {
   const [tokenConfigured, setTokenConfigured] = useState(false);
   const activeSearchRunId = useRef(0);
   const scriptRequestSeq = useRef(0);
+  const latestScriptRef = useRef("等待输入...");
+
+  function setScript(nextScript: string) {
+    latestScriptRef.current = nextScript;
+    setScriptState(nextScript);
+  }
 
   const packageCount = useMemo(
     () => input.split(/\r?\n/).filter((line) => line.trim()).length,
@@ -323,11 +329,11 @@ function App() {
   }
 
   async function copyScript() {
-    if (!script || script === "等待输入...") {
+    const scriptSnapshot = latestScriptRef.current;
+    if (!scriptSnapshot || scriptSnapshot === "等待输入...") {
       return;
     }
-    const scriptSnapshot = script;
-    if (scriptTooLarge) {
+    if (scriptSnapshot.length > MAX_SCRIPT_CHARS) {
       setStatus(`脚本内容过长，最多允许 ${MAX_SCRIPT_CHARS} 个字符`);
       return;
     }
@@ -343,7 +349,7 @@ function App() {
       ].slice(0, 100);
       const savedHistory = await invoke<HistoryRecord[]>("save_history", { history: merged });
       await writeText(scriptSnapshot);
-      if (scriptSnapshot === script) {
+      if (scriptSnapshot === latestScriptRef.current) {
         setHistory(takeBounded(asArray(savedHistory).map(sanitizeHistoryRecord), 100));
       }
       setStatus(`已复制脚本并记录 ${records.length} 条命令`);
@@ -369,22 +375,22 @@ function App() {
   }
 
   async function cleanComments() {
-    if (scriptTooLarge) {
+    const sourceScript = latestScriptRef.current;
+    if (sourceScript.length > MAX_SCRIPT_CHARS) {
       setStatus(`脚本内容过长，最多允许 ${MAX_SCRIPT_CHARS} 个字符`);
       return;
     }
     const requestSeq = scriptRequestSeq.current + 1;
     scriptRequestSeq.current = requestSeq;
-    const sourceScript = script;
     try {
       const cleaned = await invoke<string>("clean_script", { script: sourceScript });
-      if (requestSeq !== scriptRequestSeq.current || sourceScript !== script) {
+      if (requestSeq !== scriptRequestSeq.current || sourceScript !== latestScriptRef.current) {
         return;
       }
       setScript(cleaned);
       setStatus("已移除脚本注释");
     } catch (error) {
-      if (requestSeq === scriptRequestSeq.current && sourceScript === script) {
+      if (requestSeq === scriptRequestSeq.current && sourceScript === latestScriptRef.current) {
         setStatus(`清理失败: ${formatError(error)}`);
       }
     }
