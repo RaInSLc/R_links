@@ -202,7 +202,7 @@ function App() {
   function acceptInputValue(value: string, source: "manual" | "clipboard") {
     if (inputValueTooLarge(value)) {
       setStatus(
-        `${source === "clipboard" ? "剪贴板内容" : "输入"}超出限制：最多 ${MAX_PACKAGE_LINES} 行、总计 ${MAX_INPUT_CHARS} 字节、单行 ${MAX_INPUT_LINE_BYTES} 字节`,
+        `${source === "clipboard" ? "剪贴板内容" : "输入"}超出限制或包含非法字符：最多 ${MAX_PACKAGE_LINES} 行、总计 ${MAX_INPUT_CHARS} 字节、单行 ${MAX_INPUT_LINE_BYTES} 字节`,
       );
       return false;
     }
@@ -369,7 +369,7 @@ function App() {
   async function startSearch() {
     if (!input.trim() || searchingRef.current || inputTooLarge) {
       if (inputTooLarge) {
-        setStatus(`输入超出限制：最多 ${MAX_PACKAGE_LINES} 行、总计 ${MAX_INPUT_CHARS} 字节、单行 ${MAX_INPUT_LINE_BYTES} 字节`);
+        setStatus(`输入超出限制或包含非法字符：最多 ${MAX_PACKAGE_LINES} 行、总计 ${MAX_INPUT_CHARS} 字节、单行 ${MAX_INPUT_LINE_BYTES} 字节`);
       }
       return;
     }
@@ -684,7 +684,7 @@ function App() {
                 />
                 {inputTooLarge && (
                   <div className="inline-warning">
-                    输入超出限制：最多 {MAX_PACKAGE_LINES} 行、总计 {MAX_INPUT_CHARS} 字节、单行 {MAX_INPUT_LINE_BYTES} 字节。
+                    输入超出限制或包含非法字符：最多 {MAX_PACKAGE_LINES} 行、总计 {MAX_INPUT_CHARS} 字节、单行 {MAX_INPUT_LINE_BYTES} 字节。
                   </div>
                 )}
                 <div className="input-actions">
@@ -1033,6 +1033,7 @@ function truncateUtf8Bytes(value: string, limit: number) {
 function inputValueTooLarge(value: string) {
   return (
     value.length > MAX_INPUT_CHARS ||
+    inputHasDisallowedControlCharacters(value) ||
     nonEmptyLineCountExceeds(value, MAX_PACKAGE_LINES) ||
     nonEmptyLineBytesExceeds(value, MAX_INPUT_LINE_BYTES) ||
     utf8Length(value) > MAX_INPUT_CHARS
@@ -1082,6 +1083,10 @@ function nonEmptyLineBytesExceeds(value: string, limit: number) {
     }
   }
   return false;
+}
+
+function inputHasDisallowedControlCharacters(value: string) {
+  return /[\p{C}]/u.test(value.replace(/[\r\n\t]/g, ""));
 }
 
 function safeBoolean(value: unknown) {
