@@ -12,7 +12,9 @@ use url::Url;
 use crate::logic::{
     infer_bioc_version, is_valid_package_name, normalize_github_repository, parse_inputs,
 };
-use crate::models::{url_has_explicit_port, PackageInput, SearchResponse, SearchResult, Settings};
+use crate::models::{
+    url_has_explicit_port, PackageInput, SearchResponse, SearchResult, Settings, MAX_FIELD_CHARS,
+};
 
 const BIOC_VERSIONS: &[&str] = &[
     "3.23", "3.22", "3.21", "3.20", "3.19", "3.18", "3.17", "3.16", "3.15", "3.14", "3.13", "3.12",
@@ -409,7 +411,7 @@ async fn search_github(
         urlencoding::encode(&package.name)
     );
     if let Some(value) = get_json(context, &universe_url).await {
-        if let Some(object) = find_package_object(&value) {
+        if let Some(object) = r_universe_package_object(&value) {
             if let Some(real_name) = object.get("Package").and_then(Value::as_str) {
                 if !github_package_name_matches_request(real_name, &package.name) {
                     // 忽略不可信的 r-universe 命中，继续尝试 GitHub API 检索。
@@ -868,15 +870,26 @@ fn clean_version(value: &str) -> Option<String> {
         .then(|| trimmed.to_string())
 }
 
-fn find_package_object(value: &Value) -> Option<&serde_json::Map<String, Value>> {
+fn r_universe_package_object(value: &Value) -> Option<&serde_json::Map<String, Value>> {
     match value {
-        Value::Object(object) if object.contains_key("Package") => Some(object),
-        Value::Array(values) => values.iter().find_map(|item| match item {
-            Value::Object(object) if object.contains_key("Package") => Some(object),
+        Value::Object(object) if r_universe_object_has_bounded_fields(object) => Some(object),
+        Value::Array(values) => values.first().and_then(|item| match item {
+            Value::Object(object) if r_universe_object_has_bounded_fields(object) => Some(object),
             _ => None,
         }),
         _ => None,
     }
+}
+
+fn r_universe_object_has_bounded_fields(object: &serde_json::Map<String, Value>) -> bool {
+    ["Package", "Version", "RemoteUrl"].iter().all(|field| {
+        object
+            .get(*field)
+            .and_then(Value::as_str)
+            .is_some_and(|value| {
+                value.len() <= MAX_FIELD_CHARS && !value.chars().any(char::is_control)
+            })
+    })
 }
 
 fn clean_github_response_repository_name(value: &str) -> Option<String> {
@@ -1290,33 +1303,60 @@ mod tests {
     }
 
     #[test]
-    fn finds_package_object_only_at_expected_response_depth() {
+    fn bounds_r_universe_package_object_shape() {
         let top_level = serde_json::json!({
             "Package": "demo",
-            "Version": "1.0.0"
+            "Version": "1.0.0",
+            "RemoteUrl": "https://github.com/owner/demo"
         });
         let array_response = serde_json::json!([
             {
                 "Package": "demo",
-                "Version": "1.0.0"
+                "Version": "1.0.0",
+                "RemoteUrl": "https://github.com/owner/demo"
+            },
+            {
+                "Package": "other",
+                "Version": "9.9.9",
+                "RemoteUrl": "https://github.com/owner/other"
             }
         ]);
+        let invalid_first_array_response = serde_json::json!([
+            {
+                "Package": 42,
+                "Version": "1.0.0",
+                "RemoteUrl": "https://github.com/owner/wrong"
+            },
+            {
+                "Package": "demo",
+                "Version": "1.0.0",
+                "RemoteUrl": "https://github.com/owner/demo"
+            }
+        ]);
+        let oversized_response = serde_json::json!({
+            "Package": "demo",
+            "Version": "1.0.0",
+            "RemoteUrl": "x".repeat(MAX_FIELD_CHARS + 1)
+        });
         let nested_response = serde_json::json!({
             "meta": {
                 "Package": "wrong",
-                "Version": "9.9.9"
+                "Version": "9.9.9",
+                "RemoteUrl": "https://github.com/owner/wrong"
             }
         });
 
         assert_eq!(
-            find_package_object(&top_level).and_then(|object| object.get("Package")),
+            r_universe_package_object(&top_level).and_then(|object| object.get("Package")),
             Some(&serde_json::json!("demo"))
         );
         assert_eq!(
-            find_package_object(&array_response).and_then(|object| object.get("Package")),
+            r_universe_package_object(&array_response).and_then(|object| object.get("Package")),
             Some(&serde_json::json!("demo"))
         );
-        assert!(find_package_object(&nested_response).is_none());
+        assert!(r_universe_package_object(&invalid_first_array_response).is_none());
+        assert!(r_universe_package_object(&oversized_response).is_none());
+        assert!(r_universe_package_object(&nested_response).is_none());
     }
 
     #[test]
