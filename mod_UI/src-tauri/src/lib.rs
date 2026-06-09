@@ -187,9 +187,7 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<PublicSettings, S
 
 #[tauri::command]
 fn clear_github_token(app: AppHandle) -> Result<PublicSettings, String> {
-    let mut settings = storage::load_existing_settings(&app)?.unwrap_or_default();
-    settings.github_token.clear();
-    let settings = settings.normalized()?;
+    let settings = clear_github_token_settings(load_existing_settings_for_save(&app)?)?;
     storage::save_settings(&app, &settings)?;
     Ok(settings.public_view())
 }
@@ -270,6 +268,11 @@ fn load_existing_settings_for_save(app: &AppHandle) -> Result<Settings, String> 
 fn is_recoverable_settings_read_error(error: &str) -> bool {
     error.starts_with("设置文件超过安全读取上限，已备份")
         || error.starts_with("设置文件损坏，已备份")
+}
+
+fn clear_github_token_settings(mut settings: Settings) -> Result<Settings, String> {
+    settings.github_token.clear();
+    settings.normalized()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -463,6 +466,17 @@ mod tests {
 
         assert!(merged.github_token.is_empty());
         assert_eq!(merged.proxy, "http://127.0.0.1:7890");
+    }
+
+    #[test]
+    fn clearing_token_from_recovered_settings_uses_default_public_state() {
+        let public = clear_github_token_settings(Settings::default())
+            .expect("默认设置应可清除 Token")
+            .public_view();
+
+        assert!(!public.github_token_configured);
+        assert!(public.proxy.is_empty());
+        assert_eq!(public.cran_mirror, "https://cloud.r-project.org/");
     }
 
     #[test]
