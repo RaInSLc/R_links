@@ -961,7 +961,46 @@ fn sanitize_search_result_for_emit(mut result: SearchResult) -> SearchResult {
         clean_result_repository(&result.source, &result.repository).unwrap_or_default();
     result.real_name = clean_result_package_name(&result.real_name).unwrap_or(fallback_package);
     result.message = sanitize_result_message(&result.message);
+    if result.found && !is_trusted_emit_result(&result) {
+        result.found = false;
+        result.latest_version.clear();
+        result.repository.clear();
+        result.source = "none".to_string();
+        result.message = "结果字段无效，已忽略".to_string();
+    }
     result
+}
+
+fn is_trusted_emit_result(result: &SearchResult) -> bool {
+    if result.package.is_empty() || result.real_name.is_empty() || result.latest_version.is_empty()
+    {
+        return false;
+    }
+
+    match result.source.as_str() {
+        "cran" | "bioc" => result.repository.is_empty(),
+        "biocGit" => !result.repository.is_empty(),
+        "github" => github_emit_identity_matches(result),
+        _ => false,
+    }
+}
+
+fn github_emit_identity_matches(result: &SearchResult) -> bool {
+    if result.repository.is_empty() {
+        return false;
+    }
+    if normalize_github_repository(&result.package)
+        .as_deref()
+        .is_some_and(|repository| repository.eq_ignore_ascii_case(&result.repository))
+    {
+        return true;
+    }
+    result.real_name.eq_ignore_ascii_case(&result.package)
+        || result
+            .repository
+            .rsplit('/')
+            .next()
+            .is_some_and(|repo| repo.eq_ignore_ascii_case(&result.real_name))
 }
 
 fn sanitize_log_message(value: &str) -> String {
@@ -1224,6 +1263,45 @@ mod tests {
         assert_eq!(result.source, "none");
         assert!(!result.message.contains('\n'));
         assert!(result.message.len() <= MAX_RESULT_MESSAGE_CHARS);
+    }
+
+    #[test]
+    fn downgrades_untrusted_progress_results_before_emit() {
+        let result = sanitize_search_result_for_emit(SearchResult {
+            package: "demo".to_string(),
+            requested_version: String::new(),
+            latest_version: "1.2.3".to_string(),
+            repository: String::new(),
+            real_name: "demo".to_string(),
+            source: "github".to_string(),
+            found: true,
+            message: "验证成功".to_string(),
+        });
+
+        assert!(!result.found);
+        assert_eq!(result.source, "none");
+        assert!(result.latest_version.is_empty());
+        assert!(result.repository.is_empty());
+        assert_eq!(result.message, "结果字段无效，已忽略");
+    }
+
+    #[test]
+    fn preserves_explicit_github_progress_result_identity() {
+        let result = sanitize_search_result_for_emit(SearchResult {
+            package: "owner/repo".to_string(),
+            requested_version: String::new(),
+            latest_version: "1.2.3".to_string(),
+            repository: "owner/repo".to_string(),
+            real_name: "actualPkg".to_string(),
+            source: "github".to_string(),
+            found: true,
+            message: "验证成功".to_string(),
+        });
+
+        assert!(result.found);
+        assert_eq!(result.source, "github");
+        assert_eq!(result.repository, "owner/repo");
+        assert_eq!(result.real_name, "actualPkg");
     }
 
     #[test]
