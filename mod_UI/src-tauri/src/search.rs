@@ -777,13 +777,11 @@ fn clean_version(value: &str) -> Option<String> {
 
 fn find_package_object(value: &Value) -> Option<&serde_json::Map<String, Value>> {
     match value {
-        Value::Object(object) => {
-            if object.contains_key("Package") {
-                return Some(object);
-            }
-            object.values().find_map(find_package_object)
-        }
-        Value::Array(values) => values.iter().find_map(find_package_object),
+        Value::Object(object) if object.contains_key("Package") => Some(object),
+        Value::Array(values) => values.iter().find_map(|item| match item {
+            Value::Object(object) if object.contains_key("Package") => Some(object),
+            _ => None,
+        }),
         _ => None,
     }
 }
@@ -1058,6 +1056,36 @@ mod tests {
         assert!(clean_version(&"1".repeat(65)).is_none());
         assert!(extract_description_version("Version: 1.0.0\n").is_some());
         assert!(extract_description_version("Version: 1.0.0<script>\n").is_none());
+    }
+
+    #[test]
+    fn finds_package_object_only_at_expected_response_depth() {
+        let top_level = serde_json::json!({
+            "Package": "demo",
+            "Version": "1.0.0"
+        });
+        let array_response = serde_json::json!([
+            {
+                "Package": "demo",
+                "Version": "1.0.0"
+            }
+        ]);
+        let nested_response = serde_json::json!({
+            "meta": {
+                "Package": "wrong",
+                "Version": "9.9.9"
+            }
+        });
+
+        assert_eq!(
+            find_package_object(&top_level).and_then(|object| object.get("Package")),
+            Some(&serde_json::json!("demo"))
+        );
+        assert_eq!(
+            find_package_object(&array_response).and_then(|object| object.get("Package")),
+            Some(&serde_json::json!("demo"))
+        );
+        assert!(find_package_object(&nested_response).is_none());
     }
 
     #[test]
