@@ -82,12 +82,14 @@ const MAX_INPUT_LINE_BYTES = 2_048;
 const MAX_SEARCH_TABS = 30;
 const MAX_SCRIPT_CHARS = 1_000_000;
 const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
+const MAX_SEARCH_RESULT_SCAN = MAX_SEARCH_RESULTS * 2;
 const MAX_SEARCH_LOGS = 1_000;
 const MAX_STATUS_CHARS = 512;
 const MAX_RESULT_FIELD_CHARS = 2_048;
 const MAX_TOKEN_CHARS = 512;
 const MAX_VERSION_CHARS = 64;
 const MAX_SOURCE_CHARS = 16;
+const MAX_HISTORY_RECORDS = 100;
 const MAX_HISTORY_FIELD_CHARS = 8_000;
 const HISTORY_LOAD_WAIT_TIMEOUT_MS = 5_000;
 const utf8Encoder = new TextEncoder();
@@ -145,23 +147,37 @@ function upsertBoundedResult(items: SearchResult[], item: SearchResult, limit: n
   return [...items, item];
 }
 
-function dedupeBoundedResults(items: SearchResult[], limit: number) {
+function dedupeBoundedResults(items: readonly unknown[], limit: number, scanLimit: number) {
   const results: SearchResult[] = [];
-  for (const item of items) {
+  const indexes = new Map<string, number>();
+  const boundedLimit = Math.max(0, Math.floor(limit));
+  const boundedScanLimit = Math.max(0, Math.floor(scanLimit));
+  for (
+    let itemIndex = 0;
+    itemIndex < items.length && itemIndex < boundedScanLimit;
+    itemIndex += 1
+  ) {
+    const item = items[itemIndex];
     const cleanItem = sanitizeSearchResult(item);
     const key = resultIdentityKey(cleanItem);
-    const index = results.findIndex((current) => resultIdentityKey(current) === key);
-    if (index >= 0) {
+    const index = indexes.get(key);
+    if (index !== undefined) {
       results[index] = cleanItem;
-    } else if (results.length < limit) {
+    } else if (results.length < boundedLimit) {
+      indexes.set(key, results.length);
       results.push(cleanItem);
     }
   }
   return results;
 }
 
-function takeBounded<T>(items: T[], limit: number) {
-  return items.length > limit ? items.slice(0, limit) : items;
+function mapBounded<T, U>(items: readonly T[], limit: number, mapper: (item: T) => U) {
+  const mapped: U[] = [];
+  const boundedLimit = Math.max(0, Math.floor(limit));
+  for (let index = 0; index < items.length && index < boundedLimit; index += 1) {
+    mapped.push(mapper(items[index]));
+  }
+  return mapped;
 }
 
 function App() {
@@ -227,8 +243,7 @@ function App() {
   }
 
   function sanitizeHistoryList(nextHistory: unknown) {
-    const cleanHistory = takeBounded(asArray(nextHistory).map(sanitizeHistoryRecord), 100);
-    return cleanHistory;
+    return mapBounded(asArray(nextHistory), MAX_HISTORY_RECORDS, sanitizeHistoryRecord);
   }
 
   function setHistory(nextHistory: unknown) {
@@ -436,14 +451,14 @@ function App() {
       const records = await invoke<HistoryRecord[]>("build_history_records", {
         script: scriptSnapshot,
       });
-      const cleanRecords = records.map(sanitizeHistoryRecord);
+      const cleanRecords = sanitizeHistoryList(records);
       await writeText(scriptSnapshot);
       await enqueueHistorySave((currentHistory) => {
         const commands = new Set(cleanRecords.map((record) => record.command));
         return [
           ...cleanRecords,
           ...currentHistory.filter((record) => !commands.has(record.command)),
-        ].slice(0, 100);
+        ].slice(0, MAX_HISTORY_RECORDS);
       });
       setStatus(`已复制脚本并记录 ${cleanRecords.length} 条命令`);
     } catch (error) {
@@ -568,7 +583,7 @@ function App() {
   async function deleteHistoryRecord(id: string) {
     try {
       await enqueueHistorySave((currentHistory) =>
-        currentHistory.filter((record) => record.id !== id).map(sanitizeHistoryRecord),
+        currentHistory.filter((record) => record.id !== id),
       );
       setStatus("历史记录已删除");
     } catch (error) {
@@ -585,7 +600,7 @@ function App() {
       if (!historyLoadReady) {
         setStatus("历史加载等待超时，已使用当前历史继续保存");
       }
-      const nextHistory = buildNext(latestHistoryRef.current).map(sanitizeHistoryRecord);
+      const nextHistory = sanitizeHistoryList(buildNext(latestHistoryRef.current));
       const savedHistory = await invoke<HistoryRecord[]>("save_history", { history: nextHistory });
       setHistory(savedHistory);
     });
@@ -1135,8 +1150,12 @@ function sanitizeSearchResponse(value: unknown): SearchResponse {
   const response = asRecord(value);
   return {
     runId: safeRunId(response.runId),
-    results: dedupeBoundedResults(asArray(response.results), MAX_SEARCH_RESULTS),
-    logs: takeBounded(asArray(response.logs).map(safeStatusText), MAX_SEARCH_LOGS),
+    results: dedupeBoundedResults(
+      asArray(response.results),
+      MAX_SEARCH_RESULTS,
+      MAX_SEARCH_RESULT_SCAN,
+    ),
+    logs: mapBounded(asArray(response.logs), MAX_SEARCH_LOGS, safeStatusText),
     stopped: safeBoolean(response.stopped),
   };
 }
