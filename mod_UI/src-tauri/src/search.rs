@@ -40,6 +40,12 @@ struct GithubRepository {
     full_name: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GithubDescription {
+    package_name: String,
+    version: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchLogEvent {
@@ -360,13 +366,12 @@ async fn search_explicit_github(
         context.log("GitHub 仓库格式无效，已跳过");
         return None;
     };
-    let version = github_description_version(context, &repository).await?;
-    let real_name = repository.rsplit('/').next().unwrap_or(&repository);
+    let description = github_description(context, &repository).await?;
     Some(found_result(
         package,
-        &version,
+        &description.version,
         &repository,
-        real_name,
+        &description.package_name,
         "github",
     ))
 }
@@ -384,28 +389,30 @@ async fn search_github(
     );
     if let Some(value) = get_json(context, &universe_url).await {
         if let Some(object) = find_package_object(&value) {
-            let real_name = object
-                .get("Package")
-                .and_then(Value::as_str)
-                .unwrap_or(&package.name);
-            let version = object
-                .get("Version")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            let repository = object
-                .get("RemoteUrl")
-                .and_then(Value::as_str)
-                .and_then(normalize_github_repository);
-            if let Some(repository) = repository {
-                seen.insert(repository.to_ascii_lowercase());
-                if let Some(version) = clean_version(version) {
-                    results.push(found_result(
-                        package,
-                        &version,
-                        repository.as_str(),
-                        real_name,
-                        "github",
-                    ));
+            if let Some(real_name) = object.get("Package").and_then(Value::as_str) {
+                if !github_package_name_matches_request(real_name, &package.name) {
+                    // 忽略不可信的 r-universe 命中，继续尝试 GitHub API 检索。
+                } else {
+                    let version = object
+                        .get("Version")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    let repository = object
+                        .get("RemoteUrl")
+                        .and_then(Value::as_str)
+                        .and_then(normalize_github_repository);
+                    if let Some(repository) = repository {
+                        seen.insert(repository.to_ascii_lowercase());
+                        if let Some(version) = clean_version(version) {
+                            results.push(found_result(
+                                package,
+                                &version,
+                                repository.as_str(),
+                                real_name,
+                                "github",
+                            ));
+                        }
+                    }
                 }
             }
         }
@@ -468,13 +475,16 @@ async fn search_github(
             continue;
         }
         if let Some(repository_name) = normalize_github_repository(&repository.full_name) {
-            if let Some(version) = github_description_version(context, &repository_name).await {
+            if let Some(description) = github_description(context, &repository_name).await {
+                if !github_package_name_matches_request(&description.package_name, &package.name) {
+                    continue;
+                }
                 seen.insert(repository_name.to_ascii_lowercase());
                 results.push(found_result(
                     package,
-                    &version,
+                    &description.version,
                     &repository_name,
-                    repo_name,
+                    &description.package_name,
                     "github",
                 ));
             }
@@ -483,10 +493,10 @@ async fn search_github(
     results
 }
 
-async fn github_description_version(
+async fn github_description(
     context: &mut SearchContext<'_>,
     repository: &str,
-) -> Option<String> {
+) -> Option<GithubDescription> {
     for branch in ["HEAD", "master", "main", "devel"] {
         if context.is_stopped() {
             return None;
@@ -508,8 +518,8 @@ async fn github_description_version(
             let description = read_limited_text(response, MAX_DESCRIPTION_BYTES)
                 .await
                 .ok()?;
-            if let Some(version) = extract_description_version(&description) {
-                return Some(version);
+            if let Some(description) = extract_description_metadata(&description) {
+                return Some(description);
             }
         }
     }
@@ -758,10 +768,71 @@ fn extract_html_version(html: &str) -> Option<String> {
         .and_then(|value| clean_version(value.as_str()))
 }
 
-fn extract_description_version(description: &str) -> Option<String> {
-    description
-        .lines()
-        .find_map(|line| line.strip_prefix("Version:").and_then(clean_version))
+fn extract_description_metadata(description: &str) -> Option<GithubDescription> {
+    let mut package_name = None;
+    let mut version = None;
+    let mut continuation_allowed = false;
+
+    for raw_line in description.lines() {
+        let line = raw_line.trim_end_matches('\r');
+        if line.trim().is_empty() {
+            continuation_allowed = false;
+            continue;
+        }
+        if line.starts_with([' ', '\t']) {
+            if !continuation_allowed {
+                return None;
+            }
+            continue;
+        }
+
+        let (field, value) = line.split_once(':')?;
+        if !is_valid_description_field_name(field) {
+            return None;
+        }
+        let value = value.trim();
+        match field {
+            "Package" => {
+                if package_name.is_some() {
+                    return None;
+                }
+                package_name = Some(clean_result_package_name(value)?);
+                continuation_allowed = false;
+            }
+            "Version" => {
+                if version.is_some() {
+                    return None;
+                }
+                version = Some(clean_version(value)?);
+                continuation_allowed = false;
+            }
+            _ => {
+                continuation_allowed = true;
+            }
+        }
+    }
+
+    Some(GithubDescription {
+        package_name: package_name?,
+        version: version?,
+    })
+}
+
+fn is_valid_description_field_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.chars().all(|character| {
+            character.is_ascii()
+                && !character.is_ascii_control()
+                && !character.is_ascii_whitespace()
+                && character != ':'
+        })
+}
+
+fn github_package_name_matches_request(real_name: &str, requested: &str) -> bool {
+    clean_result_package_name(real_name)
+        .zip(clean_result_package_name(requested))
+        .is_some_and(|(real_name, requested)| real_name.eq_ignore_ascii_case(&requested))
 }
 
 fn clean_version(value: &str) -> Option<String> {
@@ -963,8 +1034,11 @@ mod tests {
             Some("1.2.3".to_string())
         );
         assert_eq!(
-            extract_description_version("Package: demo\nVersion: 0.4.1\n"),
-            Some("0.4.1".to_string())
+            extract_description_metadata("Package: demo\nVersion: 0.4.1\n"),
+            Some(GithubDescription {
+                package_name: "demo".to_string(),
+                version: "0.4.1".to_string(),
+            })
         );
     }
 
@@ -1073,8 +1147,18 @@ mod tests {
         assert_eq!(clean_version(" 1.2.3-rc1 "), Some("1.2.3-rc1".to_string()));
         assert!(clean_version("1.2.3\nInjected: yes").is_none());
         assert!(clean_version(&"1".repeat(65)).is_none());
-        assert!(extract_description_version("Version: 1.0.0\n").is_some());
-        assert!(extract_description_version("Version: 1.0.0<script>\n").is_none());
+        assert!(extract_description_metadata("Version: 1.0.0\n").is_none());
+        assert!(extract_description_metadata("Package: demo\nVersion: 1.0.0<script>\n").is_none());
+        assert!(extract_description_metadata("Package: demo\nVersion: 1.0.0\n").is_some());
+    }
+
+    #[test]
+    fn validates_github_description_package_identity() {
+        assert!(github_package_name_matches_request("Demo", "demo"));
+        assert!(!github_package_name_matches_request("demoExtra", "demo"));
+        assert!(!github_package_name_matches_request("demo\nbad", "demo"));
+        assert!(extract_description_metadata("Package: demo\nVersion: 1.2.3\n").is_some());
+        assert!(extract_description_metadata("Package: demo\nbad\nVersion: 1.2.3\n").is_none());
     }
 
     #[test]
