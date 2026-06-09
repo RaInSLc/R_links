@@ -178,7 +178,7 @@ pub fn generate_script(
     if requested_method == "checkSystem" {
         let names = packages
             .iter()
-            .map(|item| format!("\"{}\"", escape_r(&item.name)))
+            .map(|item| format!("\"{}\"", escape_r(&local_package_name(&item.name))))
             .collect::<Vec<_>>()
             .join(", ");
         return Ok(format!(
@@ -247,7 +247,11 @@ pub fn generate_script(
         if requested_method == "auto"
             && !matches!(method.as_str(), "github" | "biocManager" | "biocGit")
         {
-            method = if is_clean_version(&version) {
+            method = if package.name.contains('/')
+                && normalize_github_repository(&package.name).is_some()
+            {
+                "github".to_string()
+            } else if is_clean_version(&version) {
                 "remotesVersion".to_string()
             } else {
                 "base".to_string()
@@ -824,6 +828,12 @@ pub fn is_valid_package_name(value: &str) -> bool {
     chars.all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-'))
 }
 
+fn local_package_name(value: &str) -> String {
+    normalize_github_repository(value)
+        .and_then(|repository| repository.rsplit('/').next().map(ToString::to_string))
+        .unwrap_or_else(|| value.to_string())
+}
+
 pub fn is_valid_github_repository(value: &str) -> bool {
     if value.len() > 200 || value.contains('\\') || value.contains("..") {
         return false;
@@ -975,6 +985,43 @@ mod tests {
         .expect("应生成命令");
         assert!(output.contains("requireNamespace(\"dplyr\""));
         assert!(output.contains("dependencies = TRUE"));
+    }
+
+    #[test]
+    fn auto_routes_explicit_github_repository_without_search_result() {
+        let output = generate_script(
+            "owner/demo",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: true,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[],
+        )
+        .expect("显式 GitHub 仓库应生成 GitHub 安装命令");
+
+        assert!(output.contains("requireNamespace(\"demo\""));
+        assert!(output.contains("remotes::install_github(\"owner/demo\""));
+        assert!(!output.contains("install.packages(\"owner/demo\""));
+    }
+
+    #[test]
+    fn check_system_uses_local_name_for_explicit_github_repository() {
+        let output = generate_script(
+            "owner/demo",
+            &GenerateOptions {
+                method: "checkSystem".to_string(),
+                conditional: true,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[],
+        )
+        .expect("系统检查应可处理显式 GitHub 仓库");
+
+        assert!(output.contains("\"demo\""));
+        assert!(!output.contains("\"owner/demo\""));
     }
 
     #[test]
