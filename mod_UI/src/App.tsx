@@ -370,12 +370,20 @@ function App() {
       setStatus(`脚本内容过长，最多允许 ${MAX_SCRIPT_CHARS} 个字符`);
       return;
     }
+    const requestSeq = scriptRequestSeq.current + 1;
+    scriptRequestSeq.current = requestSeq;
+    const sourceScript = script;
     try {
-      const cleaned = await invoke<string>("clean_script", { script });
+      const cleaned = await invoke<string>("clean_script", { script: sourceScript });
+      if (requestSeq !== scriptRequestSeq.current || sourceScript !== script) {
+        return;
+      }
       setScript(cleaned);
       setStatus("已移除脚本注释");
     } catch (error) {
-      setStatus(`清理失败: ${formatError(error)}`);
+      if (requestSeq === scriptRequestSeq.current && sourceScript === script) {
+        setStatus(`清理失败: ${formatError(error)}`);
+      }
     }
   }
 
