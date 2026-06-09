@@ -832,13 +832,29 @@ pub fn is_valid_github_repository(value: &str) -> bool {
     if parts.len() != 2 {
         return false;
     }
-    parts.iter().all(|part| {
-        !part.is_empty()
-            && part.len() <= 100
-            && part.chars().all(|character| {
-                character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
-            })
-    })
+    is_valid_github_owner_segment(parts[0]) && is_valid_github_repo_segment(parts[1])
+}
+
+fn is_valid_github_owner_segment(value: &str) -> bool {
+    if value.is_empty()
+        || value.len() > 39
+        || value.starts_with('-')
+        || value.ends_with('-')
+        || value.contains("--")
+    {
+        return false;
+    }
+    value
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || character == '-')
+}
+
+fn is_valid_github_repo_segment(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 100
+        && value.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+        })
 }
 
 pub fn normalize_github_repository(value: &str) -> Option<String> {
@@ -1030,7 +1046,17 @@ mod tests {
     fn rejects_invalid_github_repository() {
         assert!(!is_valid_github_repository("owner/repo/extra"));
         assert!(!is_valid_github_repository("../repo"));
+        assert!(!is_valid_github_repository("owner_name/repo"));
+        assert!(!is_valid_github_repository("owner.name/repo"));
+        assert!(!is_valid_github_repository("-owner/repo"));
+        assert!(!is_valid_github_repository("owner-/repo"));
+        assert!(!is_valid_github_repository(&format!(
+            "{}/repo",
+            "a".repeat(40)
+        )));
         assert!(is_valid_github_repository("owner/repo.name"));
+        assert!(is_valid_github_repository("owner-name/repo_name"));
+        assert!(normalize_github_repository("https://github.com/owner.name/repo").is_none());
         assert!(normalize_github_repository("https://github.com:443/owner/repo").is_none());
     }
 
