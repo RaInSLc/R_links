@@ -72,6 +72,10 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
         });
     }
 
+    if raw.contains("http://") || raw.contains("https://") {
+        return None;
+    }
+
     let url_re =
         INPUT_URL_RE.get_or_init(|| Regex::new(r"https?://\S+").expect("固定 URL 正则必须有效"));
     let clean = url_re.replace_all(raw, " ");
@@ -1176,6 +1180,7 @@ mod tests {
     #[test]
     fn rejects_unsafe_install_url_inputs() {
         assert!(parse_input_line("https://example.org/src/contrib/demo_1.0.0.tar.gz").is_some());
+        assert!(parse_input_line("demo https://example.org/pkg_1.0.tar.gz").is_none());
         assert!(parse_input_line("https://user:pass@example.com/pkg_1.0.tar.gz").is_none());
         assert!(parse_input_line("https://example.org:443/pkg_1.0.tar.gz").is_none());
         assert!(parse_input_line("http://example.com/pkg_1.0.tar.gz").is_none());
@@ -1215,6 +1220,17 @@ mod tests {
             "https://github.com/owner/demo",
             &GenerateOptions {
                 method: "remotes".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[],
+        )
+        .is_err());
+        assert!(generate_script(
+            "demo https://example.org/pkg_1.0.tar.gz",
+            &GenerateOptions {
+                method: "base".to_string(),
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
