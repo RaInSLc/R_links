@@ -19,11 +19,12 @@ use serde::{Deserialize, Serialize};
 const MAX_PROTECTED_TOKEN_CHARS: usize = MAX_TOKEN_CHARS * 16;
 const MAX_HISTORY_SAVE_RECORDS: usize = MAX_HISTORY_RECORDS * 4;
 const MAX_HISTORY_SAVE_BYTES: usize = 1024 * 1024;
+const MAX_HISTORY_LOAD_SCAN_RECORDS: usize = MAX_HISTORY_RECORDS * 20;
 const MAX_HISTORY_ID_CHARS: usize = 64;
 const MAX_HISTORY_VERSION_CHARS: usize = 64;
 const MAX_HISTORY_TIMESTAMP_CHARS: usize = 32;
 const MAX_SETTINGS_FILE_BYTES: u64 = 64 * 1024;
-const MAX_HISTORY_FILE_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_HISTORY_FILE_BYTES: u64 = MAX_HISTORY_SAVE_BYTES as u64;
 const MAX_CORRUPT_BACKUPS_PER_FILE: usize = 5;
 const OVERSIZED_BACKUP_NOTICE: &str = "原文件超过安全读取上限，内容未复制到备份。";
 static STORAGE_WRITE_LOCK: Mutex<()> = Mutex::new(());
@@ -243,6 +244,7 @@ fn sanitize_history(history: &[HistoryRecord]) -> Vec<HistoryRecord> {
         .as_millis();
     history
         .iter()
+        .take(MAX_HISTORY_LOAD_SCAN_RECORDS)
         .enumerate()
         .filter_map(|(index, record)| sanitize_history_record(record, index, now))
         .take(MAX_HISTORY_RECORDS)
@@ -878,6 +880,35 @@ mod tests {
         assert_eq!(history[0].version, "");
         assert_eq!(history[0].tool_name, "GitHub");
         assert_eq!(history[0].created_at, "123456");
+    }
+
+    #[test]
+    fn sanitize_history_bounds_invalid_record_scan_window() {
+        let mut records = vec![
+            HistoryRecord {
+                id: "bad".to_string(),
+                command: "system(\"calc.exe\")".to_string(),
+                package_name: "demo".to_string(),
+                version: String::new(),
+                tool_name: "base R".to_string(),
+                created_at: "1".to_string(),
+            };
+            MAX_HISTORY_LOAD_SCAN_RECORDS
+        ];
+        records.push(HistoryRecord {
+            id: "history-valid".to_string(),
+            command:
+                "remotes::install_github(\"owner/demo\", upgrade = \"never\", dependencies = TRUE)"
+                    .to_string(),
+            package_name: "demo".to_string(),
+            version: String::new(),
+            tool_name: "GitHub".to_string(),
+            created_at: "1".to_string(),
+        });
+
+        let history = sanitize_history(&records);
+
+        assert!(history.is_empty());
     }
 
     #[test]
