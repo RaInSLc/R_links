@@ -142,7 +142,7 @@ function App() {
   const [script, setScriptState] = useState("等待输入...");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
-  const [history, setHistory] = useState<HistoryRecord[]>([]);
+  const [history, setHistoryState] = useState<HistoryRecord[]>([]);
   const [searching, setSearching] = useState(false);
   const [status, setStatus] = useState("就绪");
   const [showToken, setShowToken] = useState(false);
@@ -150,10 +150,39 @@ function App() {
   const activeSearchRunId = useRef(0);
   const scriptRequestSeq = useRef(0);
   const latestScriptRef = useRef("等待输入...");
+  const latestHistoryRef = useRef<HistoryRecord[]>([]);
+  const historyActionSeq = useRef(0);
+  const historySaveQueue = useRef(Promise.resolve());
+  const historyLoadResolveRef = useRef<() => void>(() => undefined);
+  const historyLoadReadyRef = useRef<Promise<void> | null>(null);
+  if (historyLoadReadyRef.current === null) {
+    historyLoadReadyRef.current = new Promise<void>((resolve) => {
+      historyLoadResolveRef.current = resolve;
+    });
+  }
 
   function setScript(nextScript: string) {
     latestScriptRef.current = nextScript;
     setScriptState(nextScript);
+  }
+
+  function sanitizeHistoryList(nextHistory: unknown) {
+    const cleanHistory = takeBounded(asArray(nextHistory).map(sanitizeHistoryRecord), 100);
+    return cleanHistory;
+  }
+
+  function setHistory(nextHistory: unknown) {
+    const cleanHistory = sanitizeHistoryList(nextHistory);
+    latestHistoryRef.current = cleanHistory;
+    setHistoryState(cleanHistory);
+  }
+
+  function loadInitialHistory(nextHistory: unknown) {
+    const cleanHistory = sanitizeHistoryList(nextHistory);
+    latestHistoryRef.current = cleanHistory;
+    if (historyActionSeq.current === 0) {
+      setHistoryState(cleanHistory);
+    }
   }
 
   const packageCount = useMemo(
@@ -172,11 +201,8 @@ function App() {
     : 0;
 
   useEffect(() => {
-    Promise.all([
-      invoke<PublicSettings>("load_settings"),
-      invoke<HistoryRecord[]>("load_history"),
-    ])
-      .then(([savedSettings, savedHistory]) => {
+    invoke<PublicSettings>("load_settings")
+      .then((savedSettings) => {
         const cleanSettings = sanitizePublicSettings(savedSettings);
         setSettings({
           proxy: cleanSettings.proxy,
@@ -185,9 +211,13 @@ function App() {
           fullSearch: cleanSettings.fullSearch,
         });
         setTokenConfigured(cleanSettings.githubTokenConfigured);
-        setHistory(takeBounded(asArray(savedHistory).map(sanitizeHistoryRecord), 100));
       })
-      .catch((error) => setStatus(`初始化失败: ${formatError(error)}`));
+      .catch((error) => setStatus(`设置加载失败: ${formatError(error)}`));
+
+    invoke<HistoryRecord[]>("load_history")
+      .then(loadInitialHistory)
+      .catch((error) => setStatus(`历史加载失败: ${formatError(error)}`))
+      .finally(() => historyLoadResolveRef.current());
   }, []);
 
   useEffect(() => {
@@ -342,16 +372,14 @@ function App() {
         script: scriptSnapshot,
       });
       const cleanRecords = records.map(sanitizeHistoryRecord);
-      const commands = new Set(cleanRecords.map((record) => record.command));
-      const merged = [
-        ...cleanRecords,
-        ...history.filter((record) => !commands.has(record.command)),
-      ].slice(0, 100);
-      const savedHistory = await invoke<HistoryRecord[]>("save_history", { history: merged });
+      await enqueueHistorySave((currentHistory) => {
+        const commands = new Set(cleanRecords.map((record) => record.command));
+        return [
+          ...cleanRecords,
+          ...currentHistory.filter((record) => !commands.has(record.command)),
+        ].slice(0, 100);
+      });
       await writeText(scriptSnapshot);
-      if (scriptSnapshot === latestScriptRef.current) {
-        setHistory(takeBounded(asArray(savedHistory).map(sanitizeHistoryRecord), 100));
-      }
       setStatus(`已复制脚本并记录 ${records.length} 条命令`);
     } catch (error) {
       setStatus(`复制失败: ${formatError(error)}`);
@@ -471,14 +499,31 @@ function App() {
   }
 
   async function deleteHistoryRecord(id: string) {
-    const next = history.filter((record) => record.id !== id).map(sanitizeHistoryRecord);
     try {
-      const savedHistory = await invoke<HistoryRecord[]>("save_history", { history: next });
-      setHistory(takeBounded(asArray(savedHistory).map(sanitizeHistoryRecord), 100));
+      await enqueueHistorySave((currentHistory) =>
+        currentHistory.filter((record) => record.id !== id).map(sanitizeHistoryRecord),
+      );
       setStatus("历史记录已删除");
     } catch (error) {
       setStatus(`历史保存失败: ${formatError(error)}`);
     }
+  }
+
+  async function enqueueHistorySave(
+    buildNext: (currentHistory: HistoryRecord[]) => HistoryRecord[],
+  ) {
+    historyActionSeq.current += 1;
+    const task = historySaveQueue.current.then(async () => {
+      await historyLoadReadyRef.current;
+      const nextHistory = buildNext(latestHistoryRef.current).map(sanitizeHistoryRecord);
+      const savedHistory = await invoke<HistoryRecord[]>("save_history", { history: nextHistory });
+      setHistory(savedHistory);
+    });
+    historySaveQueue.current = task.then(
+      () => undefined,
+      () => undefined,
+    );
+    await task;
   }
 
   function isMethodDisabled(candidate: Method) {
