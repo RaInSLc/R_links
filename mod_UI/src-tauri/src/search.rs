@@ -24,6 +24,8 @@ const MAX_DESCRIPTION_BYTES: usize = 64 * 1024;
 const MAX_DESCRIPTION_LINES: usize = 1_000;
 const MAX_DESCRIPTION_LINE_CHARS: usize = 2_048;
 const MAX_JSON_RESPONSE_BYTES: usize = 1024 * 1024;
+const MAX_GITHUB_SEARCH_ITEMS: usize = 10;
+const MAX_GITHUB_REPOSITORY_CHARS: usize = 200;
 const MAX_SEARCH_HTTP_REQUESTS: usize = 200;
 const MAX_RESULT_MESSAGE_CHARS: usize = 256;
 const MAX_SEARCH_LOG_CHARS: usize = 512;
@@ -481,19 +483,17 @@ async fn search_github(
         }
     };
 
-    for repository in body.items {
+    for full_name in bounded_github_response_repositories(body) {
         if context.is_stopped() {
             break;
         }
-        let repo_name = repository.full_name.rsplit('/').next().unwrap_or_default();
+        let repo_name = full_name.rsplit('/').next().unwrap_or_default();
         let lower_repo = repo_name.to_ascii_lowercase();
         let lower_package = package.name.to_ascii_lowercase();
-        if !lower_repo.contains(&lower_package)
-            || seen.contains(&repository.full_name.to_ascii_lowercase())
-        {
+        if !lower_repo.contains(&lower_package) || seen.contains(&full_name.to_ascii_lowercase()) {
             continue;
         }
-        if let Some(repository_name) = normalize_github_repository(&repository.full_name) {
+        if let Some(repository_name) = normalize_github_repository(&full_name) {
             if let Some(description) = github_description(context, &repository_name).await {
                 if !github_package_name_matches_request(&description.package_name, &package.name) {
                     continue;
@@ -879,6 +879,24 @@ fn find_package_object(value: &Value) -> Option<&serde_json::Map<String, Value>>
     }
 }
 
+fn clean_github_response_repository_name(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.len() > MAX_GITHUB_REPOSITORY_CHARS
+        || trimmed.chars().any(|character| character.is_control())
+    {
+        return None;
+    }
+    normalize_github_repository(trimmed).map(|_| trimmed.to_string())
+}
+
+fn bounded_github_response_repositories(body: GithubSearchResponse) -> Vec<String> {
+    body.items
+        .into_iter()
+        .take(MAX_GITHUB_SEARCH_ITEMS)
+        .filter_map(|repository| clean_github_response_repository_name(&repository.full_name))
+        .collect()
+}
+
 fn version_compatible(found: &str, requested: &str) -> bool {
     found == requested
         || (requested.matches('.').count() == 1
@@ -1201,6 +1219,35 @@ mod tests {
         assert!(normalize_github_repository("https://example.com/github.com/owner/repo").is_none());
         assert!(normalize_github_repository("https://github.com/owner/repo/issues").is_none());
         assert!(normalize_github_repository("https://github.com/owner/repo?tab=readme").is_none());
+    }
+
+    #[test]
+    fn bounds_github_search_response_repositories() {
+        let mut items = vec![
+            GithubRepository {
+                full_name: "owner/demo".to_string(),
+            },
+            GithubRepository {
+                full_name: "owner/bad\nrepo".to_string(),
+            },
+            GithubRepository {
+                full_name: format!("owner/{}", "x".repeat(MAX_GITHUB_REPOSITORY_CHARS + 1)),
+            },
+        ];
+        items.extend((0..MAX_GITHUB_SEARCH_ITEMS).map(|index| GithubRepository {
+            full_name: format!("owner/repo{index}"),
+        }));
+
+        let repositories = bounded_github_response_repositories(GithubSearchResponse { items });
+
+        assert_eq!(repositories.len(), MAX_GITHUB_SEARCH_ITEMS - 2);
+        assert_eq!(repositories.first().map(String::as_str), Some("owner/demo"));
+        assert!(!repositories
+            .iter()
+            .any(|repository| repository == "owner/repo9"));
+        assert!(repositories
+            .iter()
+            .all(|repository| repository.len() <= MAX_GITHUB_REPOSITORY_CHARS));
     }
 
     #[test]
