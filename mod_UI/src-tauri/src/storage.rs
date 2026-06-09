@@ -94,9 +94,9 @@ fn load_settings_with_recovery(
     if !path.exists() {
         return Ok(Settings::default());
     }
-    let Some(content) = read_limited_to_string(&path, MAX_SETTINGS_FILE_BYTES, "设置文件")?
+    let Some(content) =
+        read_storage_file_with_recovery(app, "settings.json", MAX_SETTINGS_FILE_BYTES, "设置文件")?
     else {
-        backup_corrupt_settings_file(app, OVERSIZED_BACKUP_NOTICE)?;
         return if fallback_to_default {
             Ok(Settings::default())
         } else {
@@ -132,9 +132,9 @@ pub fn load_history(app: &AppHandle) -> Result<Vec<HistoryRecord>, String> {
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let Some(content) = read_limited_to_string(&path, MAX_HISTORY_FILE_BYTES, "历史文件")?
+    let Some(content) =
+        read_storage_file_with_recovery(app, "history.json", MAX_HISTORY_FILE_BYTES, "历史文件")?
     else {
-        backup_corrupt_file(app, "history.json", OVERSIZED_BACKUP_NOTICE)?;
         return Ok(Vec::new());
     };
     match serde_json::from_str::<Vec<HistoryRecord>>(&content) {
@@ -256,6 +256,37 @@ fn read_limited_to_string(
         .map_err(|_| format!("{file_label}不是有效 UTF-8"))
 }
 
+fn read_storage_file_with_recovery(
+    app: &AppHandle,
+    name: &str,
+    max_bytes: u64,
+    file_label: &str,
+) -> Result<Option<String>, String> {
+    let path = data_file(app, name)?;
+    let directory = path.parent().ok_or_else(|| "存储目录无效".to_string())?;
+    read_storage_path_with_recovery(directory, &path, name, max_bytes, file_label)
+}
+
+fn read_storage_path_with_recovery(
+    directory: &Path,
+    path: &PathBuf,
+    name: &str,
+    max_bytes: u64,
+    file_label: &str,
+) -> Result<Option<String>, String> {
+    match read_limited_to_string(path, max_bytes, file_label) {
+        Ok(Some(content)) => Ok(Some(content)),
+        Ok(None) => {
+            backup_corrupt_storage_path(directory, name, OVERSIZED_BACKUP_NOTICE)?;
+            Ok(None)
+        }
+        Err(error) => {
+            backup_corrupt_storage_path(directory, name, &error)?;
+            Ok(None)
+        }
+    }
+}
+
 fn atomic_write(path: &PathBuf, content: &str) -> Result<(), String> {
     let _guard = STORAGE_WRITE_LOCK
         .lock()
@@ -296,12 +327,28 @@ fn backup_corrupt_settings_file(app: &AppHandle, content: &str) -> Result<(), St
     backup_corrupt_file(app, "settings.json", &redacted)
 }
 
-fn backup_corrupt_file(app: &AppHandle, name: &str, content: &str) -> Result<(), String> {
-    let backup = data_file(app, &format!("{name}.corrupt.{}.bak", unique_file_suffix()))?;
-    atomic_write(&backup, content)?;
-    if let Ok(directory) = app.path().app_data_dir() {
-        prune_corrupt_backups(&directory, name);
+fn backup_corrupt_storage_path(directory: &Path, name: &str, content: &str) -> Result<(), String> {
+    if name == "settings.json" {
+        backup_corrupt_path(directory, name, &redact_settings_backup_content(content))
+    } else {
+        backup_corrupt_path(directory, name, content)
     }
+}
+
+fn backup_corrupt_file(app: &AppHandle, name: &str, content: &str) -> Result<(), String> {
+    let directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    backup_corrupt_path(&directory, name, content)
+}
+
+fn backup_corrupt_path(directory: &Path, name: &str, content: &str) -> Result<(), String> {
+    fs::create_dir_all(directory).map_err(|error| error.to_string())?;
+    let backup = directory.join(format!("{name}.corrupt.{}.bak", unique_file_suffix()));
+    atomic_write(&backup, content)?;
+    prune_corrupt_backups(directory, name);
     Ok(())
 }
 
@@ -597,6 +644,78 @@ mod tests {
             .expect_err("非法 UTF-8 应被拒绝");
 
         assert_eq!(error, "设置文件不是有效 UTF-8");
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[test]
+    fn storage_recovery_backs_up_invalid_utf8_settings() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-invalid-settings-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+        let path = directory.join("settings.json");
+        fs::write(&path, [b'{', 0xff, b'}']).expect("应能写入非法 UTF-8 设置");
+
+        let content = read_storage_path_with_recovery(
+            &directory,
+            &path,
+            "settings.json",
+            MAX_SETTINGS_FILE_BYTES,
+            "设置文件",
+        )
+        .expect("非法 UTF-8 设置应进入恢复路径");
+
+        assert!(content.is_none());
+        let backup = fs::read_dir(&directory)
+            .expect("应能列出备份目录")
+            .filter_map(Result::ok)
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("settings.json.corrupt.")
+            })
+            .expect("应写入设置损坏备份");
+        let backup_content = fs::read_to_string(backup.path()).expect("应能读取设置备份");
+
+        assert_eq!(backup_content, "设置文件不是有效 UTF-8");
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[test]
+    fn storage_recovery_backs_up_invalid_utf8_history() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-invalid-history-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+        let path = directory.join("history.json");
+        fs::write(&path, [b'[', 0xff, b']']).expect("应能写入非法 UTF-8 历史");
+
+        let content = read_storage_path_with_recovery(
+            &directory,
+            &path,
+            "history.json",
+            MAX_HISTORY_FILE_BYTES,
+            "历史文件",
+        )
+        .expect("非法 UTF-8 历史应进入恢复路径");
+
+        assert!(content.is_none());
+        let backup = fs::read_dir(&directory)
+            .expect("应能列出备份目录")
+            .filter_map(Result::ok)
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("history.json.corrupt.")
+            })
+            .expect("应写入历史损坏备份");
+
+        assert_eq!(
+            fs::read_to_string(backup.path()).expect("应能读取历史备份"),
+            "历史文件不是有效 UTF-8"
+        );
 
         fs::remove_dir_all(directory).expect("应能清理临时目录");
     }
