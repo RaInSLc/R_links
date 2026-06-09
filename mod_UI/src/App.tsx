@@ -178,6 +178,7 @@ function App() {
   const [showToken, setShowToken] = useState(false);
   const [tokenConfigured, setTokenConfigured] = useState(false);
   const activeSearchRunId = useRef(0);
+  const searchingRef = useRef(false);
   const scriptRequestSeq = useRef(0);
   const latestScriptRef = useRef("等待输入...");
   const latestHistoryRef = useRef<HistoryRecord[]>([]);
@@ -334,12 +335,13 @@ function App() {
   }, [input, method]);
 
   async function startSearch() {
-    if (!input.trim() || searching || inputTooLarge) {
+    if (!input.trim() || searchingRef.current || inputTooLarge) {
       if (inputTooLarge) {
         setStatus(`输入超出限制：最多 ${MAX_PACKAGE_LINES} 行、${MAX_INPUT_CHARS} 字节`);
       }
       return;
     }
+    searchingRef.current = true;
     setSearching(true);
     const runId = nextSearchRunId();
     activeSearchRunId.current = runId;
@@ -370,6 +372,7 @@ function App() {
     } finally {
       if (runId === activeSearchRunId.current) {
         setSearching(false);
+        searchingRef.current = false;
         activeSearchRunId.current = 0;
       }
     }
