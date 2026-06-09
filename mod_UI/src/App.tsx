@@ -401,6 +401,7 @@ function App() {
         script: scriptSnapshot,
       });
       const cleanRecords = records.map(sanitizeHistoryRecord);
+      await writeText(scriptSnapshot);
       await enqueueHistorySave((currentHistory) => {
         const commands = new Set(cleanRecords.map((record) => record.command));
         return [
@@ -408,8 +409,7 @@ function App() {
           ...currentHistory.filter((record) => !commands.has(record.command)),
         ].slice(0, 100);
       });
-      await writeText(scriptSnapshot);
-      setStatus(`已复制脚本并记录 ${records.length} 条命令`);
+      setStatus(`已复制脚本并记录 ${cleanRecords.length} 条命令`);
     } catch (error) {
       setStatus(`复制失败: ${formatError(error)}`);
     }
