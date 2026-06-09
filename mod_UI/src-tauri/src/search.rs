@@ -188,7 +188,7 @@ pub async fn search_packages(
                 }
             ));
 
-            let before = results.len();
+            let had_found_before = has_found_result_for_package(&results, &package.name);
             if package.name.contains('/') {
                 if let Some(result) = search_explicit_github(&mut context, package).await {
                     push_result(app, run_id, &mut results, result);
@@ -198,14 +198,18 @@ pub async fn search_packages(
                     push_result(app, run_id, &mut results, result);
                 }
 
-                if (settings.full_search || results.len() == before) && !context.is_stopped() {
+                if (settings.full_search || !has_found_result_for_package(&results, &package.name))
+                    && !context.is_stopped()
+                {
                     let bioc_results = search_bioconductor(&mut context, package).await;
                     for result in bioc_results {
                         push_result(app, run_id, &mut results, result);
                     }
                 }
 
-                if (settings.full_search || results.len() == before) && !context.is_stopped() {
+                if (settings.full_search || !has_found_result_for_package(&results, &package.name))
+                    && !context.is_stopped()
+                {
                     let github_results = search_github(&mut context, package).await;
                     for result in github_results {
                         push_result(app, run_id, &mut results, result);
@@ -213,7 +217,10 @@ pub async fn search_packages(
                 }
             }
 
-            if results.len() == before && !context.is_stopped() {
+            if !had_found_before
+                && !has_found_result_for_package(&results, &package.name)
+                && !context.is_stopped()
+            {
                 let result = SearchResult {
                     package: package.name.clone(),
                     requested_version: package.version.clone(),
@@ -241,6 +248,16 @@ pub async fn search_packages(
         results,
         logs,
         stopped,
+    })
+}
+
+fn has_found_result_for_package(results: &[SearchResult], package_name: &str) -> bool {
+    results.iter().any(|result| {
+        result.found
+            && (result.package.eq_ignore_ascii_case(package_name)
+                || normalize_github_repository(package_name)
+                    .as_deref()
+                    .is_some_and(|repository| result.package.eq_ignore_ascii_case(repository)))
     })
 }
 
@@ -1302,6 +1319,52 @@ mod tests {
         assert_eq!(result.source, "github");
         assert_eq!(result.repository, "owner/repo");
         assert_eq!(result.real_name, "actualPkg");
+    }
+
+    #[test]
+    fn found_result_tracking_ignores_downgraded_or_unrelated_results() {
+        let results = vec![
+            SearchResult {
+                package: "demo".to_string(),
+                requested_version: String::new(),
+                latest_version: String::new(),
+                repository: String::new(),
+                real_name: "demo".to_string(),
+                source: "none".to_string(),
+                found: false,
+                message: "未找到".to_string(),
+            },
+            SearchResult {
+                package: "other".to_string(),
+                requested_version: String::new(),
+                latest_version: "1.0.0".to_string(),
+                repository: String::new(),
+                real_name: "other".to_string(),
+                source: "cran".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            },
+        ];
+
+        assert!(!has_found_result_for_package(&results, "demo"));
+        assert!(has_found_result_for_package(&results, "other"));
+    }
+
+    #[test]
+    fn found_result_tracking_accepts_explicit_github_package_identity() {
+        let results = vec![SearchResult {
+            package: "owner/repo".to_string(),
+            requested_version: String::new(),
+            latest_version: "1.0.0".to_string(),
+            repository: "owner/repo".to_string(),
+            real_name: "actualPkg".to_string(),
+            source: "github".to_string(),
+            found: true,
+            message: "验证成功".to_string(),
+        }];
+
+        assert!(has_found_result_for_package(&results, "Owner/Repo"));
+        assert!(!has_found_result_for_package(&results, "owner/other"));
     }
 
     #[test]
