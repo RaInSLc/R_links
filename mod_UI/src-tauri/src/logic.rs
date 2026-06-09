@@ -356,10 +356,14 @@ fn sanitize_search_result(result: &SearchResult) -> Option<SearchResult> {
     let latest_version = clean_result_version(&result.latest_version).unwrap_or_default();
     let source = clean_result_source(&result.source)?;
     let repository = clean_result_repository(&source, &result.repository)?;
-    let real_name = clean_result_package(&result.real_name).unwrap_or_else(|| package.clone());
+    let clean_real_name = clean_result_package(&result.real_name);
+    let real_name_is_valid = clean_real_name.is_some();
+    let real_name = clean_real_name.unwrap_or_else(|| package.clone());
     let message = clean_result_text(&result.message);
 
-    if result.found && latest_version.is_empty() && source != "github" {
+    if result.found
+        && !is_trusted_found_result(&source, &latest_version, &repository, real_name_is_valid)
+    {
         return None;
     }
 
@@ -383,6 +387,24 @@ fn search_result_fields_within_bounds(result: &SearchResult) -> bool {
         && result.real_name.len() <= MAX_FIELD_CHARS
         && result.source.len() <= MAX_RESULT_SOURCE_CHARS
         && result.message.len() <= MAX_RESULT_MESSAGE_CHARS
+}
+
+fn is_trusted_found_result(
+    source: &str,
+    latest_version: &str,
+    repository: &str,
+    real_name_is_valid: bool,
+) -> bool {
+    if latest_version.is_empty() {
+        return false;
+    }
+
+    match source {
+        "cran" | "bioc" => true,
+        "biocGit" => !repository.is_empty(),
+        "github" => !repository.is_empty() && real_name_is_valid,
+        _ => false,
+    }
 }
 
 fn clean_result_package(value: &str) -> Option<String> {
@@ -1412,6 +1434,59 @@ mod tests {
         assert!(output.contains("install.packages(\"demo\""));
         assert!(!output.contains("install_github"));
         assert!(!output.contains("evil/demo"));
+    }
+
+    #[test]
+    fn ignores_inconsistent_found_search_results_for_auto_script() {
+        let output = generate_script(
+            "demo",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[
+                SearchResult {
+                    package: "demo".to_string(),
+                    requested_version: String::new(),
+                    latest_version: "9.9.9".to_string(),
+                    repository: String::new(),
+                    real_name: "demo".to_string(),
+                    source: "none".to_string(),
+                    found: true,
+                    message: "伪造成功".to_string(),
+                },
+                SearchResult {
+                    package: "demo".to_string(),
+                    requested_version: String::new(),
+                    latest_version: "8.8.8".to_string(),
+                    repository: String::new(),
+                    real_name: "demo".to_string(),
+                    source: "github".to_string(),
+                    found: true,
+                    message: "缺少仓库".to_string(),
+                },
+                SearchResult {
+                    package: "demo".to_string(),
+                    requested_version: String::new(),
+                    latest_version: "7.7.7".to_string(),
+                    repository: "owner/demo".to_string(),
+                    real_name: "demo\nbad".to_string(),
+                    source: "github".to_string(),
+                    found: true,
+                    message: "非法真实包名".to_string(),
+                },
+            ],
+        )
+        .expect("矛盾检索结果应被忽略并回退基础安装");
+
+        assert!(output.contains("install.packages(\"demo\""));
+        assert!(!output.contains("install_github"));
+        assert!(!output.contains("9.9.9"));
+        assert!(!output.contains("8.8.8"));
+        assert!(!output.contains("7.7.7"));
+        assert!(!output.contains("owner/demo"));
     }
 
     #[test]
