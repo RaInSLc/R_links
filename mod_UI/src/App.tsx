@@ -78,6 +78,7 @@ const defaultSettings: Settings = {
 
 const MAX_INPUT_CHARS = 100_000;
 const MAX_PACKAGE_LINES = 500;
+const MAX_INPUT_LINE_BYTES = 2_048;
 const MAX_SEARCH_TABS = 30;
 const MAX_SCRIPT_CHARS = 1_000_000;
 const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
@@ -201,7 +202,7 @@ function App() {
   function acceptInputValue(value: string, source: "manual" | "clipboard") {
     if (inputValueTooLarge(value)) {
       setStatus(
-        `${source === "clipboard" ? "剪贴板内容" : "输入"}超出限制：最多 ${MAX_PACKAGE_LINES} 行、${MAX_INPUT_CHARS} 字节`,
+        `${source === "clipboard" ? "剪贴板内容" : "输入"}超出限制：最多 ${MAX_PACKAGE_LINES} 行、总计 ${MAX_INPUT_CHARS} 字节、单行 ${MAX_INPUT_LINE_BYTES} 字节`,
       );
       return false;
     }
@@ -249,7 +250,10 @@ function App() {
     [input],
   );
   const inputBytes = useMemo(() => utf8Length(input), [input]);
-  const inputTooLarge = inputBytes > MAX_INPUT_CHARS || packageCount > MAX_PACKAGE_LINES;
+  const inputTooLarge =
+    inputBytes > MAX_INPUT_CHARS ||
+    packageCount > MAX_PACKAGE_LINES ||
+    nonEmptyLineBytesExceeds(input, MAX_INPUT_LINE_BYTES);
   const scriptTooLarge = useMemo(() => scriptValueTooLarge(script), [script]);
   const foundCount = results.filter((result) => result.found).length;
   const uniqueFoundCount = new Set(
@@ -365,7 +369,7 @@ function App() {
   async function startSearch() {
     if (!input.trim() || searchingRef.current || inputTooLarge) {
       if (inputTooLarge) {
-        setStatus(`输入超出限制：最多 ${MAX_PACKAGE_LINES} 行、${MAX_INPUT_CHARS} 字节`);
+        setStatus(`输入超出限制：最多 ${MAX_PACKAGE_LINES} 行、总计 ${MAX_INPUT_CHARS} 字节、单行 ${MAX_INPUT_LINE_BYTES} 字节`);
       }
       return;
     }
@@ -680,7 +684,7 @@ function App() {
                 />
                 {inputTooLarge && (
                   <div className="inline-warning">
-                    输入超出限制：最多 {MAX_PACKAGE_LINES} 行、{MAX_INPUT_CHARS} 字节。
+                    输入超出限制：最多 {MAX_PACKAGE_LINES} 行、总计 {MAX_INPUT_CHARS} 字节、单行 {MAX_INPUT_LINE_BYTES} 字节。
                   </div>
                 )}
                 <div className="input-actions">
@@ -1030,6 +1034,7 @@ function inputValueTooLarge(value: string) {
   return (
     value.length > MAX_INPUT_CHARS ||
     nonEmptyLineCountExceeds(value, MAX_PACKAGE_LINES) ||
+    nonEmptyLineBytesExceeds(value, MAX_INPUT_LINE_BYTES) ||
     utf8Length(value) > MAX_INPUT_CHARS
   );
 }
@@ -1065,6 +1070,15 @@ function nonEmptyLineCountExceeds(value: string, limit: number) {
       if (count > limit) {
         return true;
       }
+    }
+  }
+  return false;
+}
+
+function nonEmptyLineBytesExceeds(value: string, limit: number) {
+  for (const line of value.split(/\r?\n/)) {
+    if (line.trim() && utf8Length(line) > limit) {
+      return true;
     }
   }
   return false;
