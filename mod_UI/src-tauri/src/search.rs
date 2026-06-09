@@ -3,6 +3,7 @@ use reqwest::{Client, RequestBuilder, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -32,6 +33,8 @@ const MAX_SEARCH_HTTP_REQUESTS: usize = 200;
 const MAX_RESULT_MESSAGE_CHARS: usize = 256;
 const MAX_SEARCH_LOG_CHARS: usize = 512;
 const MAX_SEARCH_LOGS: usize = 1_000;
+const SEARCH_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const SEARCH_STOPPED_ERROR: &str = "检索已停止";
 const SEARCH_LOG_EMPTY_MESSAGE: &str = "日志内容为空或已被清理";
 const SEARCH_LOGS_TRUNCATED_MESSAGE: &str = "检索日志达到上限，后续日志已停止记录";
 static HTML_VERSION_RE: OnceLock<Regex> = OnceLock::new();
@@ -144,6 +147,37 @@ impl SearchContext<'_> {
 
 fn search_stopped(cancelled: &AtomicBool, budget: &RequestBudget) -> bool {
     cancelled.load(Ordering::SeqCst) || budget.is_exhausted()
+}
+
+async fn wait_until_search_stopped(cancelled: &AtomicBool, budget: &RequestBudget) {
+    while !search_stopped(cancelled, budget) {
+        tokio::time::sleep(SEARCH_STOP_POLL_INTERVAL).await;
+    }
+}
+
+async fn await_or_stop<T>(
+    future: impl Future<Output = T>,
+    cancelled: &AtomicBool,
+    budget: &RequestBudget,
+) -> Result<T, String> {
+    if search_stopped(cancelled, budget) {
+        return Err(SEARCH_STOPPED_ERROR.to_string());
+    }
+
+    tokio::select! {
+        biased;
+        _ = wait_until_search_stopped(cancelled, budget) => Err(SEARCH_STOPPED_ERROR.to_string()),
+        result = future => Ok(result),
+    }
+}
+
+async fn send_request(
+    context: &SearchContext<'_>,
+    request: RequestBuilder,
+) -> Result<reqwest::Response, String> {
+    await_or_stop(request.send(), context.cancelled, context.budget)
+        .await?
+        .map_err(|error| error.to_string())
 }
 
 pub async fn search_packages(
@@ -459,10 +493,12 @@ async fn search_github(
     if !context.acquire_request_budget() {
         return results;
     }
-    let response = match request.send().await {
+    let response = match send_request(context, request).await {
         Ok(response) => response,
         Err(error) => {
-            context.log(&format!("GitHub 请求失败: {error}"));
+            if !context.is_stopped() {
+                context.log(&format!("GitHub 请求失败: {error}"));
+            }
             return results;
         }
     };
@@ -470,10 +506,26 @@ async fn search_github(
         context.log("GitHub API 已触发频率限制");
         return results;
     }
-    let text = match read_limited_text(response, MAX_JSON_RESPONSE_BYTES).await {
+    if !response.status().is_success() {
+        context.log(&format!(
+            "GitHub API 返回 HTTP {}",
+            response.status().as_u16()
+        ));
+        return results;
+    }
+    let text = match read_limited_text(
+        response,
+        MAX_JSON_RESPONSE_BYTES,
+        context.cancelled,
+        context.budget,
+    )
+    .await
+    {
         Ok(value) => value,
         Err(error) => {
-            context.log(&format!("GitHub 响应读取失败: {error}"));
+            if !context.is_stopped() {
+                context.log(&format!("GitHub 响应读取失败: {error}"));
+            }
             return results;
         }
     };
@@ -528,7 +580,7 @@ async fn github_description(
                 if !context.acquire_request_budget() {
                     return None;
                 }
-                request.send().await.ok()?
+                send_request(context, request).await.ok()?
             }
             Err(error) => {
                 context.log(&error);
@@ -536,9 +588,14 @@ async fn github_description(
             }
         };
         if response.status().is_success() {
-            let description = read_limited_text(response, MAX_DESCRIPTION_BYTES)
-                .await
-                .ok()?;
+            let description = read_limited_text(
+                response,
+                MAX_DESCRIPTION_BYTES,
+                context.cancelled,
+                context.budget,
+            )
+            .await
+            .ok()?;
             if let Some(description) = extract_description_metadata(&description) {
                 return Some(description);
             }
@@ -574,13 +631,18 @@ async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Option<String> 
     if !context.acquire_request_budget() {
         return None;
     }
-    let response = context.client.get(url).send().await.ok()?;
+    let response = send_request(context, context.client.get(url)).await.ok()?;
     if !response.status().is_success() {
         return None;
     }
-    read_limited_text(response, MAX_TEXT_RESPONSE_BYTES)
-        .await
-        .ok()
+    read_limited_text(
+        response,
+        MAX_TEXT_RESPONSE_BYTES,
+        context.cancelled,
+        context.budget,
+    )
+    .await
+    .ok()
 }
 
 async fn get_json(context: &mut SearchContext<'_>, url: &str) -> Option<Value> {
@@ -597,16 +659,26 @@ async fn get_json(context: &mut SearchContext<'_>, url: &str) -> Option<Value> {
     if !context.acquire_request_budget() {
         return None;
     }
-    let response = request.send().await.ok()?;
-    let text = read_limited_text(response, MAX_JSON_RESPONSE_BYTES)
-        .await
-        .ok()?;
+    let response = send_request(context, request).await.ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    let text = read_limited_text(
+        response,
+        MAX_JSON_RESPONSE_BYTES,
+        context.cancelled,
+        context.budget,
+    )
+    .await
+    .ok()?;
     serde_json::from_str(&text).ok()
 }
 
 async fn read_limited_text(
     mut response: reqwest::Response,
     limit: usize,
+    cancelled: &AtomicBool,
+    budget: &RequestBudget,
 ) -> Result<String, String> {
     if let Some(length) = response.content_length() {
         if length > limit as u64 {
@@ -615,9 +687,8 @@ async fn read_limited_text(
     }
 
     let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
+    while let Some(chunk) = await_or_stop(response.chunk(), cancelled, budget)
+        .await?
         .map_err(|_| "读取响应失败".to_string())?
     {
         if bytes.len().saturating_add(chunk.len()) > limit {
