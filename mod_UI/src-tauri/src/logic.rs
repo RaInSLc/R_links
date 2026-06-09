@@ -305,6 +305,7 @@ fn choose_best_result<'a>(package: &str, results: &'a [SearchResult]) -> Option<
     let mut candidates = results
         .iter()
         .filter(|result| result.found && result.package.eq_ignore_ascii_case(package))
+        .filter(|result| result_identity_matches_package(result, package))
         .collect::<Vec<_>>();
     candidates.sort_by_key(|result| {
         let strict_name = if result.real_name.eq_ignore_ascii_case(package) {
@@ -312,12 +313,7 @@ fn choose_best_result<'a>(package: &str, results: &'a [SearchResult]) -> Option<
         } else {
             1
         };
-        let exact_repo = result
-            .repository
-            .rsplit('/')
-            .next()
-            .map(|repo| repo.eq_ignore_ascii_case(package))
-            .unwrap_or(false);
+        let exact_repo = result_repository_name_matches_package(result, package);
         let source = match result.source.as_str() {
             "biocGit" => 0,
             "cran" => 1,
@@ -328,6 +324,19 @@ fn choose_best_result<'a>(package: &str, results: &'a [SearchResult]) -> Option<
         (strict_name, source, if exact_repo { 0 } else { 1 })
     });
     candidates.into_iter().next()
+}
+
+fn result_identity_matches_package(result: &SearchResult, package: &str) -> bool {
+    result.real_name.eq_ignore_ascii_case(package)
+        || result_repository_name_matches_package(result, package)
+}
+
+fn result_repository_name_matches_package(result: &SearchResult, package: &str) -> bool {
+    result
+        .repository
+        .rsplit('/')
+        .next()
+        .is_some_and(|repo| repo.eq_ignore_ascii_case(package))
 }
 
 fn sanitize_search_results(results: &[SearchResult]) -> Vec<SearchResult> {
@@ -1403,6 +1412,34 @@ mod tests {
         assert!(output.contains("install.packages(\"demo\""));
         assert!(!output.contains("install_github"));
         assert!(!output.contains("evil/demo"));
+    }
+
+    #[test]
+    fn ignores_search_results_without_real_name_or_repository_match() {
+        let output = generate_script(
+            "demo",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[SearchResult {
+                package: "demo".to_string(),
+                requested_version: String::new(),
+                latest_version: "1.2.3".to_string(),
+                repository: "owner/not-demo".to_string(),
+                real_name: "not-demo".to_string(),
+                source: "github".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            }],
+        )
+        .expect("身份不匹配的检索结果应被忽略");
+
+        assert!(output.contains("install.packages(\"demo\""));
+        assert!(!output.contains("install_github"));
+        assert!(!output.contains("owner/not-demo"));
     }
 
     #[test]
