@@ -79,6 +79,7 @@ const defaultSettings: Settings = {
 const MAX_INPUT_CHARS = 100_000;
 const MAX_PACKAGE_LINES = 500;
 const MAX_INPUT_LINE_BYTES = 2_048;
+const BROWSER_SEARCH_CONFIRM_THRESHOLD = 10;
 const MAX_SEARCH_TABS = 30;
 const MAX_SCRIPT_CHARS = 1_000_000;
 const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
@@ -197,8 +198,10 @@ function App() {
   const [showToken, setShowToken] = useState(false);
   const [tokenConfigured, setTokenConfigured] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
+  const [openingSearchTabs, setOpeningSearchTabs] = useState(false);
   const activeSearchRunId = useRef(0);
   const searchingRef = useRef(false);
+  const browserOpenInProgress = useRef(false);
   const scriptRequestSeq = useRef(0);
   const settingsActionSeq = useRef(0);
   const settingsBusyRef = useRef(false);
@@ -572,31 +575,57 @@ function App() {
   }
 
   async function openSearchTabs() {
-    const names = Array.from(
-      new Set(
-        input
-          .split(/\r?\n/)
-          .map((line) => line.trim().split(/\s+/)[0])
-          .filter(Boolean)
-          .map((name) => name.split("/").pop() ?? name)
-          .filter(isBrowserSearchPackageName),
-      ),
-    ).slice(0, MAX_SEARCH_TABS);
+    if (browserOpenInProgress.current) {
+      return;
+    }
+    if (inputTooLarge) {
+      setStatus("输入超出限制，无法打开浏览器搜索");
+      return;
+    }
+    const { names, total } = collectBrowserSearchNames(input, MAX_SEARCH_TABS);
     if (names.length === 0) {
       setStatus("没有可搜索的包名");
       return;
     }
-    let opened = 0;
-    for (const name of names) {
-      try {
-        await invoke("open_package_search", { packageName: name });
-        opened += 1;
-      } catch (error) {
-        setStatus(`打开搜索失败: ${formatError(error)}`);
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, 180));
+    if (
+      names.length > BROWSER_SEARCH_CONFIRM_THRESHOLD &&
+      !window.confirm(
+        total > names.length
+          ? `检测到 ${total} 个可搜索包名，本次将按上限打开 ${names.length} 个浏览器页面，是否继续？`
+          : `将要打开 ${names.length} 个浏览器页面，是否继续？`,
+      )
+    ) {
+      setStatus("已取消浏览器搜索");
+      return;
     }
-    setStatus(`已打开 ${opened} 个搜索页面${packageCount > MAX_SEARCH_TABS ? `，已按上限截断到 ${MAX_SEARCH_TABS} 个` : ""}`);
+
+    browserOpenInProgress.current = true;
+    setOpeningSearchTabs(true);
+    let opened = 0;
+    let failed = 0;
+    let lastError = "";
+    try {
+      for (let index = 0; index < names.length; index += 1) {
+        try {
+          await invoke("open_package_search", { packageName: names[index] });
+          opened += 1;
+        } catch (error) {
+          failed += 1;
+          lastError = formatError(error);
+        }
+        if (index + 1 < names.length) {
+          await new Promise((resolve) => window.setTimeout(resolve, 180));
+        }
+      }
+    } finally {
+      browserOpenInProgress.current = false;
+      setOpeningSearchTabs(false);
+    }
+    const details = [
+      total > names.length ? `已按上限截断到 ${names.length} 个` : "",
+      failed > 0 ? `${failed} 个失败${lastError ? `：${lastError}` : ""}` : "",
+    ].filter(Boolean);
+    setStatus(`已打开 ${opened} 个搜索页面${details.length > 0 ? `；${details.join("；")}` : ""}`);
   }
 
   async function persistSettings() {
@@ -811,7 +840,13 @@ function App() {
                 <div className="input-actions">
                   <button className="button ghost" onClick={pasteInput}>粘贴</button>
                   <button className="button ghost" onClick={() => setInput("")}>清空</button>
-                  <button className="button ghost wide" onClick={openSearchTabs}>浏览器搜索</button>
+                  <button
+                    className="button ghost wide"
+                    onClick={openSearchTabs}
+                    disabled={openingSearchTabs || inputTooLarge}
+                  >
+                    {openingSearchTabs ? "正在打开..." : "浏览器搜索"}
+                  </button>
                   {searching ? (
                     <button className="button danger" onClick={stopSearch}>停止</button>
                   ) : (
@@ -1318,6 +1353,28 @@ function sanitizeHistoryRecord(value: unknown): HistoryRecord {
 
 function isBrowserSearchPackageName(value: string) {
   return /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value);
+}
+
+function collectBrowserSearchNames(value: string, limit: number) {
+  const allNames: string[] = [];
+  const seen = new Set<string>();
+  const boundedLimit = Math.max(0, Math.floor(limit));
+  const lines = value.split(/\r?\n/);
+  for (let index = 0; index < lines.length && index < MAX_PACKAGE_LINES; index += 1) {
+    const token = lines[index].trim().split(/\s+/)[0];
+    if (!token) {
+      continue;
+    }
+    const name = token.split("/").pop() ?? token;
+    if (isBrowserSearchPackageName(name) && !seen.has(name)) {
+      seen.add(name);
+      allNames.push(name);
+    }
+  }
+  return {
+    names: allNames.slice(0, boundedLimit),
+    total: allNames.length,
+  };
 }
 
 function nextSearchRunId() {
