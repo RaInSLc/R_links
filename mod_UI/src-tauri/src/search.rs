@@ -15,6 +15,7 @@ use crate::logic::{
 };
 use crate::models::{
     url_has_explicit_port, PackageInput, SearchResponse, SearchResult, Settings, MAX_FIELD_CHARS,
+    MAX_PACKAGE_LINES,
 };
 
 const BIOC_VERSIONS: &[&str] = &[
@@ -30,6 +31,7 @@ const MAX_JSON_RESPONSE_BYTES: usize = 1024 * 1024;
 const MAX_GITHUB_SEARCH_ITEMS: usize = 10;
 const MAX_GITHUB_REPOSITORY_CHARS: usize = 200;
 const MAX_SEARCH_HTTP_REQUESTS: usize = 200;
+const MAX_SEARCH_RESULTS: usize = MAX_PACKAGE_LINES * 16;
 const MAX_RESULT_MESSAGE_CHARS: usize = 256;
 const MAX_SEARCH_LOG_CHARS: usize = 512;
 const MAX_SEARCH_LOGS: usize = 1_000;
@@ -37,6 +39,7 @@ const SEARCH_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const SEARCH_STOPPED_ERROR: &str = "检索已停止";
 const SEARCH_LOG_EMPTY_MESSAGE: &str = "日志内容为空或已被清理";
 const SEARCH_LOGS_TRUNCATED_MESSAGE: &str = "检索日志达到上限，后续日志已停止记录";
+const SEARCH_RESULTS_TRUNCATED_MESSAGE: &str = "检索结果达到上限，后续来源请求已停止";
 static HTML_VERSION_RE: OnceLock<Regex> = OnceLock::new();
 
 #[derive(Debug, Deserialize)]
@@ -120,11 +123,12 @@ struct SearchContext<'a> {
     app: &'a AppHandle,
     run_id: u64,
     logs: &'a mut Vec<String>,
+    result_limit_reached: bool,
 }
 
 impl SearchContext<'_> {
     fn is_stopped(&self) -> bool {
-        search_stopped(self.cancelled, self.budget)
+        self.result_limit_reached || search_stopped(self.cancelled, self.budget)
     }
 
     fn log(&mut self, message: &str) {
@@ -141,6 +145,31 @@ impl SearchContext<'_> {
                 }
                 false
             }
+        }
+    }
+
+    fn push_result(&mut self, results: &mut Vec<SearchResult>, result: SearchResult) {
+        if self.result_limit_reached {
+            return;
+        }
+        let result = sanitize_search_result_for_emit(result);
+        if !append_bounded_search_result(results, result, MAX_SEARCH_RESULTS) {
+            self.result_limit_reached = true;
+            self.log(SEARCH_RESULTS_TRUNCATED_MESSAGE);
+            return;
+        }
+        if let Some(result) = results.last().cloned() {
+            let _ = self.app.emit(
+                "search-progress",
+                SearchProgressEvent {
+                    run_id: self.run_id,
+                    result,
+                },
+            );
+        }
+        if results.len() >= MAX_SEARCH_RESULTS {
+            self.result_limit_reached = true;
+            self.log(SEARCH_RESULTS_TRUNCATED_MESSAGE);
         }
     }
 }
@@ -209,6 +238,7 @@ pub async fn search_packages(
             app,
             run_id,
             logs: &mut logs,
+            result_limit_reached: false,
         };
 
         context.log("开始多源检索");
@@ -231,11 +261,11 @@ pub async fn search_packages(
             let had_found_before = has_found_result_for_package(&results, &package.name);
             if package.name.contains('/') {
                 if let Some(result) = search_explicit_github(&mut context, package).await {
-                    push_result(app, run_id, &mut results, result);
+                    context.push_result(&mut results, result);
                 }
             } else {
                 if let Some(result) = search_cran(&mut context, package).await {
-                    push_result(app, run_id, &mut results, result);
+                    context.push_result(&mut results, result);
                 }
 
                 if (settings.full_search || !has_found_result_for_package(&results, &package.name))
@@ -243,7 +273,7 @@ pub async fn search_packages(
                 {
                     let bioc_results = search_bioconductor(&mut context, package).await;
                     for result in bioc_results {
-                        push_result(app, run_id, &mut results, result);
+                        context.push_result(&mut results, result);
                     }
                 }
 
@@ -252,7 +282,7 @@ pub async fn search_packages(
                 {
                     let github_results = search_github(&mut context, package).await;
                     for result in github_results {
-                        push_result(app, run_id, &mut results, result);
+                        context.push_result(&mut results, result);
                     }
                 }
             }
@@ -271,7 +301,7 @@ pub async fn search_packages(
                     found: false,
                     message: "所有来源均未找到".to_string(),
                 };
-                push_result(app, run_id, &mut results, result);
+                context.push_result(&mut results, result);
             }
         }
 
@@ -1169,21 +1199,16 @@ fn log(app: &AppHandle, run_id: u64, logs: &mut Vec<String>, message: &str) {
     }
 }
 
-fn push_result(
-    app: &AppHandle,
-    run_id: u64,
+fn append_bounded_search_result(
     results: &mut Vec<SearchResult>,
     result: SearchResult,
-) {
-    let result = sanitize_search_result_for_emit(result);
-    let _ = app.emit(
-        "search-progress",
-        SearchProgressEvent {
-            run_id,
-            result: result.clone(),
-        },
-    );
+    limit: usize,
+) -> bool {
+    if results.len() >= limit {
+        return false;
+    }
     results.push(result);
+    true
 }
 
 #[cfg(test)]
@@ -1582,6 +1607,27 @@ mod tests {
             logs.last().map(String::as_str),
             Some(SEARCH_LOGS_TRUNCATED_MESSAGE)
         );
+    }
+
+    #[test]
+    fn bounds_search_result_count_directly() {
+        let package = PackageInput {
+            raw: "demo".to_string(),
+            name: "demo".to_string(),
+            version: String::new(),
+        };
+        let mut results = Vec::new();
+
+        for index in 0..5 {
+            let result = found_result(&package, &format!("1.0.{index}"), "", "demo", "cran");
+            assert_eq!(
+                append_bounded_search_result(&mut results, result, 3),
+                index < 3
+            );
+        }
+
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[2].latest_version, "1.0.2");
     }
 
     #[test]
