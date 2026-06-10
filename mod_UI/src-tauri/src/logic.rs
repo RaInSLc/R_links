@@ -361,7 +361,7 @@ fn sanitize_search_results(results: &[SearchResult]) -> Vec<SearchResult> {
     results
         .iter()
         .filter_map(sanitize_search_result)
-        .take(MAX_PACKAGE_LINES * 4)
+        .take(MAX_GENERATE_SEARCH_RESULTS)
         .collect()
 }
 
@@ -1465,6 +1465,47 @@ mod tests {
         .expect_err("超出上限的检索结果应被拒绝");
 
         assert!(error.contains("检索结果数量过多"));
+    }
+
+    #[test]
+    fn uses_search_results_across_the_full_accepted_range() {
+        let mut results = vec![
+            SearchResult {
+                package: "other".to_string(),
+                requested_version: String::new(),
+                latest_version: String::new(),
+                repository: String::new(),
+                real_name: "other".to_string(),
+                source: "none".to_string(),
+                found: false,
+                message: "未找到".to_string(),
+            };
+            MAX_GENERATE_SEARCH_RESULTS - 1
+        ];
+        results.push(SearchResult {
+            package: "target".to_string(),
+            requested_version: String::new(),
+            latest_version: "9.9.9".to_string(),
+            repository: String::new(),
+            real_name: "target".to_string(),
+            source: "cran".to_string(),
+            found: true,
+            message: "验证成功".to_string(),
+        });
+
+        let output = generate_script(
+            "target",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &results,
+        )
+        .expect("允许范围末端的合法检索结果应参与脚本生成");
+
+        assert!(output.contains("remotes::install_version(\"target\", version = \"9.9.9\""));
     }
 
     #[test]
