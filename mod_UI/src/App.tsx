@@ -195,9 +195,12 @@ function App() {
   const [status, setStatus] = useState("就绪");
   const [showToken, setShowToken] = useState(false);
   const [tokenConfigured, setTokenConfigured] = useState(false);
+  const [settingsBusy, setSettingsBusy] = useState(false);
   const activeSearchRunId = useRef(0);
   const searchingRef = useRef(false);
   const scriptRequestSeq = useRef(0);
+  const settingsActionSeq = useRef(0);
+  const settingsBusyRef = useRef(false);
   const latestScriptRef = useRef("等待输入...");
   const latestHistoryRef = useRef<HistoryRecord[]>([]);
   const historyActionSeq = useRef(0);
@@ -238,8 +241,28 @@ function App() {
       setStatus("GitHub Token 仅允许可见 ASCII 字符，不能包含空白字符");
       return false;
     }
-    setSettings((current) => ({ ...current, [field]: nextValue }));
+    updateSettingsFromUser((current) => ({ ...current, [field]: nextValue }));
     return true;
+  }
+
+  function updateSettingsFromUser(update: (current: Settings) => Settings) {
+    settingsActionSeq.current += 1;
+    setSettings(update);
+  }
+
+  function beginSettingsOperation() {
+    if (settingsBusyRef.current) {
+      setStatus("设置操作正在进行，请稍候");
+      return false;
+    }
+    settingsBusyRef.current = true;
+    setSettingsBusy(true);
+    return true;
+  }
+
+  function endSettingsOperation() {
+    settingsBusyRef.current = false;
+    setSettingsBusy(false);
   }
 
   function sanitizeHistoryList(nextHistory: unknown) {
@@ -279,8 +302,12 @@ function App() {
     : 0;
 
   useEffect(() => {
+    const settingsLoadSeq = settingsActionSeq.current;
     invoke<PublicSettings>("load_settings")
       .then((savedSettings) => {
+        if (settingsLoadSeq !== settingsActionSeq.current) {
+          return;
+        }
         const cleanSettings = sanitizePublicSettings(savedSettings);
         setSettings({
           proxy: cleanSettings.proxy,
@@ -290,7 +317,11 @@ function App() {
         });
         setTokenConfigured(cleanSettings.githubTokenConfigured);
       })
-      .catch((error) => setStatus(`设置加载失败: ${formatError(error)}`));
+      .catch((error) => {
+        if (settingsLoadSeq === settingsActionSeq.current) {
+          setStatus(`设置加载失败: ${formatError(error)}`);
+        }
+      });
 
     invoke<HistoryRecord[]>("load_history")
       .then(loadInitialHistory)
@@ -426,15 +457,20 @@ function App() {
   }
 
   async function stopSearch() {
+    const runId = activeSearchRunId.current;
+    if (!runId) {
+      return;
+    }
     try {
-      const runId = activeSearchRunId.current;
-      if (!runId) {
+      const accepted = await invoke<boolean>("stop_search", { runId });
+      if (runId !== activeSearchRunId.current) {
         return;
       }
-      await invoke("stop_search", { runId });
-      setStatus("正在停止检索任务");
+      setStatus(accepted ? "正在停止检索任务" : "停止请求尚未生效，请重试");
     } catch (error) {
-      setStatus(`停止失败: ${formatError(error)}`);
+      if (runId === activeSearchRunId.current) {
+        setStatus(`停止失败: ${formatError(error)}`);
+      }
     }
   }
 
@@ -530,11 +566,21 @@ function App() {
   }
 
   async function persistSettings() {
+    if (!beginSettingsOperation()) {
+      return;
+    }
+    const actionSeq = settingsActionSeq.current + 1;
+    settingsActionSeq.current = actionSeq;
+    const settingsSnapshot = settings;
     try {
       const publicSettings = sanitizePublicSettings(
-        await invoke<PublicSettings>("save_settings", { settings }),
+        await invoke<PublicSettings>("save_settings", { settings: settingsSnapshot }),
       );
       setTokenConfigured(publicSettings.githubTokenConfigured);
+      if (actionSeq !== settingsActionSeq.current) {
+        setStatus("设置已保存；检测到新的界面修改，请再次保存");
+        return;
+      }
       setSettings({
         proxy: publicSettings.proxy,
         githubToken: "",
@@ -544,14 +590,29 @@ function App() {
       setShowToken(false);
       setStatus("设置已保存并立即生效");
     } catch (error) {
-      setStatus(`设置保存失败: ${formatError(error)}`);
+      setStatus(
+        actionSeq === settingsActionSeq.current
+          ? `设置保存失败: ${formatError(error)}`
+          : `先前设置保存失败，当前修改尚未保存: ${formatError(error)}`,
+      );
+    } finally {
+      endSettingsOperation();
     }
   }
 
   async function clearSavedToken() {
+    if (!beginSettingsOperation()) {
+      return;
+    }
+    const actionSeq = settingsActionSeq.current + 1;
+    settingsActionSeq.current = actionSeq;
     try {
       const publicSettings = sanitizePublicSettings(await invoke<PublicSettings>("clear_github_token"));
       setTokenConfigured(false);
+      if (actionSeq !== settingsActionSeq.current) {
+        setStatus("已清除保存的 GitHub Token；界面保留了新的修改");
+        return;
+      }
       setSettings((current) => ({
         ...current,
         proxy: publicSettings.proxy,
@@ -562,7 +623,13 @@ function App() {
       setShowToken(false);
       setStatus("已清除保存的 GitHub Token");
     } catch (error) {
-      setStatus(`Token 清除失败: ${formatError(error)}`);
+      setStatus(
+        actionSeq === settingsActionSeq.current
+          ? `Token 清除失败: ${formatError(error)}`
+          : `Token 清除失败，当前修改未受影响: ${formatError(error)}`,
+      );
+    } finally {
+      endSettingsOperation();
     }
   }
 
@@ -875,7 +942,12 @@ function App() {
                     </button>
                   </div>
                   {tokenConfigured && !settings.githubToken.trim() && (
-                    <button type="button" className="text-button danger-text" onClick={clearSavedToken}>
+                    <button
+                      type="button"
+                      className="text-button danger-text"
+                      onClick={clearSavedToken}
+                      disabled={settingsBusy}
+                    >
                       清除已保存 Token
                     </button>
                   )}
@@ -884,7 +956,9 @@ function App() {
                   checked={settings.fullSearch}
                   label="全量检索"
                   description="命中 CRAN 或 Bioconductor 后仍继续查询 GitHub"
-                  onChange={(value) => setSettings({ ...settings, fullSearch: value })}
+                  onChange={(value) =>
+                    updateSettingsFromUser((current) => ({ ...current, fullSearch: value }))
+                  }
                 />
               </section>
 
@@ -895,7 +969,12 @@ function App() {
                     <button
                       key={mirror.value}
                       className={settings.cranMirror === mirror.value ? "selected" : ""}
-                      onClick={() => setSettings({ ...settings, cranMirror: mirror.value })}
+                      onClick={() =>
+                        updateSettingsFromUser((current) => ({
+                          ...current,
+                          cranMirror: mirror.value,
+                        }))
+                      }
                     >
                       <span>{mirror.label}</span>
                       <code>{mirror.value}</code>
@@ -911,7 +990,13 @@ function App() {
                     maxLength={MAX_RESULT_FIELD_CHARS}
                   />
                 </label>
-                <button className="button primary save-button" onClick={persistSettings}>保存设置</button>
+                <button
+                  className="button primary save-button"
+                  onClick={persistSettings}
+                  disabled={settingsBusy}
+                >
+                  {settingsBusy ? "处理中..." : "保存设置"}
+                </button>
               </section>
             </div>
           )}
