@@ -481,6 +481,10 @@ button {
   border-top: 1px solid var(--line);
 }
 
+.toggle-row > .toggle:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 .toggle {
   display: flex;
   align-items: center;

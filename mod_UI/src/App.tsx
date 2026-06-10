@@ -186,6 +186,7 @@ function App() {
   const [method, setMethod] = useState<Method>("auto");
   const [conditional, setConditional] = useState(true);
   const [installDependencies, setInstallDependencies] = useState(true);
+  const [showRemoteVersion, setShowRemoteVersion] = useState(true);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [script, setScriptState] = useState("等待输入...");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -400,6 +401,7 @@ function App() {
           mirror: settings.cranMirror,
         },
         results,
+        showRemoteVersion,
       })
         .then((nextScript) => {
           if (active && requestSeq === scriptRequestSeq.current) {
@@ -421,6 +423,7 @@ function App() {
     method,
     conditional,
     installDependencies,
+    showRemoteVersion,
     settings.cranMirror,
     results,
     inputTooLarge,
@@ -846,6 +849,12 @@ function App() {
                     label="安装依赖"
                     description="dependencies = TRUE"
                     onChange={setInstallDependencies}
+                  />
+                  <Toggle
+                    checked={showRemoteVersion}
+                    label="同步远程版本"
+                    description="显示版本并生成精确版本安装"
+                    onChange={setShowRemoteVersion}
                   />
                 </div>
               </section>

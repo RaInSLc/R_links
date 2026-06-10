@@ -159,8 +159,13 @@ fn generate_script(
     input: String,
     options: GenerateOptions,
     results: Vec<SearchResult>,
+    show_remote_version: Option<bool>,
 ) -> Result<String, String> {
-    logic::generate_script(&input, &options, &results)
+    if show_remote_version == Some(false) {
+        logic::generate_script_with_remote_versions(&input, &options, &results, false)
+    } else {
+        logic::generate_script(&input, &options, &results)
+    }
 }
 
 #[tauri::command]

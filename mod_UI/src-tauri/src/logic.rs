@@ -162,6 +162,15 @@ pub fn generate_script(
     options: &GenerateOptions,
     results: &[SearchResult],
 ) -> Result<String, String> {
+    generate_script_with_remote_versions(input, options, results, true)
+}
+
+pub fn generate_script_with_remote_versions(
+    input: &str,
+    options: &GenerateOptions,
+    results: &[SearchResult],
+    show_remote_version: bool,
+) -> Result<String, String> {
     let requested_method = normalize_generate_method(&options.method)?;
     validate_search_results_count(results)?;
     let packages = parse_inputs(input)?;
@@ -214,18 +223,21 @@ pub fn generate_script(
             .flatten()
         {
             let source_label = source_label(&best.source);
+            let remote_version = if show_remote_version {
+                format!(": v{}", best.latest_version)
+            } else {
+                String::new()
+            };
             if version.is_empty() {
                 output.push(format!(
-                    "# [{source_label} 已验证: v{} | 自动同步]",
-                    best.latest_version
+                    "# [{source_label} 已验证{remote_version} | 自动同步]"
                 ));
-                if is_clean_version(&best.latest_version) {
+                if show_remote_version && is_clean_version(&best.latest_version) {
                     version = best.latest_version.clone();
                 }
             } else {
                 output.push(format!(
-                    "# [{source_label} 最新版本: v{} | 保留指定版本]",
-                    best.latest_version
+                    "# [{source_label} 最新版本{remote_version} | 保留指定版本]"
                 ));
                 if best.source == "bioc"
                     && !best.latest_version.is_empty()
@@ -241,7 +253,12 @@ pub fn generate_script(
                 match best.source.as_str() {
                     "biocGit" => {
                         method = "biocGit".to_string();
-                        version = format!("{}|{}", best.latest_version, best.repository);
+                        let matched_version = if show_remote_version {
+                            best.latest_version.as_str()
+                        } else {
+                            ""
+                        };
+                        version = format!("{matched_version}|{}", best.repository);
                     }
                     "bioc" => method = "biocManager".to_string(),
                     "github" => {
@@ -1766,6 +1783,56 @@ mod tests {
 
         assert!(output.contains("remotes::install_github(\"owner/demo\""));
         assert!(!output.contains("https://github.com/owner/demo.git"));
+    }
+
+    #[test]
+    fn hides_remote_versions_without_losing_source_routing() {
+        let options = GenerateOptions {
+            method: "auto".to_string(),
+            conditional: true,
+            install_dependencies: true,
+            mirror: "https://cloud.r-project.org".to_string(),
+        };
+        let cran_output = generate_script_with_remote_versions(
+            "demo",
+            &options,
+            &[SearchResult {
+                package: "demo".to_string(),
+                requested_version: String::new(),
+                latest_version: "1.2.3".to_string(),
+                repository: String::new(),
+                real_name: "demo".to_string(),
+                source: "cran".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            }],
+            false,
+        )
+        .expect("隐藏远程版本时 CRAN 来源仍应生成脚本");
+
+        assert!(cran_output.contains("install.packages(\"demo\""));
+        assert!(!cran_output.contains("install_version"));
+        assert!(!cran_output.contains("1.2.3"));
+
+        let github_output = generate_script_with_remote_versions(
+            "demo",
+            &options,
+            &[SearchResult {
+                package: "demo".to_string(),
+                requested_version: String::new(),
+                latest_version: "2.0.0".to_string(),
+                repository: "owner/demo".to_string(),
+                real_name: "demo".to_string(),
+                source: "github".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            }],
+            false,
+        )
+        .expect("隐藏远程版本时 GitHub 来源路由仍应保留");
+
+        assert!(github_output.contains("remotes::install_github(\"owner/demo\""));
+        assert!(!github_output.contains("2.0.0"));
     }
 
     #[test]
