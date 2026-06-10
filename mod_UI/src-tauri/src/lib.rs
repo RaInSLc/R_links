@@ -18,6 +18,7 @@ use models::{
 
 const MAX_BROWSER_OPEN_REQUESTS: usize = 30;
 const BROWSER_OPEN_WINDOW: Duration = Duration::from_secs(60);
+const MAX_JS_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 static SETTINGS_UPDATE_LOCK: Mutex<()> = Mutex::new(());
 
 pub struct SearchState {
@@ -50,7 +51,7 @@ impl Default for SearchState {
 
 impl SearchState {
     fn try_begin(&self, run_id: u64) -> Result<SearchRunGuard<'_>, String> {
-        if run_id == 0 {
+        if run_id == 0 || run_id > MAX_JS_SAFE_INTEGER {
             return Err("检索任务 ID 无效".to_string());
         }
         let mut inner = self.lock_inner();
@@ -373,11 +374,18 @@ mod tests {
     }
 
     #[test]
-    fn search_state_rejects_zero_run_id() {
+    fn search_state_rejects_non_js_safe_run_ids() {
         let state = SearchState::default();
 
         assert!(state.try_begin(0).is_err());
+        assert!(state.try_begin(MAX_JS_SAFE_INTEGER + 1).is_err());
         assert!(!state.is_running_for_test());
+
+        let run = state
+            .try_begin(MAX_JS_SAFE_INTEGER)
+            .expect("JavaScript 最大安全整数应可用作任务 ID");
+        assert_eq!(state.run_id_for_test(), MAX_JS_SAFE_INTEGER);
+        drop(run);
     }
 
     #[test]
