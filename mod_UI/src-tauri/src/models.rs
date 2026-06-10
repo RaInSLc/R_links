@@ -142,7 +142,7 @@ pub fn normalize_http_url(value: &str, field_name: &str) -> Result<String, Strin
     if !parsed.username().is_empty() || parsed.password().is_some() {
         return Err(format!("{field_name}不允许包含用户名或密码"));
     }
-    Ok(trimmed.to_string())
+    Ok(parsed.to_string())
 }
 
 pub fn normalize_https_url(value: &str, field_name: &str) -> Result<String, String> {
@@ -290,6 +290,28 @@ mod tests {
         assert!(normalize_https_url("http://example.com/pkg_1.0.tar.gz", "安装 URL").is_err());
         assert!(normalize_https_url("https://example.com/pkg_1.0.tar.gz", "安装 URL").is_ok());
         assert!(normalize_https_url("https://example.com:443/pkg_1.0.tar.gz", "安装 URL").is_err());
+    }
+
+    #[test]
+    fn canonicalizes_valid_urls_before_use() {
+        assert_eq!(
+            normalize_https_url(r"https://example.com\src\demo_1.0.tar.gz", "安装 URL")
+                .expect("反斜杠路径应规范化"),
+            "https://example.com/src/demo_1.0.tar.gz"
+        );
+        assert_eq!(
+            normalize_https_url(
+                "https://example.com/src package/demo_1.0.tar.gz",
+                "安装 URL"
+            )
+            .expect("空格应编码"),
+            "https://example.com/src%20package/demo_1.0.tar.gz"
+        );
+        assert_eq!(
+            normalize_https_url("https://example.com/src/../demo_1.0.tar.gz", "安装 URL")
+                .expect("点路径应规范化"),
+            "https://example.com/demo_1.0.tar.gz"
+        );
     }
 
     #[test]
