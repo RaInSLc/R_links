@@ -26,6 +26,7 @@ const MAX_HISTORY_TIMESTAMP_CHARS: usize = 32;
 const MAX_SETTINGS_FILE_BYTES: u64 = 64 * 1024;
 const MAX_HISTORY_FILE_BYTES: u64 = MAX_HISTORY_SAVE_BYTES as u64;
 const MAX_CORRUPT_BACKUPS_PER_FILE: usize = 5;
+const MAX_CORRUPT_BACKUP_SCAN_ENTRIES: usize = 512;
 const MAX_TEMP_FILE_CREATE_ATTEMPTS: usize = 8;
 const OVERSIZED_BACKUP_NOTICE: &str = "原文件超过安全读取上限，内容未复制到备份。";
 static STORAGE_WRITE_LOCK: Mutex<()> = Mutex::new(());
@@ -534,38 +535,59 @@ fn backup_corrupt_path(directory: &Path, name: &str, content: &str) -> Result<()
     Ok(())
 }
 
-fn prune_corrupt_backups(directory: &Path, name: &str) {
+fn prune_corrupt_backups(directory: &Path, name: &str) -> usize {
     let prefix = format!("{name}.corrupt.");
     let Ok(entries) = fs::read_dir(directory) else {
-        return;
+        return 0;
     };
-    let mut backups = entries
-        .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let file_name = entry.file_name().to_string_lossy().into_owned();
-            if !file_name.starts_with(&prefix) || !file_name.ends_with(".bak") {
-                return None;
-            }
-            let metadata = entry.metadata().ok()?;
-            if !metadata.is_file() {
-                return None;
-            }
-            Some((
-                metadata.modified().unwrap_or(UNIX_EPOCH),
-                file_name,
-                entry.path(),
-            ))
-        })
-        .collect::<Vec<_>>();
+    let mut scanned = 0usize;
+    let mut recent = Vec::with_capacity(MAX_CORRUPT_BACKUPS_PER_FILE);
+    for entry in entries.take(MAX_CORRUPT_BACKUP_SCAN_ENTRIES) {
+        scanned += 1;
+        let Ok(entry) = entry else {
+            continue;
+        };
+        let file_name = entry.file_name().to_string_lossy().into_owned();
+        if !file_name.starts_with(&prefix) || !file_name.ends_with(".bak") {
+            continue;
+        }
+        if !entry
+            .file_type()
+            .ok()
+            .is_some_and(|file_type| file_type.is_file())
+        {
+            continue;
+        }
+        let modified = entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(UNIX_EPOCH);
+        let candidate = (modified, file_name, entry.path());
+        if recent.len() < MAX_CORRUPT_BACKUPS_PER_FILE {
+            recent.push(candidate);
+            continue;
+        }
 
-    if backups.len() <= MAX_CORRUPT_BACKUPS_PER_FILE {
-        return;
+        let Some((oldest_index, oldest)) =
+            recent.iter().enumerate().min_by(|(_, left), (_, right)| {
+                left.0.cmp(&right.0).then_with(|| left.1.cmp(&right.1))
+            })
+        else {
+            continue;
+        };
+        if candidate
+            .0
+            .cmp(&oldest.0)
+            .then_with(|| candidate.1.cmp(&oldest.1))
+            .is_gt()
+        {
+            let old_path = std::mem::replace(&mut recent[oldest_index], candidate).2;
+            let _ = fs::remove_file(old_path);
+        } else {
+            let _ = fs::remove_file(candidate.2);
+        }
     }
-    backups.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.1.cmp(&right.1)));
-    let delete_count = backups.len() - MAX_CORRUPT_BACKUPS_PER_FILE;
-    for (_, _, path) in backups.into_iter().take(delete_count) {
-        let _ = fs::remove_file(path);
-    }
+    scanned
 }
 
 fn unique_file_suffix() -> String {
@@ -1079,6 +1101,25 @@ mod tests {
         assert!(directory
             .join("settings.json.corrupt.directory.bak")
             .is_dir());
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[test]
+    fn prune_corrupt_backups_bounds_directory_scan() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-backup-scan-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+
+        for index in 0..(MAX_CORRUPT_BACKUP_SCAN_ENTRIES + 10) {
+            fs::write(directory.join(format!("unrelated-{index:04}.txt")), "data")
+                .expect("应能写入目录填充文件");
+        }
+
+        assert_eq!(
+            prune_corrupt_backups(&directory, "settings.json"),
+            MAX_CORRUPT_BACKUP_SCAN_ENTRIES
+        );
 
         fs::remove_dir_all(directory).expect("应能清理临时目录");
     }
