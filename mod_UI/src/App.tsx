@@ -201,6 +201,8 @@ function App() {
   const [openingSearchTabs, setOpeningSearchTabs] = useState(false);
   const activeSearchRunId = useRef(0);
   const searchingRef = useRef(false);
+  const latestInputRef = useRef("");
+  const hasSearchEvidenceRef = useRef(false);
   const browserOpenInProgress = useRef(false);
   const scriptRequestSeq = useRef(0);
   const settingsActionSeq = useRef(0);
@@ -223,14 +225,29 @@ function App() {
   }
 
   function acceptInputValue(value: string, source: "manual" | "clipboard") {
+    if (searchingRef.current) {
+      setStatus("检索期间不能修改输入，请先停止当前任务");
+      return "rejected";
+    }
     if (inputValueTooLarge(value)) {
       setStatus(
         `${source === "clipboard" ? "剪贴板内容" : "输入"}超出限制或包含非法字符：最多 ${MAX_PACKAGE_LINES} 行、总计 ${MAX_INPUT_CHARS} 字节、单行 ${MAX_INPUT_LINE_BYTES} 字节`,
       );
-      return false;
+      return "rejected";
     }
+    const clearsSearchEvidence =
+      value !== latestInputRef.current && hasSearchEvidenceRef.current;
+    if (clearsSearchEvidence) {
+      hasSearchEvidenceRef.current = false;
+      setResults([]);
+      setLogs([]);
+    }
+    latestInputRef.current = value;
     setInput(value);
-    return true;
+    if (clearsSearchEvidence && source === "manual") {
+      setStatus("输入已变更，旧检索结果和日志已清除");
+    }
+    return clearsSearchEvidence ? "cleared" : "accepted";
   }
 
   function acceptSettingValue(field: keyof Pick<Settings, "proxy" | "githubToken" | "cranMirror">, value: string) {
@@ -354,6 +371,7 @@ function App() {
         if (!active || safeRunId(payload.runId) !== activeSearchRunId.current) {
           return;
         }
+        hasSearchEvidenceRef.current = true;
         setLogs((current) => appendBounded(current, safeStatusText(payload.message), MAX_SEARCH_LOGS));
       },
     ).catch((error) => {
@@ -369,6 +387,7 @@ function App() {
         if (!active || safeRunId(payload.runId) !== activeSearchRunId.current) {
           return;
         }
+        hasSearchEvidenceRef.current = true;
         setResults((current) =>
           upsertBoundedResult(current, sanitizeSearchResult(payload.result), MAX_SEARCH_RESULTS),
         );
@@ -460,6 +479,7 @@ function App() {
     setSearching(true);
     const runId = nextSearchRunId();
     activeSearchRunId.current = runId;
+    hasSearchEvidenceRef.current = false;
     setResults([]);
     setLogs([]);
     setStatus("正在检索包来源");
@@ -474,6 +494,8 @@ function App() {
       if (cleanResponse.runId !== activeSearchRunId.current) {
         return;
       }
+      hasSearchEvidenceRef.current =
+        cleanResponse.results.length > 0 || cleanResponse.logs.length > 0;
       setResults(cleanResponse.results);
       setLogs(cleanResponse.logs);
       setStatus(cleanResponse.stopped ? "检索任务已停止" : "检索完成，脚本已自动刷新");
@@ -543,8 +565,13 @@ function App() {
     try {
       const value = await readText();
       if (value) {
-        if (acceptInputValue(value, "clipboard")) {
-          setStatus("已从剪贴板粘贴");
+        const result = acceptInputValue(value, "clipboard");
+        if (result !== "rejected") {
+          setStatus(
+            result === "cleared"
+              ? "已从剪贴板粘贴，旧检索结果和日志已清除"
+              : "已从剪贴板粘贴",
+          );
         }
       }
     } catch (error) {
@@ -831,6 +858,7 @@ function App() {
                   placeholder={"每行一个包，例如：\nSeurat 5.2.1\nGSVA 1.50\nbuenrostrolab/FigR\nhttps://example.org/pkg_1.0.tar.gz"}
                   spellCheck={false}
                   maxLength={MAX_INPUT_CHARS + 1}
+                  disabled={searching}
                 />
                 {inputTooLarge && (
                   <div className="inline-warning">
@@ -838,12 +866,18 @@ function App() {
                   </div>
                 )}
                 <div className="input-actions">
-                  <button className="button ghost" onClick={pasteInput}>粘贴</button>
-                  <button className="button ghost" onClick={() => setInput("")}>清空</button>
+                  <button className="button ghost" onClick={pasteInput} disabled={searching}>粘贴</button>
+                  <button
+                    className="button ghost"
+                    onClick={() => acceptInputValue("", "manual")}
+                    disabled={searching}
+                  >
+                    清空
+                  </button>
                   <button
                     className="button ghost wide"
                     onClick={openSearchTabs}
-                    disabled={openingSearchTabs || inputTooLarge}
+                    disabled={searching || openingSearchTabs || inputTooLarge}
                   >
                     {openingSearchTabs ? "正在打开..." : "浏览器搜索"}
                   </button>
