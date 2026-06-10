@@ -247,9 +247,9 @@ async fn start_search(
     settings: Settings,
 ) -> Result<SearchResponse, String> {
     logic::validate_input_size(&input)?;
+    let run = state.try_begin(run_id)?;
     let existing = load_existing_settings_for_runtime(&app)?;
     let settings = merge_runtime_settings(settings, &existing)?;
-    let run = state.try_begin(run_id)?;
     let result = search::search_packages(&app, run_id, run.cancelled(), &input, &settings).await;
     drop(run);
     result
@@ -378,6 +378,21 @@ mod tests {
 
         assert!(state.try_begin(0).is_err());
         assert!(!state.is_running_for_test());
+    }
+
+    #[test]
+    fn search_state_releases_slot_when_setup_returns_error() {
+        let state = SearchState::default();
+        let setup_result = (|| -> Result<(), String> {
+            let _run = state.try_begin(50)?;
+            Err("模拟初始化失败".to_string())
+        })();
+
+        assert!(setup_result.is_err());
+        assert!(!state.is_running_for_test());
+        let retry = state.try_begin(51).expect("初始化失败后应允许重试");
+        assert_eq!(state.run_id_for_test(), 51);
+        drop(retry);
     }
 
     #[test]
