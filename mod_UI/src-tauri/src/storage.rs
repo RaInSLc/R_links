@@ -29,6 +29,7 @@ const MAX_CORRUPT_BACKUPS_PER_FILE: usize = 5;
 const MAX_CORRUPT_BACKUP_SCAN_ENTRIES: usize = 512;
 const MAX_TEMP_FILE_CREATE_ATTEMPTS: usize = 8;
 const OVERSIZED_BACKUP_NOTICE: &str = "原文件超过安全读取上限，内容未复制到备份。";
+const MALFORMED_SETTINGS_BACKUP_NOTICE: &str = "设置文件格式损坏，原始内容未写入备份。";
 static STORAGE_WRITE_LOCK: Mutex<()> = Mutex::new(());
 static STORAGE_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -515,11 +516,7 @@ fn backup_corrupt_settings_file(app: &AppHandle, content: &str) -> Result<(), St
 }
 
 fn backup_corrupt_storage_path(directory: &Path, name: &str, content: &str) -> Result<(), String> {
-    if name == "settings.json" {
-        backup_corrupt_path(directory, name, &redact_settings_backup_content(content))
-    } else {
-        backup_corrupt_path(directory, name, content)
-    }
+    backup_corrupt_path(directory, name, content)
 }
 
 fn backup_corrupt_file(app: &AppHandle, name: &str, content: &str) -> Result<(), String> {
@@ -623,12 +620,9 @@ fn redact_settings_backup_content(content: &str) -> String {
     if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(content) {
         redact_settings_value(&mut value);
         return serde_json::to_string_pretty(&value)
-            .unwrap_or_else(|_| OVERSIZED_BACKUP_NOTICE.to_string());
+            .unwrap_or_else(|_| MALFORMED_SETTINGS_BACKUP_NOTICE.to_string());
     }
-
-    ["githubTokenProtected", "githubToken", "proxy"]
-        .into_iter()
-        .fold(content.to_string(), redact_json_string_field)
+    MALFORMED_SETTINGS_BACKUP_NOTICE.to_string()
 }
 
 fn redact_settings_value(value: &mut serde_json::Value) {
@@ -649,65 +643,6 @@ fn redact_settings_value(value: &mut serde_json::Value) {
         }
         _ => {}
     }
-}
-
-fn redact_json_string_field(content: String, field: &str) -> String {
-    let key = format!("\"{field}\"");
-    let mut output = String::with_capacity(content.len());
-    let mut cursor = 0;
-
-    while let Some(relative_start) = content[cursor..].find(&key) {
-        let start = cursor + relative_start;
-        output.push_str(&content[cursor..start]);
-        output.push_str(&key);
-
-        let after_key = start + key.len();
-        let Some((value_start, value_end)) = find_json_string_value_span(&content, after_key)
-        else {
-            cursor = after_key;
-            continue;
-        };
-
-        output.push_str(&content[after_key..value_start]);
-        output.push_str("\"[redacted]\"");
-        cursor = value_end;
-    }
-
-    output.push_str(&content[cursor..]);
-    output
-}
-
-fn find_json_string_value_span(content: &str, after_key: usize) -> Option<(usize, usize)> {
-    let bytes = content.as_bytes();
-    let mut index = after_key;
-    while bytes.get(index).is_some_and(u8::is_ascii_whitespace) {
-        index += 1;
-    }
-    if bytes.get(index) != Some(&b':') {
-        return None;
-    }
-    index += 1;
-    while bytes.get(index).is_some_and(u8::is_ascii_whitespace) {
-        index += 1;
-    }
-    if bytes.get(index) != Some(&b'"') {
-        return None;
-    }
-
-    let value_start = index;
-    index += 1;
-    let mut escaped = false;
-    while let Some(byte) = bytes.get(index) {
-        if escaped {
-            escaped = false;
-        } else if *byte == b'\\' {
-            escaped = true;
-        } else if *byte == b'"' {
-            return Some((value_start, index + 1));
-        }
-        index += 1;
-    }
-    None
 }
 
 #[cfg(test)]
@@ -783,12 +718,19 @@ mod tests {
 
         let redacted = redact_settings_backup_content(content);
 
+        assert_eq!(redacted, MALFORMED_SETTINGS_BACKUP_NOTICE);
+    }
+
+    #[test]
+    fn drops_malformed_nested_sensitive_settings_content() {
+        let content =
+            r#"{"githubToken":{"nested":"legacy-secret"},"proxy":["user:pass"],"broken":"#;
+
+        let redacted = redact_settings_backup_content(content);
+
+        assert_eq!(redacted, MALFORMED_SETTINGS_BACKUP_NOTICE);
         assert!(!redacted.contains("legacy-secret"));
-        assert!(!redacted.contains("dpapi:encrypted-secret"));
         assert!(!redacted.contains("user:pass"));
-        assert!(redacted.contains("\"githubToken\":\"[redacted]\""));
-        assert!(redacted.contains("\"githubTokenProtected\":\"[redacted]\""));
-        assert!(redacted.contains("\"proxy\":\"[redacted]\""));
     }
 
     #[test]
