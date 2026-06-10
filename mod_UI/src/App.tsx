@@ -310,10 +310,7 @@ function App() {
     }
   }
 
-  const packageCount = useMemo(
-    () => input.split(/\r?\n/).filter((line) => line.trim()).length,
-    [input],
-  );
+  const packageCount = useMemo(() => activeInputLineCount(input), [input]);
   const inputProfile = useMemo(() => classifyInputProfile(input), [input]);
   const inputBytes = useMemo(() => utf8Length(input), [input]);
   const inputTooLarge =
@@ -828,8 +825,13 @@ function App() {
               {view === "settings" && "网络与镜像设置"}
             </h1>
           </div>
-          <div className={`status-chip ${searching ? "active" : ""}`}>
-            <i />
+          <div
+            className={`status-chip ${searching ? "active" : ""}`}
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <i aria-hidden="true" />
             {status}
           </div>
         </header>
@@ -847,12 +849,15 @@ function App() {
                   value={input}
                   onChange={(event) => acceptInputValue(event.currentTarget.value, "manual")}
                   placeholder={"每行一个包，例如：\nSeurat 5.2.1\nGSVA 1.50\nbuenrostrolab/FigR\nhttps://example.org/pkg_1.0.tar.gz"}
+                  aria-label="R 包输入列表"
+                  aria-describedby={inputTooLarge ? "input-limit-warning" : undefined}
+                  aria-invalid={inputTooLarge}
                   spellCheck={false}
                   maxLength={MAX_INPUT_CHARS + 1}
                   disabled={searching}
                 />
                 {inputTooLarge && (
-                  <div className="inline-warning">
+                  <div className="inline-warning" id="input-limit-warning" role="alert">
                     输入超出限制或包含非法字符：最多 {MAX_PACKAGE_LINES} 行、总计 {MAX_INPUT_CHARS} 字节、单行 {MAX_INPUT_LINE_BYTES} 字节。
                   </div>
                 )}
@@ -890,6 +895,7 @@ function App() {
                       key={item.id}
                       className={`method-card ${method === item.id ? "selected" : ""}`}
                       disabled={isMethodDisabled(item.id)}
+                      aria-pressed={method === item.id}
                       onClick={() => setMethod(item.id)}
                     >
                       <span>{item.title}</span>
@@ -921,7 +927,7 @@ function App() {
 
               <section className="panel script-panel">
                 <PanelHeader step="03" title="脚本预览" meta="R Script" />
-                <pre>{script}</pre>
+                <pre aria-label="生成的 R 脚本" tabIndex={0}>{script}</pre>
                 {scriptTooLarge && (
                   <div className="inline-warning">
                     脚本内容超出限制：最多 {MAX_SCRIPT_CHARS} 字节。
@@ -954,17 +960,21 @@ function App() {
                 {results.length === 0 ? (
                   <EmptyState text={searching ? "正在等待首条检索结果" : "尚未执行检索"} />
                 ) : (
-                  <div className="result-table">
-                    <div className="result-row result-head">
-                      <span>包名</span><span>来源</span><span>版本</span><span>仓库</span><span>状态</span>
+                  <div className="result-table" role="table" aria-label="包来源验证结果">
+                    <div className="result-row result-head" role="row">
+                      <span role="columnheader">包名</span>
+                      <span role="columnheader">来源</span>
+                      <span role="columnheader">版本</span>
+                      <span role="columnheader">仓库</span>
+                      <span role="columnheader">状态</span>
                     </div>
                     {results.map((result, index) => (
-                      <div className="result-row" key={`${result.package}-${result.source}-${index}`}>
-                        <strong>{result.package}</strong>
-                        <span className={`source-tag ${result.source}`}>{sourceNames[result.source] ?? result.source}</span>
-                        <code>{result.latestVersion || "—"}</code>
-                        <span className="repo-cell">{result.repository || "—"}</span>
-                        <span className={result.found ? "found" : "missing"}>{result.found ? "已验证" : "未找到"}</span>
+                      <div className="result-row" role="row" key={`${result.package}-${result.source}-${index}`}>
+                        <strong role="cell">{result.package}</strong>
+                        <span role="cell" className={`source-tag ${result.source}`}>{sourceNames[result.source] ?? result.source}</span>
+                        <code role="cell">{result.latestVersion || "—"}</code>
+                        <span role="cell" className="repo-cell">{result.repository || "—"}</span>
+                        <span role="cell" className={result.found ? "found" : "missing"}>{result.found ? "已验证" : "未找到"}</span>
                       </div>
                     ))}
                   </div>
@@ -1069,6 +1079,7 @@ function App() {
                     <button
                       key={mirror.value}
                       className={settings.cranMirror === mirror.value ? "selected" : ""}
+                      aria-pressed={settings.cranMirror === mirror.value}
                       onClick={() =>
                         updateSettingsFromUser((current) => ({
                           ...current,
@@ -1120,7 +1131,11 @@ function NavButton({
   onClick: () => void;
 }) {
   return (
-    <button className={active ? "active" : ""} onClick={onClick}>
+    <button
+      className={active ? "active" : ""}
+      aria-current={active ? "page" : undefined}
+      onClick={onClick}
+    >
       <span className="nav-code">{code}</span>
       <strong>{label}</strong>
       {badge !== undefined && badge > 0 && <small>{badge}</small>}
@@ -1271,7 +1286,7 @@ function settingsFieldLabel(field: keyof Pick<Settings, "proxy" | "githubToken" 
 function nonEmptyLineCountExceeds(value: string, limit: number) {
   let count = 0;
   for (const line of value.split(/\r?\n/)) {
-    if (line.trim()) {
+    if (isActiveInputLine(line)) {
       count += 1;
       if (count > limit) {
         return true;
@@ -1279,6 +1294,21 @@ function nonEmptyLineCountExceeds(value: string, limit: number) {
     }
   }
   return false;
+}
+
+function activeInputLineCount(value: string) {
+  let count = 0;
+  for (const line of value.split(/\r?\n/)) {
+    if (isActiveInputLine(line)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function isActiveInputLine(value: string) {
+  const trimmed = value.trim();
+  return Boolean(trimmed) && !trimmed.startsWith("#");
 }
 
 function nonEmptyLineBytesExceeds(value: string, limit: number) {
@@ -1385,11 +1415,16 @@ function collectBrowserSearchNames(value: string, limit: number) {
   const seen = new Set<string>();
   const boundedLimit = Math.max(0, Math.floor(limit));
   const lines = value.split(/\r?\n/);
-  for (let index = 0; index < lines.length && index < MAX_PACKAGE_LINES; index += 1) {
-    const token = lines[index].trim().split(/\s+/)[0];
-    if (!token) {
+  let activeLines = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!isActiveInputLine(lines[index])) {
       continue;
     }
+    activeLines += 1;
+    if (activeLines > MAX_PACKAGE_LINES) {
+      break;
+    }
+    const token = lines[index].trim().split(/\s+/)[0];
     const name = token.split("/").pop() ?? token;
     if (isBrowserSearchPackageName(name) && !seen.has(name)) {
       seen.add(name);
@@ -1409,12 +1444,15 @@ function classifyInputProfile(value: string): InputProfile {
     repositories: 0,
   };
   const lines = value.split(/\r?\n/);
-  for (let index = 0; index < lines.length && index < MAX_PACKAGE_LINES; index += 1) {
+  for (let index = 0; index < lines.length; index += 1) {
     const raw = lines[index].trim();
     if (!raw || raw.startsWith("#")) {
       continue;
     }
     profile.total += 1;
+    if (profile.total > MAX_PACKAGE_LINES) {
+      break;
+    }
     if (/^https:\/\//i.test(raw)) {
       profile.archiveUrls += 1;
       continue;

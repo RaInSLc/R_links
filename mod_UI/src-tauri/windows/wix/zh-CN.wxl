@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<WixLocalization Culture="zh-CN" xmlns="http://schemas.microsoft.com/wix/2006/localization">
+  <String Id="LaunchApp">启动 R Package Command Center</String>
+  <String Id="DowngradeErrorMessage">已安装较新版本的 R Package Command Center，无法降级安装。</String>
+  <String Id="PathEnvVarFeature">将 R Package Command Center 安装目录添加到 PATH 环境变量，以便从任意位置启动应用。</String>
+  <String Id="InstallAppFeature">安装 R Package Command Center。</String>
+</WixLocalization>

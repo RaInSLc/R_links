@@ -39,12 +39,32 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "R Links",
+    "category": "Utility",
+    "shortDescription": "R 包安装命令工作台",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "allowDowngrades": false,
+      "wix": {
+        "upgradeCode": "22fd1170-463e-52c4-b55a-09d59f8f640c",
+        "language": {
+          "zh-CN": {
+            "localePath": "windows/wix/zh-CN.wxl"
+          }
+        }
+      },
+      "nsis": {
+        "languages": ["SimpChinese"],
+        "customLanguageFiles": {
+          "SimpChinese": "windows/nsis/SimpChinese.nsh"
+        }
+      }
+    }
   }
 }

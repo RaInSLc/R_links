@@ -44,6 +44,14 @@ button {
   color: inherit;
 }
 
+button:focus-visible,
+textarea:focus-visible,
+input:focus-visible,
+[tabindex="0"]:focus-visible {
+  outline: 2px solid #2c8a66;
+  outline-offset: 2px;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 226px minmax(0, 1fr);
@@ -527,6 +535,11 @@ button {
   transform: translateX(12px);
 }
 
+.toggle input:focus-visible + .toggle-control {
+  outline: 2px solid #2c8a66;
+  outline-offset: 2px;
+}
+
 .toggle strong,
 .toggle small {
   display: block;
@@ -926,6 +939,17 @@ button {
 @keyframes pulse {
   50% {
     opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

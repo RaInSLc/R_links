@@ -890,13 +890,17 @@ pub fn validate_input_size(input: &str) -> Result<(), String> {
     }
     let mut line_count = 0usize;
     for line in input.lines() {
-        if line.trim().is_empty() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
             continue;
         }
         if line.len() > MAX_INPUT_LINE_BYTES {
             return Err(format!(
                 "单行输入过长，最多允许 {MAX_INPUT_LINE_BYTES} 字节"
             ));
+        }
+        if trimmed.starts_with('#') {
+            continue;
         }
         line_count += 1;
         if line_count > MAX_PACKAGE_LINES {
@@ -1303,6 +1307,29 @@ mod tests {
     fn rejects_oversized_input() {
         let input = "pkg\n".repeat(MAX_PACKAGE_LINES + 1);
         assert!(parse_inputs(&input).is_err());
+    }
+
+    #[test]
+    fn ignores_comment_lines_when_counting_package_limit() {
+        let input = format!(
+            "{}\n{}",
+            "# comment\n".repeat(MAX_PACKAGE_LINES + 10),
+            "pkg\n".repeat(MAX_PACKAGE_LINES)
+        );
+
+        assert_eq!(
+            parse_inputs(&input)
+                .expect("注释行不应占用包数量限制")
+                .len(),
+            MAX_PACKAGE_LINES
+        );
+    }
+
+    #[test]
+    fn still_rejects_oversized_comment_lines() {
+        let input = format!("# {}", "x".repeat(MAX_INPUT_LINE_BYTES));
+
+        assert!(validate_input_size(&input).is_err());
     }
 
     #[test]
