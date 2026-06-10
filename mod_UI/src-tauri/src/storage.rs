@@ -89,7 +89,7 @@ pub fn load_settings(app: &AppHandle) -> Result<Settings, String> {
 
 pub fn load_existing_settings(app: &AppHandle) -> Result<Option<Settings>, String> {
     let path = data_file(app, "settings.json")?;
-    if !path.exists() {
+    if !path_entry_exists(&path)? {
         return Ok(None);
     }
     load_settings_with_recovery(app, false).map(Some)
@@ -100,7 +100,7 @@ fn load_settings_with_recovery(
     fallback_to_default: bool,
 ) -> Result<Settings, String> {
     let path = data_file(app, "settings.json")?;
-    if !path.exists() {
+    if !path_entry_exists(&path)? {
         return Ok(Settings::default());
     }
     let Some(content) =
@@ -138,7 +138,7 @@ pub fn save_settings(app: &AppHandle, settings: &Settings) -> Result<(), String>
 
 pub fn load_history(app: &AppHandle) -> Result<Vec<HistoryRecord>, String> {
     let path = data_file(app, "history.json")?;
-    if !path.exists() {
+    if !path_entry_exists(&path)? {
         return Ok(Vec::new());
     }
     let Some(content) =
@@ -334,6 +334,23 @@ fn open_storage_file(path: &Path) -> std::io::Result<fs::File> {
     options.open(path)
 }
 
+fn path_entry_exists(path: &Path) -> Result<bool, String> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn storage_target_exists(path: &Path) -> Result<bool, String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => Ok(true),
+        Ok(_) => Err("存储目标不是普通文件".to_string()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 fn read_storage_file_with_recovery(
     app: &AppHandle,
     name: &str,
@@ -373,12 +390,7 @@ fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| "存储文件名无效".to_string())?;
-    if path.exists() {
-        let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
-        if !metadata.is_file() || metadata.file_type().is_symlink() {
-            return Err("存储目标不是普通文件".to_string());
-        }
-    }
+    storage_target_exists(path)?;
 
     let tmp = create_synced_temp_file(path, file_name, content)?;
     if let Err(error) = replace_storage_file(path, &tmp) {
@@ -432,7 +444,7 @@ fn replace_storage_file(path: &Path, tmp: &Path) -> Result<(), String> {
 
     let target = wide_path(path)?;
     let replacement = wide_path(tmp)?;
-    let replaced = if path.exists() {
+    let replaced = if storage_target_exists(path)? {
         // ReplaceFileW 在一个文件系统操作中替换现有目标，避免正式文件短暂缺失。
         unsafe {
             ReplaceFileW(
@@ -462,6 +474,7 @@ fn replace_storage_file(path: &Path, tmp: &Path) -> Result<(), String> {
 
 #[cfg(not(windows))]
 fn replace_storage_file(path: &Path, tmp: &Path) -> Result<(), String> {
+    storage_target_exists(path)?;
     fs::rename(tmp, path).map_err(|error| error.to_string())
 }
 
@@ -842,6 +855,36 @@ mod tests {
 
         assert!(read_limited_to_string(&link, MAX_SETTINGS_FILE_BYTES, "设置文件").is_err());
 
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn atomic_write_rejects_dangling_symbolic_links() {
+        use std::os::windows::fs::symlink_file;
+
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-dangling-link-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+        let missing_target = directory.join("missing.json");
+        let link = directory.join("settings.json");
+        symlink_file(&missing_target, &link).expect("应能创建断开的文件符号链接");
+
+        assert!(!link.exists());
+        assert!(path_entry_exists(&link).expect("断链目录项应可识别"));
+        assert!(atomic_write(&link, "replacement").is_err());
+        assert!(fs::symlink_metadata(&link)
+            .expect("断链目录项应保持存在")
+            .file_type()
+            .is_symlink());
+        let leftovers = fs::read_dir(&directory)
+            .expect("应能列出临时目录")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .count();
+        assert_eq!(leftovers, 0);
+
+        fs::remove_file(&link).expect("应能移除断链");
         fs::remove_dir_all(directory).expect("应能清理临时目录");
     }
 
