@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use url::Url;
+use url::{Host, Url};
 
 pub const MAX_INPUT_CHARS: usize = 100_000;
 pub const MAX_PACKAGE_LINES: usize = 500;
@@ -184,9 +184,14 @@ fn normalize_proxy(value: &str) -> Result<String, String> {
         "http" | "https" | "socks5" | "socks5h" => {}
         _ => return Err("网络代理仅支持 http、https、socks5 或 socks5h".to_string()),
     }
-    if parsed.host_str().is_none() {
-        return Err("网络代理缺少主机名".to_string());
-    }
+    let host = match parsed.host() {
+        Some(Host::Domain(domain)) => {
+            Host::parse(domain).map_err(|_| "网络代理主机名无效".to_string())?
+        }
+        Some(Host::Ipv4(address)) => Host::Ipv4(address),
+        Some(Host::Ipv6(address)) => Host::Ipv6(address),
+        None => return Err("网络代理缺少主机名".to_string()),
+    };
     if !parsed.username().is_empty() || parsed.password().is_some() {
         return Err("网络代理不允许包含用户名或密码".to_string());
     }
@@ -194,7 +199,11 @@ fn normalize_proxy(value: &str) -> Result<String, String> {
     {
         return Err("网络代理不允许包含路径、查询参数或片段".to_string());
     }
-    Ok(candidate)
+    let port = parsed
+        .port()
+        .map(|port| format!(":{port}"))
+        .unwrap_or_default();
+    Ok(format!("{}://{host}{port}", parsed.scheme()))
 }
 
 fn normalize_token(value: &str) -> Result<String, String> {
@@ -252,12 +261,35 @@ mod tests {
     }
 
     #[test]
+    fn canonicalizes_proxy_authority_before_use() {
+        for (proxy, expected) in [
+            ("HTTP://LOCALHOST:7890", "http://localhost:7890"),
+            ("socks5://[0:0:0:0:0:0:0:1]:1080", "socks5://[::1]:1080"),
+            (
+                "socks5h://例子.测试:1080",
+                "socks5h://xn--fsqu00a.xn--0zwm56d:1080",
+            ),
+        ] {
+            let settings = Settings {
+                proxy: proxy.to_string(),
+                ..Settings::default()
+            };
+            assert_eq!(
+                settings.normalized().expect("代理应可规范化").proxy,
+                expected
+            );
+        }
+    }
+
+    #[test]
     fn rejects_credentialed_or_scoped_proxy_url() {
         for proxy in [
             "http://user:pass@127.0.0.1:7890",
             "https://127.0.0.1:7890/proxy",
             "socks5://127.0.0.1:7890?target=example",
             "socks5h://127.0.0.1:7890#fragment",
+            r"socks5://example.com\redirect:1080",
+            "socks5h://example.com%2Fredirect:1080",
         ] {
             let settings = Settings {
                 proxy: proxy.to_string(),
