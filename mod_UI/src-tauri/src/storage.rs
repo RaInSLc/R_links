@@ -529,10 +529,30 @@ fn backup_corrupt_file(app: &AppHandle, name: &str, content: &str) -> Result<(),
 
 fn backup_corrupt_path(directory: &Path, name: &str, content: &str) -> Result<(), String> {
     ensure_storage_directory(directory)?;
-    let backup = directory.join(format!("{name}.corrupt.{}.bak", unique_file_suffix()));
+    let saturated = corrupt_backup_directory_saturated(directory)?;
+    let backup = if saturated {
+        directory.join(format!("{name}.corrupt.overflow.bak"))
+    } else {
+        directory.join(format!("{name}.corrupt.{}.bak", unique_file_suffix()))
+    };
     atomic_write(&backup, content)?;
-    prune_corrupt_backups(directory, name);
+    if !saturated {
+        prune_corrupt_backups(directory, name);
+    }
     Ok(())
+}
+
+fn corrupt_backup_directory_saturated(directory: &Path) -> Result<bool, String> {
+    let entries = fs::read_dir(directory).map_err(|error| error.to_string())?;
+    let mut count = 0usize;
+    for entry in entries.take(MAX_CORRUPT_BACKUP_SCAN_ENTRIES) {
+        entry.map_err(|error| error.to_string())?;
+        count += 1;
+        if count >= MAX_CORRUPT_BACKUP_SCAN_ENTRIES {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn prune_corrupt_backups(directory: &Path, name: &str) -> usize {
@@ -1119,6 +1139,44 @@ mod tests {
         assert_eq!(
             prune_corrupt_backups(&directory, "settings.json"),
             MAX_CORRUPT_BACKUP_SCAN_ENTRIES
+        );
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[test]
+    fn saturated_backup_directory_reuses_overflow_file() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-backup-overflow-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+
+        for index in 0..MAX_CORRUPT_BACKUP_SCAN_ENTRIES {
+            fs::write(directory.join(format!("unrelated-{index:04}.txt")), "data")
+                .expect("应能写入目录填充文件");
+        }
+
+        backup_corrupt_path(&directory, "settings.json", "first")
+            .expect("饱和目录应可写入固定备份");
+        backup_corrupt_path(&directory, "settings.json", "second").expect("饱和目录应复用固定备份");
+
+        let backups = fs::read_dir(&directory)
+            .expect("应能列出临时目录")
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("settings.json.corrupt.")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(backups.len(), 1);
+        assert_eq!(
+            backups[0].file_name().to_string_lossy(),
+            "settings.json.corrupt.overflow.bak"
+        );
+        assert_eq!(
+            fs::read_to_string(backups[0].path()).expect("应能读取固定备份"),
+            "second"
         );
 
         fs::remove_dir_all(directory).expect("应能清理临时目录");
