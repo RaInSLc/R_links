@@ -189,15 +189,30 @@ pub fn generate_script(
 
     let mut output = Vec::new();
     for package in packages {
-        let mut value = if matches!(requested_method, "devtools" | "remotes") {
+        let is_archive_url = package.raw.starts_with("https://");
+        if is_archive_url && !matches!(requested_method, "auto" | "devtools" | "remotes") {
+            return Err(format!(
+                "安装归档 URL 仅支持智能路由、devtools 或 remotes，不能使用 {requested_method}"
+            ));
+        }
+        let mut value = if matches!(requested_method, "devtools" | "remotes")
+            || (requested_method == "auto" && is_archive_url)
+        {
             package.raw.clone()
         } else {
             package.name.clone()
         };
         let mut version = package.version.clone();
-        let mut method = requested_method.to_string();
+        let mut method = if requested_method == "auto" && is_archive_url {
+            "remotes".to_string()
+        } else {
+            requested_method.to_string()
+        };
 
-        if let Some(best) = choose_best_result(&package.name, &results) {
+        if let Some(best) = (!is_archive_url)
+            .then(|| choose_best_result(&package.name, &results))
+            .flatten()
+        {
             let source_label = source_label(&best.source);
             if version.is_empty() {
                 output.push(format!(
@@ -238,14 +253,16 @@ pub fn generate_script(
                     _ => method = "remotesVersion".to_string(),
                 }
             }
-        } else if results
-            .iter()
-            .any(|result| result.package.eq_ignore_ascii_case(&package.name))
+        } else if !is_archive_url
+            && results
+                .iter()
+                .any(|result| result.package.eq_ignore_ascii_case(&package.name))
         {
             output.push("# [提示: CRAN/Bioconductor/GitHub 均未找到]".to_string());
         }
 
         if requested_method == "auto"
+            && !is_archive_url
             && !matches!(method.as_str(), "github" | "biocManager" | "biocGit")
         {
             method = if package.name.contains('/')
@@ -1129,6 +1146,57 @@ mod tests {
             "remotes::install_url(\"https://example.org/src/contrib/demo_1.0.0.tar.gz\""
         ));
         assert!(!output.contains("requireNamespace(\"https://"));
+    }
+
+    #[test]
+    fn auto_routes_archive_urls_per_input_line() {
+        let output = generate_script(
+            "https://example.org/src/contrib/demo_1.0.0.tar.gz\nother",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: true,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[SearchResult {
+                package: "demo".to_string(),
+                requested_version: String::new(),
+                latest_version: "9.9.9".to_string(),
+                repository: String::new(),
+                real_name: "demo".to_string(),
+                source: "cran".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            }],
+        )
+        .expect("自动模式应按行处理安装归档 URL");
+
+        assert!(output.contains(
+            "remotes::install_url(\"https://example.org/src/contrib/demo_1.0.0.tar.gz\""
+        ));
+        assert!(output.contains("requireNamespace(\"demo\", quietly = TRUE)"));
+        assert!(output.contains("install.packages(\"other\""));
+        assert!(!output.contains("install_version(\"demo\""));
+    }
+
+    #[test]
+    fn rejects_archive_urls_for_incompatible_methods() {
+        for method in ["base", "version", "biocManager", "github"] {
+            assert!(
+                generate_script(
+                    "https://example.org/src/contrib/demo_1.0.0.tar.gz",
+                    &GenerateOptions {
+                        method: method.to_string(),
+                        conditional: false,
+                        install_dependencies: true,
+                        mirror: "https://cloud.r-project.org".to_string(),
+                    },
+                    &[],
+                )
+                .is_err(),
+                "{method}"
+            );
+        }
     }
 
     #[test]
