@@ -302,10 +302,11 @@ function App() {
     : 0;
 
   useEffect(() => {
+    let active = true;
     const settingsLoadSeq = settingsActionSeq.current;
     invoke<PublicSettings>("load_settings")
       .then((savedSettings) => {
-        if (settingsLoadSeq !== settingsActionSeq.current) {
+        if (!active || settingsLoadSeq !== settingsActionSeq.current) {
           return;
         }
         const cleanSettings = sanitizePublicSettings(savedSettings);
@@ -318,44 +319,71 @@ function App() {
         setTokenConfigured(cleanSettings.githubTokenConfigured);
       })
       .catch((error) => {
-        if (settingsLoadSeq === settingsActionSeq.current) {
+        if (active && settingsLoadSeq === settingsActionSeq.current) {
           setStatus(`设置加载失败: ${formatError(error)}`);
         }
       });
 
     invoke<HistoryRecord[]>("load_history")
-      .then(loadInitialHistory)
-      .catch((error) => setStatus(`历史加载失败: ${formatError(error)}`))
+      .then((nextHistory) => {
+        if (active) {
+          loadInitialHistory(nextHistory);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setStatus(`历史加载失败: ${formatError(error)}`);
+        }
+      })
       .finally(() => historyLoadResolveRef.current());
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
-    const unlistenLog = listen<SearchLogEvent>("search-log", (event) => {
-      const payload = asRecord(event.payload);
-      if (safeRunId(payload.runId) !== activeSearchRunId.current) {
-        return;
+    let active = true;
+    const unlistenLog = listen<SearchLogEvent>(
+      "search-log",
+      (event) => {
+        const payload = asRecord(event.payload);
+        if (!active || safeRunId(payload.runId) !== activeSearchRunId.current) {
+          return;
+        }
+        setLogs((current) => appendBounded(current, safeStatusText(payload.message), MAX_SEARCH_LOGS));
+      },
+    ).catch((error) => {
+      if (active) {
+        setStatus(`检索日志监听失败: ${formatError(error)}`);
       }
-      setLogs((current) => appendBounded(current, safeStatusText(payload.message), MAX_SEARCH_LOGS));
+      return () => undefined;
     });
     const unlistenProgress = listen<SearchProgressEvent>(
       "search-progress",
       (event) => {
         const payload = asRecord(event.payload);
-        if (safeRunId(payload.runId) !== activeSearchRunId.current) {
+        if (!active || safeRunId(payload.runId) !== activeSearchRunId.current) {
           return;
         }
         setResults((current) =>
           upsertBoundedResult(current, sanitizeSearchResult(payload.result), MAX_SEARCH_RESULTS),
         );
       },
-    );
+    ).catch((error) => {
+      if (active) {
+        setStatus(`检索进度监听失败: ${formatError(error)}`);
+      }
+      return () => undefined;
+    });
     return () => {
+      active = false;
       void unlistenLog.then((unlisten) => unlisten());
       void unlistenProgress.then((unlisten) => unlisten());
     };
   }, []);
 
   useEffect(() => {
+    let active = true;
     const timer = window.setTimeout(() => {
       const requestSeq = scriptRequestSeq.current + 1;
       scriptRequestSeq.current = requestSeq;
@@ -374,17 +402,20 @@ function App() {
         results,
       })
         .then((nextScript) => {
-          if (requestSeq === scriptRequestSeq.current) {
+          if (active && requestSeq === scriptRequestSeq.current) {
             setScript(nextScript);
           }
         })
         .catch((error) => {
-          if (requestSeq === scriptRequestSeq.current) {
+          if (active && requestSeq === scriptRequestSeq.current) {
             setStatus(`生成失败: ${formatError(error)}`);
           }
         });
     }, 120);
-    return () => window.clearTimeout(timer);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [
     input,
     method,
