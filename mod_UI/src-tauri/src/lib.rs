@@ -10,7 +10,7 @@ use std::sync::{
     Arc, Mutex, MutexGuard,
 };
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 use models::{
     GenerateOptions, HistoryRecord, PublicSettings, SearchResponse, SearchResult, Settings,
@@ -299,8 +299,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let data_dir = app.path().app_data_dir()?;
-            std::fs::create_dir_all(data_dir)?;
+            storage::ensure_data_directory(app.handle()).map_err(std::io::Error::other)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

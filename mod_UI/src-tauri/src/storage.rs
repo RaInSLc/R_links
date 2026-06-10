@@ -75,12 +75,42 @@ impl StoredSettings {
 }
 
 fn data_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
+    let directory = ensure_data_directory(app)?;
+    Ok(directory.join(name))
+}
+
+pub fn ensure_data_directory(app: &AppHandle) -> Result<PathBuf, String> {
     let directory = app
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?;
-    fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
-    Ok(directory.join(name))
+    ensure_storage_directory(&directory)?;
+    Ok(directory)
+}
+
+fn ensure_storage_directory(directory: &Path) -> Result<(), String> {
+    fs::create_dir_all(directory).map_err(|error| error.to_string())?;
+    let metadata = fs::symlink_metadata(directory).map_err(|error| error.to_string())?;
+    if !metadata.is_dir()
+        || metadata.file_type().is_symlink()
+        || metadata_is_windows_reparse_point(&metadata)
+    {
+        return Err("应用数据目录不是普通目录".to_string());
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn metadata_is_windows_reparse_point(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
+
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn metadata_is_windows_reparse_point(_metadata: &fs::Metadata) -> bool {
+    false
 }
 
 pub fn load_settings(app: &AppHandle) -> Result<Settings, String> {
@@ -492,16 +522,12 @@ fn backup_corrupt_storage_path(directory: &Path, name: &str, content: &str) -> R
 }
 
 fn backup_corrupt_file(app: &AppHandle, name: &str, content: &str) -> Result<(), String> {
-    let directory = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?;
-    fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    let directory = ensure_data_directory(app)?;
     backup_corrupt_path(&directory, name, content)
 }
 
 fn backup_corrupt_path(directory: &Path, name: &str, content: &str) -> Result<(), String> {
-    fs::create_dir_all(directory).map_err(|error| error.to_string())?;
+    ensure_storage_directory(directory)?;
     let backup = directory.join(format!("{name}.corrupt.{}.bak", unique_file_suffix()));
     atomic_write(&backup, content)?;
     prune_corrupt_backups(directory, name);
@@ -726,6 +752,41 @@ mod tests {
     #[test]
     fn unique_file_suffix_changes_between_calls() {
         assert_ne!(unique_file_suffix(), unique_file_suffix());
+    }
+
+    #[test]
+    fn ensure_storage_directory_creates_and_accepts_plain_directory() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-data-dir-{}", unique_file_suffix()));
+
+        ensure_storage_directory(&directory).expect("普通数据目录应可创建");
+        assert!(directory.is_dir());
+        ensure_storage_directory(&directory).expect("已有普通数据目录应可复用");
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn ensure_storage_directory_rejects_directory_links() {
+        use std::os::windows::fs::symlink_dir;
+
+        let root = std::env::temp_dir().join(format!("mod-ui-data-link-{}", unique_file_suffix()));
+        let target = root.join("target");
+        let link = root.join("data");
+        fs::create_dir_all(&target).expect("应能创建链接目标目录");
+        symlink_dir(&target, &link).expect("应能创建目录符号链接");
+
+        let metadata = fs::symlink_metadata(&link).expect("应能读取目录链接元数据");
+        assert!(metadata_is_windows_reparse_point(&metadata));
+        assert!(ensure_storage_directory(&link).is_err());
+        assert!(fs::read_dir(&target)
+            .expect("应能读取链接目标目录")
+            .next()
+            .is_none());
+
+        fs::remove_dir(&link).expect("应能移除目录链接");
+        fs::remove_dir_all(root).expect("应能清理临时目录");
     }
 
     #[test]
