@@ -1,5 +1,5 @@
-use std::fs;
-use std::io::Read;
+use std::fs::{self, OpenOptions};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -26,6 +26,7 @@ const MAX_HISTORY_TIMESTAMP_CHARS: usize = 32;
 const MAX_SETTINGS_FILE_BYTES: u64 = 64 * 1024;
 const MAX_HISTORY_FILE_BYTES: u64 = MAX_HISTORY_SAVE_BYTES as u64;
 const MAX_CORRUPT_BACKUPS_PER_FILE: usize = 5;
+const MAX_TEMP_FILE_CREATE_ATTEMPTS: usize = 8;
 const OVERSIZED_BACKUP_NOTICE: &str = "原文件超过安全读取上限，内容未复制到备份。";
 static STORAGE_WRITE_LOCK: Mutex<()> = Mutex::new(());
 static STORAGE_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -163,7 +164,7 @@ pub fn save_history(
 }
 
 fn save_history_to_path(
-    path: &PathBuf,
+    path: &Path,
     history: &[HistoryRecord],
 ) -> Result<Vec<HistoryRecord>, String> {
     validate_history_save_payload(history)?;
@@ -294,7 +295,7 @@ fn is_clean_timestamp(value: &str) -> bool {
 }
 
 fn read_limited_to_string(
-    path: &PathBuf,
+    path: &Path,
     max_bytes: u64,
     file_label: &str,
 ) -> Result<Option<String>, String> {
@@ -333,7 +334,7 @@ fn read_storage_file_with_recovery(
 
 fn read_storage_path_with_recovery(
     directory: &Path,
-    path: &PathBuf,
+    path: &Path,
     name: &str,
     max_bytes: u64,
     file_label: &str,
@@ -351,7 +352,7 @@ fn read_storage_path_with_recovery(
     }
 }
 
-fn atomic_write(path: &PathBuf, content: &str) -> Result<(), String> {
+fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
     let _guard = STORAGE_WRITE_LOCK
         .lock()
         .map_err(|_| "存储写入锁已损坏".to_string())?;
@@ -359,31 +360,96 @@ fn atomic_write(path: &PathBuf, content: &str) -> Result<(), String> {
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| "存储文件名无效".to_string())?;
-    let tmp = path.with_file_name(format!("{file_name}.{}.tmp", unique_file_suffix()));
-    let backup = path.with_file_name(format!("{file_name}.{}.bak", unique_file_suffix()));
     if path.exists() {
-        let metadata = fs::metadata(path).map_err(|error| error.to_string())?;
-        if !metadata.is_file() {
+        let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
             return Err("存储目标不是普通文件".to_string());
         }
     }
-    fs::write(&tmp, content).map_err(|error| error.to_string())?;
-    if path.exists() {
-        let _ = fs::remove_file(&backup);
-        fs::rename(path, &backup).map_err(|error| error.to_string())?;
-        if let Err(error) = fs::rename(&tmp, path) {
-            let _ = fs::rename(&backup, path);
-            let _ = fs::remove_file(&tmp);
-            return Err(error.to_string());
-        }
-        let _ = fs::remove_file(&backup);
-        Ok(())
-    } else {
-        fs::rename(&tmp, path).map_err(|error| {
-            let _ = fs::remove_file(&tmp);
-            error.to_string()
-        })
+
+    let tmp = create_synced_temp_file(path, file_name, content)?;
+    if let Err(error) = replace_storage_file(path, &tmp) {
+        let _ = fs::remove_file(&tmp);
+        return Err(error);
     }
+    Ok(())
+}
+
+fn create_synced_temp_file(path: &Path, file_name: &str, content: &str) -> Result<PathBuf, String> {
+    for _ in 0..MAX_TEMP_FILE_CREATE_ATTEMPTS {
+        let tmp = path.with_file_name(format!("{file_name}.{}.tmp", unique_file_suffix()));
+        match write_synced_new_file(&tmp, content) {
+            Ok(()) => return Ok(tmp),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Err("无法创建唯一的存储临时文件".to_string())
+}
+
+fn write_synced_new_file(path: &Path, content: &str) -> std::io::Result<()> {
+    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    if let Err(error) = file
+        .write_all(content.as_bytes())
+        .and_then(|_| file.sync_all())
+    {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(error);
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn replace_storage_file(path: &Path, tmp: &Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr::null;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, ReplaceFileW, MOVEFILE_WRITE_THROUGH, REPLACEFILE_WRITE_THROUGH,
+    };
+
+    fn wide_path(path: &Path) -> Result<Vec<u16>, String> {
+        let mut wide = path.as_os_str().encode_wide().collect::<Vec<_>>();
+        if wide.contains(&0) {
+            return Err("存储路径包含非法空字符".to_string());
+        }
+        wide.push(0);
+        Ok(wide)
+    }
+
+    let target = wide_path(path)?;
+    let replacement = wide_path(tmp)?;
+    let replaced = if path.exists() {
+        // ReplaceFileW 在一个文件系统操作中替换现有目标，避免正式文件短暂缺失。
+        unsafe {
+            ReplaceFileW(
+                target.as_ptr(),
+                replacement.as_ptr(),
+                null(),
+                REPLACEFILE_WRITE_THROUGH,
+                null(),
+                null(),
+            )
+        }
+    } else {
+        unsafe {
+            MoveFileExW(
+                replacement.as_ptr(),
+                target.as_ptr(),
+                MOVEFILE_WRITE_THROUGH,
+            )
+        }
+    };
+    if replaced == 0 {
+        Err(std::io::Error::last_os_error().to_string())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn replace_storage_file(path: &Path, tmp: &Path) -> Result<(), String> {
+    fs::rename(tmp, path).map_err(|error| error.to_string())
 }
 
 fn backup_corrupt_settings_file(app: &AppHandle, content: &str) -> Result<(), String> {
@@ -655,6 +721,42 @@ mod tests {
             .count();
         assert_eq!(leftovers, 0);
 
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[test]
+    fn synced_temp_write_refuses_to_overwrite_existing_file() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-exclusive-temp-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+        let path = directory.join("settings.json.fixed.tmp");
+        fs::write(&path, "existing").expect("应能预置临时文件");
+
+        let error =
+            write_synced_new_file(&path, "replacement").expect_err("独占临时写入不得覆盖已有文件");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(
+            fs::read_to_string(&path).expect("应能读取预置临时文件"),
+            "existing"
+        );
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[test]
+    fn atomic_replace_failure_keeps_existing_target() {
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-replace-fail-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+        let path = directory.join("settings.json");
+        let missing_tmp = directory.join("missing.tmp");
+        fs::write(&path, "existing").expect("应能预置正式文件");
+
+        assert!(replace_storage_file(&path, &missing_tmp).is_err());
+        assert_eq!(
+            fs::read_to_string(&path).expect("替换失败后正式文件应仍可读取"),
+            "existing"
+        );
         fs::remove_dir_all(directory).expect("应能清理临时目录");
     }
 
