@@ -1216,6 +1216,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn builds_clients_for_supported_proxy_schemes() {
+        for proxy in [
+            "http://127.0.0.1:7890",
+            "https://127.0.0.1:7890",
+            "socks5://127.0.0.1:1080",
+            "socks5h://127.0.0.1:1080",
+        ] {
+            let settings = Settings {
+                proxy: proxy.to_string(),
+                ..Settings::default()
+            }
+            .normalized()
+            .expect("supported proxy should normalize");
+
+            assert!(
+                build_client(&settings).is_ok(),
+                "supported proxy should build a client: {proxy}"
+            );
+        }
+    }
+
+    #[test]
     fn extracts_versions_from_sources() {
         assert_eq!(
             extract_html_version("<td>Version:</td><td>1.2.3</td>"),
