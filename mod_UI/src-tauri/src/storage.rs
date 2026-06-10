@@ -299,15 +299,15 @@ fn read_limited_to_string(
     max_bytes: u64,
     file_label: &str,
 ) -> Result<Option<String>, String> {
-    let metadata = fs::metadata(path).map_err(|error| error.to_string())?;
-    if !metadata.is_file() {
+    let file = open_storage_file(path).map_err(|error| error.to_string())?;
+    let metadata = file.metadata().map_err(|error| error.to_string())?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
         return Err(format!("{file_label}不是普通文件"));
     }
     if metadata.len() > max_bytes {
         return Ok(None);
     }
 
-    let file = fs::File::open(path).map_err(|error| error.to_string())?;
     let mut reader = file.take(max_bytes + 1);
     let mut bytes = Vec::new();
     reader
@@ -319,6 +319,19 @@ fn read_limited_to_string(
     String::from_utf8(bytes)
         .map(Some)
         .map_err(|_| format!("{file_label}不是有效 UTF-8"))
+}
+
+fn open_storage_file(path: &Path) -> std::io::Result<fs::File> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT;
+
+        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    options.open(path)
 }
 
 fn read_storage_file_with_recovery(
@@ -810,6 +823,24 @@ mod tests {
             .expect_err("非法 UTF-8 应被拒绝");
 
         assert_eq!(error, "设置文件不是有效 UTF-8");
+
+        fs::remove_dir_all(directory).expect("应能清理临时目录");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn read_limited_to_string_rejects_symbolic_links() {
+        use std::os::windows::fs::symlink_file;
+
+        let directory =
+            std::env::temp_dir().join(format!("mod-ui-read-link-{}", unique_file_suffix()));
+        fs::create_dir_all(&directory).expect("应能创建临时目录");
+        let target = directory.join("target.json");
+        let link = directory.join("settings.json");
+        fs::write(&target, "{}").expect("应能写入链接目标");
+        symlink_file(&target, &link).expect("应能创建文件符号链接");
+
+        assert!(read_limited_to_string(&link, MAX_SETTINGS_FILE_BYTES, "设置文件").is_err());
 
         fs::remove_dir_all(directory).expect("应能清理临时目录");
     }

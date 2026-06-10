@@ -18,6 +18,7 @@ use models::{
 
 const MAX_BROWSER_OPEN_REQUESTS: usize = 30;
 const BROWSER_OPEN_WINDOW: Duration = Duration::from_secs(60);
+static SETTINGS_UPDATE_LOCK: Mutex<()> = Mutex::new(());
 
 pub struct SearchState {
     inner: Mutex<SearchStateInner>,
@@ -179,6 +180,7 @@ fn load_settings(app: AppHandle) -> Result<PublicSettings, String> {
 
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings) -> Result<PublicSettings, String> {
+    let _guard = lock_settings_update()?;
     let existing = load_existing_settings_for_runtime(&app)?;
     let settings = merge_runtime_settings(settings, &existing)?;
     storage::save_settings(&app, &settings)?;
@@ -187,6 +189,7 @@ fn save_settings(app: AppHandle, settings: Settings) -> Result<PublicSettings, S
 
 #[tauri::command]
 fn clear_github_token(app: AppHandle) -> Result<PublicSettings, String> {
+    let _guard = lock_settings_update()?;
     let settings = clear_github_token_settings(load_existing_settings_for_runtime(&app)?)?;
     storage::save_settings(&app, &settings)?;
     Ok(settings.public_view())
@@ -254,6 +257,12 @@ async fn start_search(
 
 fn merge_runtime_settings(incoming: Settings, existing: &Settings) -> Result<Settings, String> {
     incoming.merged_with_existing_token(existing)
+}
+
+fn lock_settings_update() -> Result<MutexGuard<'static, ()>, String> {
+    SETTINGS_UPDATE_LOCK
+        .lock()
+        .map_err(|_| "设置更新锁已损坏".to_string())
 }
 
 fn load_existing_settings_for_runtime(app: &AppHandle) -> Result<Settings, String> {
