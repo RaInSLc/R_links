@@ -69,6 +69,12 @@ interface HistoryRecord {
   createdAt: string;
 }
 
+interface InputProfile {
+  total: number;
+  archiveUrls: number;
+  repositories: number;
+}
+
 const defaultSettings: Settings = {
   proxy: "",
   githubToken: "",
@@ -308,6 +314,7 @@ function App() {
     () => input.split(/\r?\n/).filter((line) => line.trim()).length,
     [input],
   );
+  const inputProfile = useMemo(() => classifyInputProfile(input), [input]);
   const inputBytes = useMemo(() => utf8Length(input), [input]);
   const inputTooLarge =
     inputBytes > MAX_INPUT_CHARS ||
@@ -452,21 +459,17 @@ function App() {
   ]);
 
   useEffect(() => {
-    const trimmed = input.trim();
-    if (!trimmed || trimmed.includes("\n")) {
+    if (inputProfile.total === 0 || methodSupportsInput(method, inputProfile)) {
       return;
     }
-    const containsUrl = /^https:\/\//i.test(trimmed);
-    const looksLikeRepository = !containsUrl && trimmed.split(/\s+/)[0].includes("/");
-    if (containsUrl && !["devtools", "remotes"].includes(method)) {
+    if (inputProfile.archiveUrls === inputProfile.total) {
       setMethod("remotes");
-    } else if (
-      looksLikeRepository &&
-      ["devtools", "remotes", "base", "biocManager", "version"].includes(method)
-    ) {
+    } else if (inputProfile.repositories === inputProfile.total) {
       setMethod("github");
+    } else {
+      setMethod("auto");
     }
-  }, [input, method]);
+  }, [inputProfile, method]);
 
   async function startSearch() {
     if (!input.trim() || searchingRef.current || inputTooLarge) {
@@ -778,19 +781,7 @@ function App() {
   }
 
   function isMethodDisabled(candidate: Method) {
-    const trimmed = input.trim();
-    if (!trimmed || trimmed.includes("\n")) {
-      return false;
-    }
-    const containsUrl = /^https:\/\//i.test(trimmed);
-    const containsSlash = trimmed.split(/\s+/)[0].includes("/");
-    if (["devtools", "remotes"].includes(candidate)) {
-      return !containsUrl;
-    }
-    if (candidate === "github") {
-      return containsUrl || !containsSlash;
-    }
-    return containsUrl;
+    return !methodSupportsInput(candidate, inputProfile);
   }
 
   return (
@@ -1409,6 +1400,43 @@ function collectBrowserSearchNames(value: string, limit: number) {
     names: allNames.slice(0, boundedLimit),
     total: allNames.length,
   };
+}
+
+function classifyInputProfile(value: string): InputProfile {
+  const profile: InputProfile = {
+    total: 0,
+    archiveUrls: 0,
+    repositories: 0,
+  };
+  const lines = value.split(/\r?\n/);
+  for (let index = 0; index < lines.length && index < MAX_PACKAGE_LINES; index += 1) {
+    const raw = lines[index].trim();
+    if (!raw || raw.startsWith("#")) {
+      continue;
+    }
+    profile.total += 1;
+    if (/^https:\/\//i.test(raw)) {
+      profile.archiveUrls += 1;
+      continue;
+    }
+    if (raw.split(/\s+/)[0].includes("/")) {
+      profile.repositories += 1;
+    }
+  }
+  return profile;
+}
+
+function methodSupportsInput(method: Method, profile: InputProfile) {
+  if (profile.total === 0 || method === "auto" || method === "checkSystem") {
+    return true;
+  }
+  if (method === "devtools" || method === "remotes") {
+    return profile.archiveUrls === profile.total;
+  }
+  if (method === "github") {
+    return profile.repositories === profile.total;
+  }
+  return profile.archiveUrls === 0 && profile.repositories === 0;
 }
 
 function nextSearchRunId() {
