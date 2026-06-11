@@ -233,7 +233,9 @@ pub fn generate_script_with_remote_versions(
                     "# [{source_label} 已验证{remote_version} | 自动同步]"
                 ));
                 if show_remote_version && is_clean_version(&best.latest_version) {
-                    version = best.latest_version.clone();
+                    if best.source != "github" {
+                        version = best.latest_version.clone();
+                    }
                 }
             } else {
                 output.push(format!(
@@ -557,10 +559,22 @@ fn generate_command(
                 .next()
                 .unwrap_or(&repository)
                 .to_string();
+
+            let repo_with_ref = if !effective_version.is_empty() {
+                let clean_ver = if effective_version.starts_with('v') {
+                    effective_version.clone()
+                } else {
+                    format!("v{}", effective_version)
+                };
+                format!("{}@{}", repository, clean_ver)
+            } else {
+                repository
+            };
+
             effective_version.clear();
             format!(
                 "remotes::install_github(\"{}\", upgrade = \"never\", dependencies = {dependencies})",
-                escape_r(&repository)
+                escape_r(&repo_with_ref)
             )
         }
         "base" => format!(
@@ -1983,5 +1997,31 @@ mod tests {
         assert!(output.contains("install.packages(\"demo\""));
         assert!(!output.contains("install_github"));
         assert!(!output.contains(&huge_repository));
+    }
+
+    #[test]
+    fn generate_script_github_with_version_ref() {
+        let output = generate_script(
+            "demo 1.2.3",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+            },
+            &[SearchResult {
+                package: "demo".to_string(),
+                requested_version: "1.2.3".to_string(),
+                latest_version: "1.2.3".to_string(),
+                repository: "owner/demo".to_string(),
+                real_name: "demo".to_string(),
+                source: "github".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+            }],
+        )
+        .expect("GitHub 智能路由带版本结果应可生成带有 ref 的 install_github");
+
+        assert!(output.contains("remotes::install_github(\"owner/demo@v1.2.3\""));
     }
 }

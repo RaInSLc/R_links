@@ -246,62 +246,97 @@ pub async fn search_packages(
             if context.is_stopped() {
                 break;
             }
-            context.log(&format!(
-                "[{}/{}] 检索 {}{}",
-                index + 1,
-                packages.len(),
-                package.name,
-                if package.version.is_empty() {
-                    String::new()
+
+            let mut loop_package = package.clone();
+            let mut has_retried_casing = false;
+
+            loop {
+                context.log(&format!(
+                    "[{}/{}] 检索 {}{}",
+                    index + 1,
+                    packages.len(),
+                    loop_package.name,
+                    if loop_package.version.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {}", loop_package.version)
+                    }
+                ));
+
+                let had_found_before = has_found_result_for_package(&results, &loop_package.name);
+                if loop_package.name.contains('/') {
+                    if let Some(result) = search_explicit_github(&mut context, &loop_package).await {
+                        context.push_result(&mut results, result);
+                    }
                 } else {
-                    format!(" {}", package.version)
-                }
-            ));
-
-            let had_found_before = has_found_result_for_package(&results, &package.name);
-            if package.name.contains('/') {
-                if let Some(result) = search_explicit_github(&mut context, package).await {
-                    context.push_result(&mut results, result);
-                }
-            } else {
-                if let Some(result) = search_cran(&mut context, package).await {
-                    context.push_result(&mut results, result);
-                }
-
-                if (settings.full_search || !has_found_result_for_package(&results, &package.name))
-                    && !context.is_stopped()
-                {
-                    let bioc_results = search_bioconductor(&mut context, package).await;
-                    for result in bioc_results {
+                    if let Some(result) = search_cran(&mut context, &loop_package).await {
                         context.push_result(&mut results, result);
+                    }
+
+                    if (settings.full_search || !has_found_result_for_package(&results, &loop_package.name))
+                        && !context.is_stopped()
+                    {
+                        let bioc_results = search_bioconductor(&mut context, &loop_package).await;
+                        for result in bioc_results {
+                            context.push_result(&mut results, result);
+                        }
+                    }
+
+                    if (settings.full_search || !has_found_result_for_package(&results, &loop_package.name))
+                        && !context.is_stopped()
+                    {
+                        let github_results = search_github(&mut context, &loop_package).await;
+
+                        let mut casing_diff_name = None;
+                        if !has_retried_casing {
+                            for res in &github_results {
+                                if res.found
+                                    && !res.real_name.is_empty()
+                                    && res.real_name != loop_package.name
+                                    && res.real_name.eq_ignore_ascii_case(&loop_package.name)
+                                {
+                                    casing_diff_name = Some(res.real_name.clone());
+                                    break;
+                                }
+                            }
+                        }
+
+                        if let Some(corrected_name) = casing_diff_name {
+                            context.log(&format!(
+                                "检测到包名大小写差异，纠正为: {}，重新进行检索...",
+                                corrected_name
+                            ));
+                            results.retain(|r| !r.package.eq_ignore_ascii_case(&loop_package.name));
+
+                            loop_package.name = corrected_name;
+                            has_retried_casing = true;
+                            continue;
+                        }
+
+                        for result in github_results {
+                            context.push_result(&mut results, result);
+                        }
                     }
                 }
 
-                if (settings.full_search || !has_found_result_for_package(&results, &package.name))
+                if !had_found_before
+                    && !has_found_result_for_package(&results, &loop_package.name)
                     && !context.is_stopped()
                 {
-                    let github_results = search_github(&mut context, package).await;
-                    for result in github_results {
-                        context.push_result(&mut results, result);
-                    }
+                    let result = SearchResult {
+                        package: loop_package.name.clone(),
+                        requested_version: loop_package.version.clone(),
+                        latest_version: String::new(),
+                        repository: String::new(),
+                        real_name: loop_package.name.clone(),
+                        source: "none".to_string(),
+                        found: false,
+                        message: "所有来源均未找到".to_string(),
+                    };
+                    context.push_result(&mut results, result);
                 }
-            }
 
-            if !had_found_before
-                && !has_found_result_for_package(&results, &package.name)
-                && !context.is_stopped()
-            {
-                let result = SearchResult {
-                    package: package.name.clone(),
-                    requested_version: package.version.clone(),
-                    latest_version: String::new(),
-                    repository: String::new(),
-                    real_name: package.name.clone(),
-                    source: "none".to_string(),
-                    found: false,
-                    message: "所有来源均未找到".to_string(),
-                };
-                context.push_result(&mut results, result);
+                break;
             }
         }
 

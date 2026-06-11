@@ -737,6 +737,44 @@ function App() {
     }
   }
 
+  async function applyHistoryRecord(record: HistoryRecord) {
+    const cleanRecord = sanitizeHistoryRecord(record);
+    let valueToLoad = cleanRecord.packageName;
+
+    // 如果是 install_url 类型，尝试从命令中提取 URL
+    if (cleanRecord.command.includes("install_url(")) {
+      const match = cleanRecord.command.match(/install_url\("([^"]+)"/);
+      if (match && match[1]) {
+        valueToLoad = match[1];
+      }
+    }
+
+    const result = acceptInputValue(valueToLoad, "manual");
+    if (result !== "rejected") {
+      if (cleanRecord.toolName === "GitHub") {
+        setMethod("github");
+      } else if (cleanRecord.toolName === "Bioconductor") {
+        setMethod("biocManager");
+      } else if (cleanRecord.toolName === "remotes") {
+        if (cleanRecord.command.includes("install_url")) {
+          setMethod("remotes");
+        } else {
+          setMethod("auto");
+        }
+      } else if (cleanRecord.toolName === "devtools") {
+        setMethod("devtools");
+      } else if (cleanRecord.toolName === "base R") {
+        if (cleanRecord.command.includes("packageVersion")) {
+          setMethod("version");
+        } else {
+          setMethod("base");
+        }
+      }
+      setView("workspace");
+      setStatus(`已加载历史命令 ${cleanRecord.packageName} 至工作台`);
+    }
+  }
+
   async function deleteHistoryRecord(id: string) {
     try {
       await enqueueHistorySave((currentHistory) =>
@@ -981,7 +1019,17 @@ function App() {
                 )}
               </section>
               <section className="panel log-panel">
-                <PanelHeader step="日志" title="检索过程" meta={`${logs.length} 行`} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <PanelHeader step="日志" title="检索过程" meta={`${logs.length} 行`} />
+                  <button 
+                    className="button ghost" 
+                    style={{ marginRight: "16px", padding: "4px 8px", fontSize: "12px", height: "auto" }}
+                    onClick={() => setLogs([])}
+                    disabled={searching || logs.length === 0}
+                  >
+                    清除日志
+                  </button>
+                </div>
                 <div className="log-console">
                   {logs.length ? logs.map((line, index) => <div key={`${line}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span>{line}</div>) : <EmptyState text="日志将在检索开始后显示" />}
                 </div>
@@ -1006,6 +1054,7 @@ function App() {
                         <code>{record.command}</code>
                       </div>
                       <div className="history-actions">
+                        <button className="text-button" onClick={() => applyHistoryRecord(record)}>应用</button>
                         <button className="text-button" onClick={() => copyHistoryRecord(record)}>复制</button>
                         <button className="text-button danger-text" onClick={() => deleteHistoryRecord(record.id)}>删除</button>
                       </div>
