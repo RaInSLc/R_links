@@ -539,15 +539,15 @@ input:focus-visible,
   min-height: 58px;
   padding: 10px 12px;
   text-align: left;
-  background: #f8faf7;
-  border: 1px solid #e0e4df;
+  background: var(--input-bg);
+  border: 1px solid var(--line);
   border-radius: 7px;
   cursor: pointer;
   transition: 150ms ease;
 }
 
 .method-card:hover:not(:disabled) {
-  border-color: #9fb6a9;
+  border-color: var(--theme-border-selected);
 }
 
 .method-card.selected {
@@ -570,14 +570,15 @@ input:focus-visible,
 .method-card span {
   font-size: 11px;
   font-weight: 600;
+  color: var(--ink);
 }
 
 .method-card small {
   margin-top: 4px;
   overflow: hidden;
-  color: #7b8581;
+  color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
