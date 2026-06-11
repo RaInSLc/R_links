@@ -970,23 +970,45 @@ function App() {
                     description="显示版本并生成精确版本安装"
                     onChange={setShowRemoteVersion}
                   />
+                  <Toggle
+                    checked={settings.fullSearch}
+                    label="全量检索"
+                    description="命中后仍继续查询 GitHub"
+                    onChange={(value) =>
+                      updateSettingsFromUser((current) => ({ ...current, fullSearch: value }))
+                    }
+                  />
                 </div>
               </section>
 
               <section className="panel script-panel">
-                <PanelHeader step="03" title="脚本预览" meta="R Script" />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <PanelHeader step="03" title="脚本预览" meta="R Script" />
+                  <div style={{ marginRight: "16px", display: "flex", gap: "8px" }}>
+                    <button
+                      className="button ghost"
+                      style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto" }}
+                      onClick={cleanComments}
+                      disabled={scriptTooLarge}
+                    >
+                      移除注释
+                    </button>
+                    <button
+                      className="button primary"
+                      style={{ padding: "4px 12px", fontSize: "11px", height: "30px", minHeight: "auto" }}
+                      onClick={copyScript}
+                      disabled={!script || script === "等待输入..." || scriptTooLarge}
+                    >
+                      复制脚本
+                    </button>
+                  </div>
+                </div>
                 <pre aria-label="生成的 R 脚本" tabIndex={0}>{script}</pre>
                 {scriptTooLarge && (
                   <div className="inline-warning">
                     脚本内容超出限制：最多 {MAX_SCRIPT_CHARS} 字节。
                   </div>
                 )}
-                <div className="script-actions">
-                  <button className="button ghost" onClick={cleanComments} disabled={scriptTooLarge}>移除注释</button>
-                  <button className="button primary copy-button" onClick={copyScript} disabled={!script || script === "等待输入..." || scriptTooLarge}>
-                    复制完整脚本
-                  </button>
-                </div>
               </section>
             </div>
           )}
