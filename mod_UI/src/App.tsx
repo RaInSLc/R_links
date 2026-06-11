@@ -189,8 +189,18 @@ function mapBounded<T, U>(items: readonly T[], limit: number, mapper: (item: T) 
 
 function App() {
   const [view, setView] = useState<View>("workspace");
+  const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem("theme") || "office");
   const [input, setInput] = useState("");
   const [method, setMethod] = useState<Method>("auto");
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", currentTheme);
+  }, [currentTheme]);
+
+  const handleThemeChange = (theme: string) => {
+    setCurrentTheme(theme);
+    localStorage.setItem("theme", theme);
+  };
   const [conditional, setConditional] = useState(true);
   const [installDependencies, setInstallDependencies] = useState(true);
   const [showRemoteVersion, setShowRemoteVersion] = useState(true);
@@ -1119,6 +1129,50 @@ function App() {
                     updateSettingsFromUser((current) => ({ ...current, fullSearch: value }))
                   }
                 />
+                <div style={{ borderTop: "1px solid var(--line)", marginTop: "20px", paddingTop: "12px" }}>
+                  <div className="field" style={{ margin: "0 17px" }}>
+                    <span>界面风格</span>
+                    <small>选择您偏好的系统色彩，切换实时生效</small>
+                    <div className="theme-selector">
+                      <button
+                        type="button"
+                        className={`theme-card ${currentTheme === "office" ? "selected" : ""}`}
+                        onClick={() => handleThemeChange("office")}
+                      >
+                        <div className="theme-preview-dots">
+                          <div className="theme-dot" style={{ background: "#0f172a" }} />
+                          <div className="theme-dot" style={{ background: "#0f4c81" }} />
+                          <div className="theme-dot" style={{ background: "#e6f0fa" }} />
+                        </div>
+                        <span>商务办公蓝</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`theme-card ${currentTheme === "green" ? "selected" : ""}`}
+                        onClick={() => handleThemeChange("green")}
+                      >
+                        <div className="theme-preview-dots">
+                          <div className="theme-dot" style={{ background: "#112c24" }} />
+                          <div className="theme-dot" style={{ background: "#176b4d" }} />
+                          <div className="theme-dot" style={{ background: "#dcece4" }} />
+                        </div>
+                        <span>墨绿林野</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`theme-card ${currentTheme === "graphite" ? "selected" : ""}`}
+                        onClick={() => handleThemeChange("graphite")}
+                      >
+                        <div className="theme-preview-dots">
+                          <div className="theme-dot" style={{ background: "#212529" }} />
+                          <div className="theme-dot" style={{ background: "#495057" }} />
+                          <div className="theme-dot" style={{ background: "#f1f3f5" }} />
+                        </div>
+                        <span>石墨暗灰</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </section>
 
               <section className="panel settings-panel">
