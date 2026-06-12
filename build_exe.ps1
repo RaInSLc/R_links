@@ -8,6 +8,7 @@ $scriptDir = $PSScriptRoot
 $modUiDir = Join-Path -Path $scriptDir -ChildPath "mod_UI"
 
 Set-Location -Path $modUiDir
+[Environment]::CurrentDirectory = $PWD.Path
 
 Write-Host "正在安装/检查前端依赖..."
 cmd /c npm install
