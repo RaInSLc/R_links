@@ -634,6 +634,16 @@ async fn search_github(
                     &description.package_name,
                     "github",
                 ));
+            } else if lower_repo == lower_package {
+                // 兜底逻辑：如果拿不到 DESCRIPTION（比如 mono-repo），但仓库名精确匹配请求包名，则信任该结果
+                seen.insert(repository_name.to_ascii_lowercase());
+                results.push(found_result(
+                    package,
+                    "unknown",
+                    &repository_name,
+                    repo_name,
+                    "github",
+                ));
             }
         }
     }
