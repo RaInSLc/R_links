@@ -8,19 +8,15 @@ cd /d "%~dp0mod_UI"
 
 echo 正在安装/检查前端依赖...
 call npm install
-if %errorlevel% neq 0 (
-    echo [错误] npm install 失败！请检查 Node 环境或网络。
-    pause
-    exit /b %errorlevel%
-)
+if errorlevel 1 echo [错误] npm install 失败！请检查 Node 环境或网络。
+if errorlevel 1 pause
+if errorlevel 1 exit /b 1
 
 echo 正在编译构建 EXE ...
 call npm run tauri build
-if %errorlevel% neq 0 (
-    echo [错误] tauri build 失败！请检查 Rust/Cargo 环境是否就绪。
-    pause
-    exit /b %errorlevel%
-)
+if errorlevel 1 echo [错误] tauri build 失败！请检查 Rust/Cargo 环境是否就绪。
+if errorlevel 1 pause
+if errorlevel 1 exit /b 1
 
 echo =========================================
 echo 打包成功！
