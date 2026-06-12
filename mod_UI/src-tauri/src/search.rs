@@ -488,7 +488,16 @@ async fn search_explicit_github(
         context.log("GitHub 仓库格式无效，已跳过");
         return None;
     };
-    let description = github_description(context, &repository).await?;
+    let description = match github_description(context, &repository).await {
+        Some(desc) => desc,
+        None => {
+            let package_name = repository.rsplit('/').next().unwrap_or(&repository).to_string();
+            GithubDescription {
+                package_name,
+                version: "unknown".to_string(),
+            }
+        }
+    };
     Some(found_result(
         package,
         &description.version,

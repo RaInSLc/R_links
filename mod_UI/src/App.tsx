@@ -982,9 +982,10 @@ function App() {
               </section>
 
               <section className="panel script-panel">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <PanelHeader step="03" title="脚本预览" meta="R Script" />
-                  <div style={{ marginRight: "16px", display: "flex", gap: "8px" }}>
+                <header className="panel-header" style={{ gridTemplateColumns: "auto auto 1fr auto" }}>
+                  <span>03</span>
+                  <h2>脚本预览</h2>
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginRight: "10px" }}>
                     <button
                       className="button ghost"
                       style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto" }}
@@ -1002,7 +1003,8 @@ function App() {
                       复制脚本
                     </button>
                   </div>
-                </div>
+                  <small>R Script</small>
+                </header>
                 <pre aria-label="生成的 R 脚本" tabIndex={0}>{script}</pre>
                 {scriptTooLarge && (
                   <div className="inline-warning">
