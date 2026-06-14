@@ -1,7 +1,12 @@
 :root, [data-theme="office"] {
-  font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   color: #0f172a;
   background: #f1f5f9;
+  
+  /* Font Variables */
+  --font-base: 'Inter', 'Noto Sans SC', sans-serif;
+  --font-mono: 'DM Mono', Consolas, 'Noto Sans SC', monospace;
+  
   --ink: #0f172a;
   --muted: #64748b;
   --line: #cbd5e1;
@@ -183,7 +188,7 @@ input:focus-visible,
   color: var(--sidebar-bg);
   background: var(--sidebar-active-line);
   border-radius: 11px 11px 11px 3px;
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 21px;
   font-weight: 600;
 }
@@ -256,7 +261,7 @@ input:focus-visible,
 
 .nav-code {
   color: var(--nav-code);
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 15px;
 }
 
@@ -353,7 +358,7 @@ input:focus-visible,
 
 .eyebrow {
   color: var(--theme-color);
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 15px;
   font-weight: 500;
   letter-spacing: 0.18em;
@@ -419,7 +424,7 @@ input:focus-visible,
 
 .panel-header > span {
   color: var(--theme-color);
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 15px;
   font-weight: 500;
 }
@@ -432,7 +437,7 @@ input:focus-visible,
 
 .panel-header small {
   color: #89928f;
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 15px;
 }
 
@@ -447,7 +452,7 @@ input:focus-visible,
   border: 0;
   border-bottom: 1px solid var(--line);
   outline: none;
-  font-family: "DM Mono", Consolas, 'Noto Sans SC', sans-serif;
+  font-family: var(--font-mono);
   font-size: 15px;
   line-height: 1.75;
 }
@@ -573,7 +578,7 @@ input:focus-visible,
   margin-top: 4px;
   overflow: hidden;
   color: var(--muted);
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -665,7 +670,7 @@ input:focus-visible,
   overflow: auto;
   color: var(--terminal-text);
   background: var(--terminal-bg);
-  font-family: "DM Mono", Consolas, 'Noto Sans SC', sans-serif;
+  font-family: var(--font-mono);
   font-size: 15px;
   line-height: 1.7;
   white-space: pre-wrap;
@@ -712,7 +717,7 @@ input:focus-visible,
 
 .metric strong {
   margin-top: 6px;
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 22px;
 }
 
@@ -751,7 +756,7 @@ input:focus-visible,
 .result-row code,
 .repo-cell {
   overflow: hidden;
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -805,7 +810,7 @@ input:focus-visible,
   overflow: auto;
   color: var(--terminal-text);
   background: var(--terminal-bg);
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 15px;
   line-height: 1.75;
 }
@@ -867,7 +872,7 @@ input:focus-visible,
   margin-top: 7px;
   overflow: hidden;
   color: var(--muted);
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -937,7 +942,7 @@ input:focus-visible,
   border: 1px solid var(--line);
   border-radius: 6px;
   outline: none;
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 15px;
 }
 
@@ -1003,7 +1008,7 @@ input:focus-visible,
 .mirror-list code {
   overflow: hidden;
   color: var(--muted);
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1030,7 +1035,7 @@ input:focus-visible,
 
 .empty-state span {
   color: var(--muted);
-  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   font-size: 25px;
 }
 
@@ -1082,7 +1087,7 @@ input:focus-visible,
   border-radius: 8px;
   cursor: pointer;
   outline: none;
-  font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  font-family: var(--font-base);
   transition: all 150ms ease;
 }
 
@@ -1113,4 +1118,24 @@ input:focus-visible,
   font-size: 15px;
   font-weight: 600;
   color: var(--ink);
+}
+
+/* Global Font Settings */
+:root[data-font="modern"], [data-theme="office"][data-font="modern"] {
+  --font-base: 'Inter', 'Noto Sans SC', sans-serif;
+  --font-mono: 'DM Mono', Consolas, 'Noto Sans SC', monospace;
+}
+
+:root[data-font="system"], [data-theme="office"][data-font="system"] {
+  --font-base: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  --font-mono: Consolas, "Courier New", monospace;
+}
+
+:root[data-font="classic"], [data-theme="office"][data-font="classic"] {
+  --font-base: "SimSun", "宋体", serif;
+  --font-mono: "Courier New", monospace;
+}
+
+body {
+  font-family: var(--font-base);
 }

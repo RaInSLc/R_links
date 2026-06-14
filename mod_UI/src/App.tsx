@@ -190,6 +190,7 @@ function mapBounded<T, U>(items: readonly T[], limit: number, mapper: (item: T) 
 function App() {
   const [view, setView] = useState<View>("workspace");
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem("theme") || "office");
+  const [currentFont, setCurrentFont] = useState(() => localStorage.getItem("fontFamily") || "modern");
   const [input, setInput] = useState("");
   const [method, setMethod] = useState<Method>("auto");
 
@@ -197,9 +198,18 @@ function App() {
     document.documentElement.setAttribute("data-theme", currentTheme);
   }, [currentTheme]);
 
+  useEffect(() => {
+    document.documentElement.setAttribute("data-font", currentFont);
+  }, [currentFont]);
+
   const handleThemeChange = (theme: string) => {
     setCurrentTheme(theme);
     localStorage.setItem("theme", theme);
+  };
+
+  const handleFontChange = (font: string) => {
+    setCurrentFont(font);
+    localStorage.setItem("fontFamily", font);
   };
   const [conditional, setConditional] = useState(true);
   const [installDependencies, setInstallDependencies] = useState(true);
@@ -1193,6 +1203,44 @@ function App() {
                           <div className="theme-dot" style={{ background: "#f1f3f5" }} />
                         </div>
                         <span>石墨暗灰</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="theme-group" style={{ marginTop: '24px' }}>
+                    <div className="theme-label">
+                      <strong>字体风格</strong>
+                      <small>选择最适合您显示器的排版</small>
+                    </div>
+                    <div className="theme-options">
+                      <button
+                        type="button"
+                        className={`theme-card ${currentFont === "modern" ? "selected" : ""}`}
+                        onClick={() => handleFontChange("modern")}
+                      >
+                        <div className="theme-preview-dots" style={{ alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontFamily: "'Inter', 'Noto Sans SC', sans-serif", fontSize: '15px', fontWeight: 600, color: 'var(--ink)' }}>Aa</span>
+                        </div>
+                        <span>现代 (推荐)</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`theme-card ${currentFont === "system" ? "selected" : ""}`}
+                        onClick={() => handleFontChange("system")}
+                      >
+                        <div className="theme-preview-dots" style={{ alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontFamily: '"Segoe UI", "Microsoft YaHei UI", sans-serif', fontSize: '15px', fontWeight: 600, color: 'var(--ink)' }}>Aa</span>
+                        </div>
+                        <span>系统默认</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`theme-card ${currentFont === "classic" ? "selected" : ""}`}
+                        onClick={() => handleFontChange("classic")}
+                      >
+                        <div className="theme-preview-dots" style={{ alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontFamily: '"SimSun", "宋体", serif', fontSize: '15px', fontWeight: 600, color: 'var(--ink)' }}>Aa</span>
+                        </div>
+                        <span>传统宋体</span>
                       </button>
                     </div>
                   </div>
