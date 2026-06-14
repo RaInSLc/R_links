@@ -1,5 +1,5 @@
 :root, [data-theme="office"] {
-  font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  font-family: 'Inter', 'Noto Sans SC', sans-serif;
   color: #0f172a;
   background: #f1f5f9;
   --ink: #0f172a;
@@ -183,7 +183,7 @@ input:focus-visible,
   color: var(--sidebar-bg);
   background: var(--sidebar-active-line);
   border-radius: 11px 11px 11px 3px;
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 21px;
   font-weight: 600;
 }
@@ -256,7 +256,7 @@ input:focus-visible,
 
 .nav-code {
   color: var(--nav-code);
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 15px;
 }
 
@@ -353,7 +353,7 @@ input:focus-visible,
 
 .eyebrow {
   color: var(--theme-color);
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 15px;
   font-weight: 500;
   letter-spacing: 0.18em;
@@ -419,7 +419,7 @@ input:focus-visible,
 
 .panel-header > span {
   color: var(--theme-color);
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 15px;
   font-weight: 500;
 }
@@ -432,7 +432,7 @@ input:focus-visible,
 
 .panel-header small {
   color: #89928f;
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 15px;
 }
 
@@ -447,7 +447,7 @@ input:focus-visible,
   border: 0;
   border-bottom: 1px solid var(--line);
   outline: none;
-  font-family: "DM Mono", Consolas, "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", Consolas, 'Noto Sans SC', sans-serif;
   font-size: 15px;
   line-height: 1.75;
 }
@@ -573,7 +573,7 @@ input:focus-visible,
   margin-top: 4px;
   overflow: hidden;
   color: var(--muted);
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -665,7 +665,7 @@ input:focus-visible,
   overflow: auto;
   color: var(--terminal-text);
   background: var(--terminal-bg);
-  font-family: "DM Mono", Consolas, "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", Consolas, 'Noto Sans SC', sans-serif;
   font-size: 15px;
   line-height: 1.7;
   white-space: pre-wrap;
@@ -712,7 +712,7 @@ input:focus-visible,
 
 .metric strong {
   margin-top: 6px;
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 22px;
 }
 
@@ -751,7 +751,7 @@ input:focus-visible,
 .result-row code,
 .repo-cell {
   overflow: hidden;
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -805,7 +805,7 @@ input:focus-visible,
   overflow: auto;
   color: var(--terminal-text);
   background: var(--terminal-bg);
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 15px;
   line-height: 1.75;
 }
@@ -867,7 +867,7 @@ input:focus-visible,
   margin-top: 7px;
   overflow: hidden;
   color: var(--muted);
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -937,7 +937,7 @@ input:focus-visible,
   border: 1px solid var(--line);
   border-radius: 6px;
   outline: none;
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 15px;
 }
 
@@ -1003,7 +1003,7 @@ input:focus-visible,
 .mirror-list code {
   overflow: hidden;
   color: var(--muted);
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1030,7 +1030,7 @@ input:focus-visible,
 
 .empty-state span {
   color: var(--muted);
-  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-family: "DM Mono", 'Noto Sans SC', sans-serif;
   font-size: 25px;
 }
 
@@ -1082,7 +1082,7 @@ input:focus-visible,
   border-radius: 8px;
   cursor: pointer;
   outline: none;
-  font-family: inherit;
+  font-family: 'Inter', 'Noto Sans SC', sans-serif;
   transition: all 150ms ease;
 }
 
