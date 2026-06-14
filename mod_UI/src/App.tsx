@@ -1206,12 +1206,10 @@ function App() {
                       </button>
                     </div>
                   </div>
-                  <div className="theme-group" style={{ marginTop: '24px' }}>
-                    <div className="theme-label">
-                      <strong>字体风格</strong>
-                      <small>选择最适合您显示器的排版</small>
-                    </div>
-                    <div className="theme-options">
+                  <div className="field" style={{ margin: "0 17px", marginTop: "24px" }}>
+                    <span>字体风格</span>
+                    <small>选择最适合您显示器的排版</small>
+                    <div className="theme-selector">
                       <button
                         type="button"
                         className={`theme-card ${currentFont === "modern" ? "selected" : ""}`}
