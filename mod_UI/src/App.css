@@ -2,10 +2,6 @@
   font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
   color: #0f172a;
   background: #f1f5f9;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  
   --ink: #0f172a;
   --muted: #64748b;
   --line: #cbd5e1;
