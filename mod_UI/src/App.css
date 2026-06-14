@@ -183,7 +183,7 @@ input:focus-visible,
   color: var(--sidebar-bg);
   background: var(--sidebar-active-line);
   border-radius: 11px 11px 11px 3px;
-  font-family: "DM Mono", monospace;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
   font-size: 21px;
   font-weight: 600;
 }
@@ -194,14 +194,14 @@ input:focus-visible,
 }
 
 .brand strong {
-  font-size: 14px;
+  font-size: 15px;
   letter-spacing: -0.02em;
 }
 
 .brand span {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .nav-list {
@@ -250,14 +250,14 @@ input:focus-visible,
 }
 
 .nav-list strong {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
 }
 
 .nav-code {
   color: var(--nav-code);
-  font-family: "DM Mono", monospace;
-  font-size: 10px;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-size: 15px;
 }
 
 .nav-list small {
@@ -267,7 +267,7 @@ input:focus-visible,
   text-align: center;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 20px;
-  font-size: 10px;
+  font-size: 15px;
 }
 
 .sidebar-summary {
@@ -286,20 +286,20 @@ input:focus-visible,
 
 .sidebar-summary span {
   color: var(--sidebar-summary-label);
-  font-size: 10px;
+  font-size: 15px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .sidebar-summary strong {
   margin-top: 7px;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .sidebar-summary small {
   margin-top: 8px;
   color: var(--sidebar-summary-desc);
-  font-size: 10px;
+  font-size: 15px;
 }
 
 .summary-track {
@@ -353,8 +353,8 @@ input:focus-visible,
 
 .eyebrow {
   color: var(--theme-color);
-  font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-size: 15px;
   font-weight: 500;
   letter-spacing: 0.18em;
 }
@@ -375,7 +375,7 @@ input:focus-visible,
   background: rgba(255, 255, 255, 0.65);
   border: 1px solid var(--line);
   border-radius: 7px;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .status-chip i {
@@ -419,21 +419,21 @@ input:focus-visible,
 
 .panel-header > span {
   color: var(--theme-color);
-  font-family: "DM Mono", monospace;
-  font-size: 10px;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-size: 15px;
   font-weight: 500;
 }
 
 .panel-header h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
 }
 
 .panel-header small {
   color: #89928f;
-  font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-size: 15px;
 }
 
 .input-panel textarea {
@@ -447,8 +447,8 @@ input:focus-visible,
   border: 0;
   border-bottom: 1px solid var(--line);
   outline: none;
-  font-family: "DM Mono", Consolas, monospace;
-  font-size: 12px;
+  font-family: "DM Mono", Consolas, "Microsoft YaHei UI", sans-serif;
+  font-size: 15px;
   line-height: 1.75;
 }
 
@@ -465,7 +465,7 @@ input:focus-visible,
   color: #8f3f24;
   background: #f7e6dc;
   border-bottom: 1px solid #efc9b7;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .input-actions,
@@ -482,7 +482,7 @@ input:focus-visible,
   border: 1px solid var(--line);
   border-radius: 6px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
   transition: 150ms ease;
 }
@@ -564,7 +564,7 @@ input:focus-visible,
 }
 
 .method-card span {
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--ink);
 }
@@ -573,8 +573,8 @@ input:focus-visible,
   margin-top: 4px;
   overflow: hidden;
   color: var(--muted);
-  font-family: "DM Mono", monospace;
-  font-size: 10px;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -644,13 +644,13 @@ input:focus-visible,
 }
 
 .toggle strong {
-  font-size: 10px;
+  font-size: 15px;
 }
 
 .toggle small {
   margin-top: 2px;
   color: #8a9390;
-  font-size: 9px;
+  font-size: 15px;
 }
 
 .script-panel {
@@ -665,8 +665,8 @@ input:focus-visible,
   overflow: auto;
   color: var(--terminal-text);
   background: var(--terminal-bg);
-  font-family: "DM Mono", Consolas, monospace;
-  font-size: 11px;
+  font-family: "DM Mono", Consolas, "Microsoft YaHei UI", sans-serif;
+  font-size: 15px;
   line-height: 1.7;
   white-space: pre-wrap;
 }
@@ -707,12 +707,12 @@ input:focus-visible,
 
 .metric span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 15px;
 }
 
 .metric strong {
   margin-top: 6px;
-  font-family: "DM Mono", monospace;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
   font-size: 22px;
 }
 
@@ -741,18 +741,18 @@ input:focus-visible,
   min-height: 46px;
   padding: 8px 5px;
   border-bottom: 1px solid var(--line);
-  font-size: 10px;
+  font-size: 15px;
 }
 
 .result-row strong {
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .result-row code,
 .repo-cell {
   overflow: hidden;
-  font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -760,7 +760,7 @@ input:focus-visible,
 .result-head {
   min-height: 37px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -772,7 +772,7 @@ input:focus-visible,
   color: var(--tag-default-text);
   background: var(--tag-default-bg);
   border-radius: 4px;
-  font-size: 9px;
+  font-size: 15px;
 }
 
 .source-tag.cran {
@@ -805,8 +805,8 @@ input:focus-visible,
   overflow: auto;
   color: var(--terminal-text);
   background: var(--terminal-bg);
-  font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-size: 15px;
   line-height: 1.75;
 }
 
@@ -854,12 +854,12 @@ input:focus-visible,
 }
 
 .history-main strong {
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .history-main span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 15px;
 }
 
 .history-main code {
@@ -867,8 +867,8 @@ input:focus-visible,
   margin-top: 7px;
   overflow: hidden;
   color: var(--muted);
-  font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -884,7 +884,7 @@ input:focus-visible,
   background: transparent;
   border: 0;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 15px;
 }
 
 .text-button:disabled {
@@ -917,14 +917,14 @@ input:focus-visible,
 }
 
 .field span {
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
 }
 
 .field small {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 15px;
 }
 
 .field input {
@@ -937,8 +937,8 @@ input:focus-visible,
   border: 1px solid var(--line);
   border-radius: 6px;
   outline: none;
-  font-family: "DM Mono", monospace;
-  font-size: 10px;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
+  font-size: 15px;
 }
 
 .field input:focus {
@@ -963,7 +963,7 @@ input:focus-visible,
   border: 1px solid var(--line);
   border-radius: 6px;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -996,14 +996,14 @@ input:focus-visible,
 }
 
 .mirror-list span {
-  font-size: 10px;
+  font-size: 15px;
   font-weight: 600;
 }
 
 .mirror-list code {
   overflow: hidden;
   color: var(--muted);
-  font-family: "DM Mono", monospace;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1025,12 +1025,12 @@ input:focus-visible,
   gap: 8px;
   color: var(--muted);
   text-align: center;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .empty-state span {
   color: var(--muted);
-  font-family: "DM Mono", monospace;
+  font-family: "DM Mono", "Microsoft YaHei UI", sans-serif;
   font-size: 25px;
 }
 
@@ -1110,7 +1110,7 @@ input:focus-visible,
 }
 
 .theme-card span {
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--ink);
 }
