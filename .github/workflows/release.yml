@@ -40,7 +40,6 @@ jobs:
           projectPath: mod_UI
           tagName: v__VERSION__
           releaseName: 'R Package Command Center v__VERSION__'
-          releaseBody: '自动发布的版本。'
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
@@ -51,4 +50,5 @@ jobs:
       - name: Upload Portable Executable
         uses: softprops/action-gh-release@v2
         with:
+          generate_release_notes: true
           files: mod_UI/src-tauri/target/release/R_Package_Command_Center_Portable.exe
