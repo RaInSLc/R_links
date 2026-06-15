@@ -36,7 +36,6 @@ release\RLinks_UI.exe
 在 Windows PowerShell 中执行：
 
 ```powershell
-Set-Location -LiteralPath "Z:\R_links\mod_UI"
 npm ci
 $env:PATH = "C:\Users\rainsc\.cargo\bin;$env:PATH"
 npm run tauri dev
@@ -57,12 +56,12 @@ buenrostrolab/FigR
 https://example.org/src/contrib/demo_1.0.0.tar.gz
 ```
 
-| 输入形式 | 示例 | 用途 |
-|---|---|---|
-| R 包名 | `Seurat` | 检索最新可用来源 |
-| 包名与版本 | `GSVA 1.50` | 检索并生成指定版本命令 |
-| GitHub 仓库 | `buenrostrolab/FigR` | 生成 GitHub 安装命令 |
-| HTTPS 归档地址 | `https://example.org/demo_1.0.0.tar.gz` | 生成远程归档安装命令 |
+| 输入形式       | 示例                                      | 用途                   |
+| -------------- | ----------------------------------------- | ---------------------- |
+| R 包名         | `Seurat`                                | 检索最新可用来源       |
+| 包名与版本     | `GSVA 1.50`                             | 检索并生成指定版本命令 |
+| GitHub 仓库    | `buenrostrolab/FigR`                    | 生成 GitHub 安装命令   |
+| HTTPS 归档地址 | `https://example.org/demo_1.0.0.tar.gz` | 生成远程归档安装命令   |
 
 空行和以 `#` 开头的注释行不会作为包处理。一次最多处理 500 个有效输入项。
 
@@ -70,16 +69,16 @@ https://example.org/src/contrib/demo_1.0.0.tar.gz
 
 通常使用默认的“智能路由”即可。应用会根据输入类型和来源检索结果自动生成命令。
 
-| 策略 | 生成结果 |
-|---|---|
-| 智能路由 | 自动选择 CRAN、Bioconductor、GitHub 或远程归档 |
-| CRAN | `install.packages()` |
-| Bioconductor | `BiocManager::install()` |
-| GitHub | `remotes::install_github()` |
-| 远程地址 | `remotes::install_url()` |
-| devtools | `devtools::install_url()` |
-| 版本查询 | `packageVersion()` |
-| 系统检查 | 批量检查包是否已经安装 |
+| 策略         | 生成结果                                       |
+| ------------ | ---------------------------------------------- |
+| 智能路由     | 自动选择 CRAN、Bioconductor、GitHub 或远程归档 |
+| CRAN         | `install.packages()`                         |
+| Bioconductor | `BiocManager::install()`                     |
+| GitHub       | `remotes::install_github()`                  |
+| 远程地址     | `remotes::install_url()`                     |
+| devtools     | `devtools::install_url()`                    |
+| 版本查询     | `packageVersion()`                           |
+| 系统检查     | 批量检查包是否已经安装                         |
 
 部分策略会根据当前输入类型自动禁用。例如，GitHub 策略只适用于仓库形式输入，远程地址策略只适用于 HTTPS R 包归档。
 
@@ -141,7 +140,6 @@ history.json
 ## 构建发布版本
 
 ```powershell
-Set-Location -LiteralPath "Z:\R_links\mod_UI"
 $env:PATH = "C:\Users\rainsc\.cargo\bin;$env:PATH"
 npm run tauri build
 ```
