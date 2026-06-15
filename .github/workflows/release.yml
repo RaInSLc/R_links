@@ -44,3 +44,11 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Rename portable exe
+        run: copy mod_UI\src-tauri\target\release\mod_ui.exe mod_UI\src-tauri\target\release\R_Package_Command_Center_Portable.exe
+
+      - name: Upload Portable Executable
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mod_UI/src-tauri/target/release/R_Package_Command_Center_Portable.exe
