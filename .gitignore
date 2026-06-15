@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# C++ build artifacts
+*.exe
+*.o
+*.obj
+*.lib
+*.dll
+*.pdb
+*.bak
+*.old
+cpp_src/build_error.log
+cpp_src/build_test.log
+
+# Release output
+release/
+
+# Temp / scratch
+scratch/
+temp_*.html
+
+# AI generated temporary code (not source)
+报告
+
+# Node
+node_modules/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+
+# 环境变量
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Python 虚拟环境
+venv/
+.venv/
+env/
+ENV/
+
+# Node / 前端缓存与日志
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+.vite/
+
+# 测试与覆盖率报告
+coverage/
+htmlcov/
+.pytest_cache/
+.tox/
