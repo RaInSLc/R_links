@@ -27,7 +27,7 @@ scratch/
 temp_*.html
 
 # AI generated temporary code (not source)
-报告
+报告/ai_codes/
 
 # Node
 node_modules/
