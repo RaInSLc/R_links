@@ -791,3 +791,6 @@
 
 ## [Unreleased]
 - 优化 App 布局自适应：提升双列转单列的响应式断点（由1080px升至1200px），为文本输入和代码区增加垂直拉伸功能，并使日志区域高度自适应。
+
+## [Unreleased]
+- 新增在线升级功能：集成 Tauri Updater 与 GitHub Actions/Releases，并在界面设置中提供应用更新和自动下载安装支持。

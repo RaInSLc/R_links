@@ -66,5 +66,13 @@
         }
       }
     }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/USERNAME/REPO/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
+    }
   }
 }

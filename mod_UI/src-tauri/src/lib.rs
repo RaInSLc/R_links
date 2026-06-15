@@ -303,6 +303,7 @@ pub fn run() {
         .manage(BrowserOpenLimiter::default())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             storage::ensure_data_directory(app.handle()).map_err(std::io::Error::other)?;
             Ok(())

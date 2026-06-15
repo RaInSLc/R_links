@@ -194,6 +194,49 @@ function App() {
   const [input, setInput] = useState("");
   const [method, setMethod] = useState<Method>("auto");
 
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState("");
+
+  async function checkForUpdates() {
+    setCheckingUpdate(true);
+    setUpdateMessage("正在检查更新...");
+    try {
+      const { check } = await import('@tauri-apps/plugin-updater');
+      const update = await check();
+      if (update) {
+        setUpdateMessage(`发现新版本 ${update.version}，正在下载并安装...`);
+        let downloaded = 0;
+        let contentLength = 0;
+        await update.downloadAndInstall((event) => {
+          switch (event.event) {
+            case 'Started':
+              contentLength = event.data?.contentLength || 0;
+              setUpdateMessage(`正在下载新版本...`);
+              break;
+            case 'Progress':
+              downloaded += event.data?.chunkLength || 0;
+              if (contentLength > 0) {
+                const percent = Math.round((downloaded / contentLength) * 100);
+                setUpdateMessage(`正在下载... ${percent}%`);
+              }
+              break;
+            case 'Finished':
+              setUpdateMessage(`下载完成，正在安装...`);
+              break;
+          }
+        });
+        setUpdateMessage("更新安装成功！请手动关闭并重启应用以生效。");
+        window.alert("更新安装成功！请手动关闭并重启应用以生效。");
+      } else {
+        setUpdateMessage("当前已是最新版本");
+      }
+    } catch (error) {
+      setUpdateMessage(`检查更新失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }
+
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", currentTheme);
   }, [currentTheme]);
@@ -1241,6 +1284,25 @@ function App() {
                         <span>传统宋体</span>
                       </button>
                     </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="panel settings-panel">
+                <PanelHeader step="系统" title="应用更新" meta="版本维护" />
+                <div className="field">
+                  <span>检查应用更新</span>
+                  <small>检查并安装最新版本的 R Package Command Center</small>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '9px' }}>
+                    <button 
+                      className="button primary" 
+                      onClick={checkForUpdates} 
+                      disabled={checkingUpdate}
+                      style={{ marginLeft: 0 }}
+                    >
+                      {checkingUpdate ? '正在处理...' : '检查更新'}
+                    </button>
+                    {updateMessage && <span style={{fontSize: '14px', color: 'var(--muted)'}}>{updateMessage}</span>}
                   </div>
                 </div>
               </section>
