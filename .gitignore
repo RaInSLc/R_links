@@ -16,8 +16,7 @@ build/
 *.pdb
 *.bak
 *.old
-cpp_src/build_error.log
-cpp_src/build_test.log
+cpp_src/
 
 # Release output
 release/
@@ -76,4 +75,7 @@ coverage/
 htmlcov/
 .pytest_cache/
 .tox/
-cpp_src/config.ini
+
+# Other ignored directories
+.opencode/
+doc/
