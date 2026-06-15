@@ -76,3 +76,4 @@ coverage/
 htmlcov/
 .pytest_cache/
 .tox/
+cpp_src/config.ini
