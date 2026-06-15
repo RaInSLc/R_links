@@ -41,6 +41,6 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'R Package Command Center v__VERSION__'
           releaseBody: '自动发布的版本。'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
