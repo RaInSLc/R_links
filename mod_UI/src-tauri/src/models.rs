@@ -112,6 +112,17 @@ pub struct HistoryRecord {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageCacheEntry {
+    pub package_name: String,
+    pub source: String,
+    pub version: String,
+    pub repository: String,
+    pub real_name: String,
+    pub cached_at: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageInput {
     pub raw: String,

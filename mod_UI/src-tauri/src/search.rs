@@ -2,11 +2,11 @@ use regex::Regex;
 use reqwest::{Client, RequestBuilder, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use url::Url;
 
@@ -14,9 +14,10 @@ use crate::logic::{
     infer_bioc_version, is_valid_package_name, normalize_github_repository, parse_inputs,
 };
 use crate::models::{
-    url_has_explicit_port, PackageInput, SearchResponse, SearchResult, Settings, MAX_FIELD_CHARS,
-    MAX_PACKAGE_LINES,
+    url_has_explicit_port, PackageCacheEntry, PackageInput, SearchResponse, SearchResult,
+    Settings, MAX_FIELD_CHARS, MAX_PACKAGE_LINES,
 };
+use crate::storage;
 
 const BIOC_VERSIONS: &[&str] = &[
     "3.23", "3.22", "3.21", "3.20", "3.19", "3.18", "3.17", "3.16", "3.15", "3.14", "3.13", "3.12",
@@ -229,6 +230,14 @@ pub async fn search_packages(
     let mut results = Vec::new();
     let mut logs = Vec::new();
 
+    let mut cache = match storage::load_cache(app) {
+        Ok(cache) => cache,
+        Err(error) => {
+            log(app, run_id, &mut logs, &format!("缓存加载失败: {error}"));
+            HashMap::new()
+        }
+    };
+
     let stopped = {
         let mut context = SearchContext {
             client: &client,
@@ -249,6 +258,31 @@ pub async fn search_packages(
 
             let mut loop_package = package.clone();
             let mut has_retried_casing = false;
+
+            // 检查缓存
+            let cache_key = loop_package.name.to_ascii_lowercase();
+            if let Some(cached_entry) = cache.get(&cache_key) {
+                context.log(&format!(
+                    "[{}/{}] {} (缓存命中)",
+                    index + 1,
+                    packages.len(),
+                    loop_package.name
+                ));
+                context.push_result(
+                    &mut results,
+                    SearchResult {
+                        package: loop_package.name.clone(),
+                        requested_version: loop_package.version.clone(),
+                        latest_version: cached_entry.version.clone(),
+                        repository: cached_entry.repository.clone(),
+                        real_name: cached_entry.real_name.clone(),
+                        source: cached_entry.source.clone(),
+                        found: true,
+                        message: "缓存命中".to_string(),
+                    },
+                );
+                continue;
+            }
 
             loop {
                 context.log(&format!(
@@ -336,6 +370,34 @@ pub async fn search_packages(
                     context.push_result(&mut results, result);
                 }
 
+                // 缓存成功找到的结果
+                for result in &results {
+                    let result_key = result.package.to_ascii_lowercase();
+                    if result.found && !cache.contains_key(&result_key) {
+                        if matches!(
+                            result.source.as_str(),
+                            "cran" | "bioc" | "biocGit" | "github"
+                        ) {
+                            let now = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs()
+                                .to_string();
+                            cache.insert(
+                                result_key,
+                                PackageCacheEntry {
+                                    package_name: result.real_name.clone(),
+                                    source: result.source.clone(),
+                                    version: result.latest_version.clone(),
+                                    repository: result.repository.clone(),
+                                    real_name: result.real_name.clone(),
+                                    cached_at: now,
+                                },
+                            );
+                        }
+                    }
+                }
+
                 break;
             }
         }
@@ -348,6 +410,14 @@ pub async fn search_packages(
         });
         stopped
     };
+    if let Err(error) = storage::save_cache(app, &cache) {
+        log(
+            app,
+            run_id,
+            &mut logs,
+            &format!("缓存保存失败: {error}"),
+        );
+    }
     Ok(SearchResponse {
         run_id,
         results,
@@ -385,7 +455,6 @@ async fn search_cran(
     context: &mut SearchContext<'_>,
     package: &PackageInput,
 ) -> Option<SearchResult> {
-    context.log("查询 CRAN");
     let url = format!(
         "https://cloud.r-project.org/web/packages/{}/index.html",
         urlencoding::encode(&package.name)
@@ -400,7 +469,6 @@ async fn search_bioconductor(
     context: &mut SearchContext<'_>,
     package: &PackageInput,
 ) -> Vec<SearchResult> {
-    context.log("查询 Bioconductor");
     for category in BIOC_CATEGORIES {
         if context.is_stopped() {
             return Vec::new();
@@ -511,7 +579,6 @@ async fn search_github(
     context: &mut SearchContext<'_>,
     package: &PackageInput,
 ) -> Vec<SearchResult> {
-    context.log("查询 r-universe 与 GitHub");
     let mut results = Vec::new();
     let mut seen = HashSet::new();
     let universe_url = format!(

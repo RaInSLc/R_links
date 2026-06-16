@@ -212,6 +212,11 @@ fn save_history(app: AppHandle, history: Vec<HistoryRecord>) -> Result<Vec<Histo
 }
 
 #[tauri::command]
+fn clear_package_cache(app: AppHandle) -> Result<(), String> {
+    storage::clear_cache(&app)
+}
+
+#[tauri::command]
 fn open_package_search(
     app: AppHandle,
     limiter: State<'_, BrowserOpenLimiter>,
@@ -317,6 +322,7 @@ pub fn run() {
             clear_github_token,
             load_history,
             save_history,
+            clear_package_cache,
             open_package_search,
             start_search,
             stop_search

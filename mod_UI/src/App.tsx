@@ -1308,6 +1308,30 @@ function App() {
               </section>
 
               <section className="panel settings-panel">
+                <PanelHeader step="缓存" title="包结果缓存" meta="避免重复检索" />
+                <div className="field">
+                  <span>清除包缓存</span>
+                  <small>已缓存的包将跳过在线检索直接使用历史结果；清除后所有包都会重新在线检索</small>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '9px' }}>
+                    <button 
+                      className="button ghost" 
+                      onClick={async () => {
+                        try {
+                          await invoke("clear_package_cache");
+                          setStatus("包缓存已清除");
+                        } catch (error) {
+                          setStatus(`缓存清除失败: ${formatError(error)}`);
+                        }
+                      }}
+                      style={{ marginLeft: 0 }}
+                    >
+                      清除缓存
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="panel settings-panel">
                 <PanelHeader step="镜像" title="CRAN 镜像" meta="实时影响脚本" />
                 <div className="mirror-list">
                   {mirrors.map((mirror) => (

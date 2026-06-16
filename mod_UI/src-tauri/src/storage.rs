@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -10,8 +11,8 @@ use tauri::{AppHandle, Manager};
 
 use crate::logic;
 use crate::models::{
-    HistoryRecord, Settings, MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS,
-    MAX_TOKEN_CHARS,
+    HistoryRecord, PackageCacheEntry, Settings, MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS,
+    MAX_HISTORY_RECORDS, MAX_TOKEN_CHARS,
 };
 use crate::secrets;
 use serde::{Deserialize, Serialize};
@@ -643,6 +644,67 @@ fn redact_settings_value(value: &mut serde_json::Value) {
         }
         _ => {}
     }
+}
+
+const MAX_CACHE_ENTRIES: usize = 1000;
+const CACHE_FILE_NAME: &str = "pkg_cache.json";
+
+pub fn load_cache(app: &AppHandle) -> Result<HashMap<String, PackageCacheEntry>, String> {
+    let path = data_file(app, CACHE_FILE_NAME)?;
+    if !path_entry_exists(&path)? {
+        return Ok(HashMap::new());
+    }
+    let Some(content) = read_storage_file_with_recovery(
+        app,
+        CACHE_FILE_NAME,
+        1024 * 1024,
+        "包缓存文件",
+    )? else {
+        return Ok(HashMap::new());
+    };
+    match serde_json::from_str::<Vec<PackageCacheEntry>>(&content) {
+        Ok(entries) => {
+            let mut cache = HashMap::new();
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            for entry in entries.into_iter().take(MAX_CACHE_ENTRIES) {
+                let key = entry.package_name.to_ascii_lowercase();
+                if !key.is_empty() && !entry.source.is_empty() {
+                    cache.insert(key, entry);
+                }
+            }
+            // 自动清理超过 7 天的旧缓存
+            cache.retain(|_, entry| {
+                entry
+                    .cached_at
+                    .parse::<u64>()
+                    .map(|ts| now.saturating_sub(ts) < 7 * 24 * 3600)
+                    .unwrap_or(false)
+            });
+            Ok(cache)
+        }
+        Err(_) => {
+            backup_corrupt_file(app, CACHE_FILE_NAME, &content)?;
+            Ok(HashMap::new())
+        }
+    }
+}
+
+pub fn save_cache(
+    app: &AppHandle,
+    cache: &HashMap<String, PackageCacheEntry>,
+) -> Result<(), String> {
+    let path = data_file(app, CACHE_FILE_NAME)?;
+    let entries: Vec<&PackageCacheEntry> = cache.values().take(MAX_CACHE_ENTRIES).collect();
+    let content = serde_json::to_string_pretty(&entries).map_err(|error| error.to_string())?;
+    atomic_write(&path, &content)
+}
+
+pub fn clear_cache(app: &AppHandle) -> Result<(), String> {
+    let path = data_file(app, CACHE_FILE_NAME)?;
+    atomic_write(&path, "[]")
 }
 
 #[cfg(test)]
