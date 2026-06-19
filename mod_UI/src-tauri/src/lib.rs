@@ -156,11 +156,73 @@ impl BrowserOpenLimiter {
 
 #[tauri::command]
 fn generate_script(
+    app: tauri::AppHandle,
     input: String,
     options: GenerateOptions,
-    results: Vec<SearchResult>,
+    mut results: Vec<SearchResult>,
     show_remote_version: Option<bool>,
 ) -> Result<String, String> {
+    if results.is_empty() {
+        let mut offline_results = Vec::new();
+        if let Ok(packages) = logic::parse_inputs(&input) {
+            let cache = storage::load_cache(&app).unwrap_or_default();
+            let history = storage::load_history(&app).unwrap_or_default();
+            
+            for pkg in packages {
+                let pkg_lower = pkg.name.to_ascii_lowercase();
+                
+                if let Some(entry) = cache.get(&pkg_lower) {
+                    offline_results.push(SearchResult {
+                        package: pkg.name.clone(),
+                        requested_version: pkg.version.clone(),
+                        latest_version: entry.version.clone(),
+                        repository: entry.repository.clone(),
+                        real_name: entry.real_name.clone(),
+                        source: entry.source.clone(),
+                        found: true,
+                        message: "离线缓存命中".to_string(),
+                    });
+                    continue;
+                }
+                
+                if let Some(record) = history.iter().find(|r| r.package_name.eq_ignore_ascii_case(&pkg.name)) {
+                    let source = match record.tool_name.as_str() {
+                        "Bioconductor" => "bioc",
+                        "GitHub" => "github",
+                        "CRAN" | "base R" => "cran",
+                        _ => "cran",
+                    };
+                    
+                    let mut repository = String::new();
+                    if source == "github" {
+                        if let Ok(re) = regex::Regex::new(r#"(?:install_github|install_url)\("([^"]+)""#) {
+                            if let Some(caps) = re.captures(&record.command) {
+                                if let Some(m) = caps.get(1) {
+                                    let val = m.as_str();
+                                    if val.contains('/') && !val.starts_with("http") {
+                                        repository = val.to_string();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    offline_results.push(SearchResult {
+                        package: pkg.name.clone(),
+                        requested_version: pkg.version.clone(),
+                        latest_version: record.version.clone(),
+                        repository,
+                        real_name: record.package_name.clone(),
+                        source: source.to_string(),
+                        found: true,
+                        message: "历史记录命中".to_string(),
+                    });
+                }
+            }
+        }
+        results = offline_results;
+    }
+
     if show_remote_version == Some(false) {
         logic::generate_script_with_remote_versions(&input, &options, &results, false)
     } else {
