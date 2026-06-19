@@ -128,6 +128,7 @@ pub struct PackageInput {
     pub raw: String,
     pub name: String,
     pub version: String,
+    pub source_hint: Option<String>,
 }
 
 pub fn normalize_http_url(value: &str, field_name: &str) -> Result<String, String> {

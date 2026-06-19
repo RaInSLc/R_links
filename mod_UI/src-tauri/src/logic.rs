@@ -24,6 +24,7 @@ static INPUT_URL_RE: OnceLock<Regex> = OnceLock::new();
 static INPUT_PACKAGE_RE: OnceLock<Regex> = OnceLock::new();
 static INPUT_VERSION_RE: OnceLock<Regex> = OnceLock::new();
 static QUOTED_VALUE_RE: OnceLock<Regex> = OnceLock::new();
+static SOURCE_HINT_RE: OnceLock<Regex> = OnceLock::new();
 static HISTORY_VERSION_RE: OnceLock<Regex> = OnceLock::new();
 static BASE_HISTORY_RE: OnceLock<[Regex; 4]> = OnceLock::new();
 static INSTALL_URL_HISTORY_RE: OnceLock<Regex> = OnceLock::new();
@@ -70,6 +71,7 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
             raw: raw.to_string(),
             name,
             version: String::new(),
+            source_hint: None,
         });
     }
 
@@ -94,7 +96,7 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
     }
     let remaining = &clean[captures.get(0)?.end()..];
     let version_re = INPUT_VERSION_RE
-        .get_or_init(|| Regex::new(r"([0-9]+[0-9A-Za-z.\-]*)").expect("固定版本正则必须有效"));
+        .get_or_init(|| Regex::new(r"^\s*(?:v|V)?([0-9]+[0-9A-Za-z.\-]*)").expect("固定版本正则必须有效"));
     let version = version_re
         .captures(remaining)
         .and_then(|capture| capture.get(1))
@@ -104,10 +106,25 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
         return None;
     }
 
+    let hint_re = SOURCE_HINT_RE
+        .get_or_init(|| Regex::new(r"(?i)\b(cran|bioconductor|bioc|github)\b").expect("源提示正则必须有效"));
+    let source_hint = hint_re
+        .captures(remaining)
+        .and_then(|capture| capture.get(1))
+        .map(|value| {
+            let lower = value.as_str().to_ascii_lowercase();
+            if lower == "bioconductor" {
+                "bioc".to_string()
+            } else {
+                lower
+            }
+        });
+
     Some(PackageInput {
         raw: raw.to_string(),
         name,
         version,
+        source_hint,
     })
 }
 
@@ -219,7 +236,7 @@ pub fn generate_script_with_remote_versions(
         };
 
         if let Some(best) = (!is_archive_url)
-            .then(|| choose_best_result(&package.name, &results))
+            .then(|| choose_best_result(&package.name, &results, package.source_hint.as_deref()))
             .flatten()
         {
             let source_label = source_label(&best.source);
@@ -338,13 +355,28 @@ fn validate_search_results_count(results: &[SearchResult]) -> Result<(), String>
     Ok(())
 }
 
-fn choose_best_result<'a>(package: &str, results: &'a [SearchResult]) -> Option<&'a SearchResult> {
+fn choose_best_result<'a>(
+    package: &str,
+    results: &'a [SearchResult],
+    source_hint: Option<&str>,
+) -> Option<&'a SearchResult> {
     let mut candidates = results
         .iter()
         .filter(|result| result.found && result.package.eq_ignore_ascii_case(package))
         .filter(|result| result_identity_matches_package(result, package))
         .collect::<Vec<_>>();
     candidates.sort_by_key(|result| {
+        let hint_match = if let Some(hint) = source_hint {
+            if result.source.eq_ignore_ascii_case(hint)
+                || (hint == "bioc" && result.source == "biocGit")
+            {
+                0
+            } else {
+                1
+            }
+        } else {
+            1
+        };
         let strict_name = if result.real_name.eq_ignore_ascii_case(package) {
             0
         } else {
@@ -358,7 +390,7 @@ fn choose_best_result<'a>(package: &str, results: &'a [SearchResult]) -> Option<
             "github" => 3,
             _ => 4,
         };
-        (strict_name, source, if exact_repo { 0 } else { 1 })
+        (hint_match, strict_name, source, if exact_repo { 0 } else { 1 })
     });
     candidates.into_iter().next()
 }
