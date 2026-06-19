@@ -193,6 +193,7 @@ function App() {
   const [currentFont, setCurrentFont] = useState(() => localStorage.getItem("fontFamily") || "modern");
   const [input, setInput] = useState("");
   const [method, setMethod] = useState<Method>("auto");
+  const [historySearch, setHistorySearch] = useState("");
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
@@ -1126,12 +1127,27 @@ function App() {
 
           {view === "history" && (
             <section className="panel history-panel">
-              <PanelHeader step="历史" title="最近生成的命令" meta={`最多保留 100 条`} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <PanelHeader step="历史" title="最近生成的命令" meta={`最多保留 100 条`} />
+                <input
+                  type="text"
+                  placeholder="搜索包名、来源或命令..."
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  style={{ marginRight: "16px", padding: "4px 8px", fontSize: "12px", width: "200px" }}
+                />
+              </div>
               {history.length === 0 ? (
                 <EmptyState text="复制脚本后，命令会记录在这里" />
               ) : (
                 <div className="history-list">
-                  {history.map((record) => (
+                  {history
+                    .filter(record => 
+                      (record.packageName && record.packageName.toLowerCase().includes(historySearch.toLowerCase())) ||
+                      (record.toolName && record.toolName.toLowerCase().includes(historySearch.toLowerCase())) ||
+                      (record.command && record.command.toLowerCase().includes(historySearch.toLowerCase()))
+                    )
+                    .map((record) => (
                     <article className="history-item" key={record.id}>
                       <div className="history-main">
                         <div>
