@@ -4,10 +4,11 @@ mod search;
 mod secrets;
 mod storage;
 
+use regex::Regex;
 use std::collections::VecDeque;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex, MutexGuard,
+    Arc, Mutex, MutexGuard, OnceLock,
 };
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, State};
@@ -20,6 +21,7 @@ const MAX_BROWSER_OPEN_REQUESTS: usize = 30;
 const BROWSER_OPEN_WINDOW: Duration = Duration::from_secs(60);
 const MAX_JS_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 static SETTINGS_UPDATE_LOCK: Mutex<()> = Mutex::new(());
+static HISTORY_EXTRACT_RE: OnceLock<Regex> = OnceLock::new();
 
 pub struct SearchState {
     inner: Mutex<SearchStateInner>,
@@ -167,10 +169,10 @@ fn generate_script(
         if let Ok(packages) = logic::parse_inputs(&input) {
             let cache = storage::load_cache(&app).unwrap_or_default();
             let history = storage::load_history(&app).unwrap_or_default();
-            
+
             for pkg in packages {
                 let pkg_lower = pkg.name.to_ascii_lowercase();
-                
+
                 if let Some(entry) = cache.get(&pkg_lower) {
                     offline_results.push(SearchResult {
                         package: pkg.name.clone(),
@@ -184,24 +186,30 @@ fn generate_script(
                     });
                     continue;
                 }
-                
-                if let Some(record) = history.iter().find(|r| r.package_name.eq_ignore_ascii_case(&pkg.name)) {
+
+                if let Some(record) = history
+                    .iter()
+                    .find(|r| r.package_name.eq_ignore_ascii_case(&pkg.name))
+                {
                     let source = match record.tool_name.as_str() {
                         "Bioconductor" => "bioc",
                         "GitHub" => "github",
                         "CRAN" | "base R" => "cran",
                         _ => "cran",
                     };
-                    
+
                     let mut repository = String::new();
                     if source == "github" {
-                        if let Ok(re) = regex::Regex::new(r#"(?:install_github|install_url)\("([^"]+)""#) {
-                            if let Some(caps) = re.captures(&record.command) {
-                                if let Some(m) = caps.get(1) {
-                                    let val = m.as_str();
-                                    if val.contains('/') && !val.starts_with("http") {
-                                        repository = val.to_string();
-                                    }
+                        #[allow(clippy::regex_creation_in_loops)]
+                        let re = HISTORY_EXTRACT_RE.get_or_init(|| {
+                            Regex::new(r#"(?:install_github|install_url)\("([^"]+)""#)
+                                .expect("固定历史提取正则必须有效")
+                        });
+                        if let Some(caps) = re.captures(&record.command) {
+                            if let Some(m) = caps.get(1) {
+                                let val = m.as_str();
+                                if val.contains('/') && !val.starts_with("http") {
+                                    repository = val.to_string();
                                 }
                             }
                         }

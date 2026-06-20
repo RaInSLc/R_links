@@ -14,8 +14,8 @@ use crate::logic::{
     infer_bioc_version, is_valid_package_name, normalize_github_repository, parse_inputs,
 };
 use crate::models::{
-    url_has_explicit_port, PackageCacheEntry, PackageInput, SearchResponse, SearchResult,
-    Settings, MAX_FIELD_CHARS, MAX_PACKAGE_LINES,
+    url_has_explicit_port, PackageCacheEntry, PackageInput, SearchResponse, SearchResult, Settings,
+    MAX_FIELD_CHARS, MAX_PACKAGE_LINES,
 };
 use crate::storage;
 
@@ -299,7 +299,8 @@ pub async fn search_packages(
 
                 let had_found_before = has_found_result_for_package(&results, &loop_package.name);
                 if loop_package.name.contains('/') {
-                    if let Some(result) = search_explicit_github(&mut context, &loop_package).await {
+                    if let Some(result) = search_explicit_github(&mut context, &loop_package).await
+                    {
                         context.push_result(&mut results, result);
                     }
                 } else {
@@ -307,7 +308,8 @@ pub async fn search_packages(
                         context.push_result(&mut results, result);
                     }
 
-                    if (settings.full_search || !has_found_result_for_package(&results, &loop_package.name))
+                    if (settings.full_search
+                        || !has_found_result_for_package(&results, &loop_package.name))
                         && !context.is_stopped()
                     {
                         let bioc_results = search_bioconductor(&mut context, &loop_package).await;
@@ -316,7 +318,8 @@ pub async fn search_packages(
                         }
                     }
 
-                    if (settings.full_search || !has_found_result_for_package(&results, &loop_package.name))
+                    if (settings.full_search
+                        || !has_found_result_for_package(&results, &loop_package.name))
                         && !context.is_stopped()
                     {
                         let github_results = search_github(&mut context, &loop_package).await;
@@ -373,28 +376,29 @@ pub async fn search_packages(
                 // 缓存成功找到的结果
                 for result in &results {
                     let result_key = result.package.to_ascii_lowercase();
-                    if result.found && !cache.contains_key(&result_key) {
-                        if matches!(
+                    if result.found
+                        && !cache.contains_key(&result_key)
+                        && matches!(
                             result.source.as_str(),
                             "cran" | "bioc" | "biocGit" | "github"
-                        ) {
-                            let now = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_secs()
-                                .to_string();
-                            cache.insert(
-                                result_key,
-                                PackageCacheEntry {
-                                    package_name: result.real_name.clone(),
-                                    source: result.source.clone(),
-                                    version: result.latest_version.clone(),
-                                    repository: result.repository.clone(),
-                                    real_name: result.real_name.clone(),
-                                    cached_at: now,
-                                },
-                            );
-                        }
+                        )
+                    {
+                        let now = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs()
+                            .to_string();
+                        cache.insert(
+                            result_key,
+                            PackageCacheEntry {
+                                package_name: result.real_name.clone(),
+                                source: result.source.clone(),
+                                version: result.latest_version.clone(),
+                                repository: result.repository.clone(),
+                                real_name: result.real_name.clone(),
+                                cached_at: now,
+                            },
+                        );
                     }
                 }
 
@@ -411,12 +415,7 @@ pub async fn search_packages(
         stopped
     };
     if let Err(error) = storage::save_cache(app, &cache) {
-        log(
-            app,
-            run_id,
-            &mut logs,
-            &format!("缓存保存失败: {error}"),
-        );
+        log(app, run_id, &mut logs, &format!("缓存保存失败: {error}"));
     }
     Ok(SearchResponse {
         run_id,
@@ -559,7 +558,11 @@ async fn search_explicit_github(
     let description = match github_description(context, &repository).await {
         Some(desc) => desc,
         None => {
-            let package_name = repository.rsplit('/').next().unwrap_or(&repository).to_string();
+            let package_name = repository
+                .rsplit('/')
+                .next()
+                .unwrap_or(&repository)
+                .to_string();
             GithubDescription {
                 package_name,
                 version: "unknown".to_string(),
@@ -1758,6 +1761,7 @@ mod tests {
             raw: "demo".to_string(),
             name: "demo".to_string(),
             version: String::new(),
+            source_hint: None,
         };
         let mut results = Vec::new();
 
@@ -1779,6 +1783,7 @@ mod tests {
             raw: "demo".to_string(),
             name: "demo".to_string(),
             version: String::new(),
+            source_hint: None,
         };
 
         let result = found_result(&package, "1.2.3", "3.18", "demo", "biocGit");
@@ -1793,6 +1798,7 @@ mod tests {
             raw: "demo".to_string(),
             name: "demo".to_string(),
             version: String::new(),
+            source_hint: None,
         };
 
         let result = found_result(&package, "1.2.3", "owner/demo", "demo\nbad", "github");

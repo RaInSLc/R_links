@@ -654,12 +654,9 @@ pub fn load_cache(app: &AppHandle) -> Result<HashMap<String, PackageCacheEntry>,
     if !path_entry_exists(&path)? {
         return Ok(HashMap::new());
     }
-    let Some(content) = read_storage_file_with_recovery(
-        app,
-        CACHE_FILE_NAME,
-        1024 * 1024,
-        "包缓存文件",
-    )? else {
+    let Some(content) =
+        read_storage_file_with_recovery(app, CACHE_FILE_NAME, 1024 * 1024, "包缓存文件")?
+    else {
         return Ok(HashMap::new());
     };
     match serde_json::from_str::<Vec<PackageCacheEntry>>(&content) {

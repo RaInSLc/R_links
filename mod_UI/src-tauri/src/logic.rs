@@ -95,8 +95,9 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
         return None;
     }
     let remaining = &clean[captures.get(0)?.end()..];
-    let version_re = INPUT_VERSION_RE
-        .get_or_init(|| Regex::new(r"^\s*(?:v|V)?([0-9]+[0-9A-Za-z.\-]*)").expect("固定版本正则必须有效"));
+    let version_re = INPUT_VERSION_RE.get_or_init(|| {
+        Regex::new(r"^\s*(?:v|V)?([0-9]+[0-9A-Za-z.\-]*)").expect("固定版本正则必须有效")
+    });
     let version = version_re
         .captures(remaining)
         .and_then(|capture| capture.get(1))
@@ -106,8 +107,9 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
         return None;
     }
 
-    let hint_re = SOURCE_HINT_RE
-        .get_or_init(|| Regex::new(r"(?i)\b(cran|bioconductor|bioc|github)\b").expect("源提示正则必须有效"));
+    let hint_re = SOURCE_HINT_RE.get_or_init(|| {
+        Regex::new(r"(?i)\b(cran|bioconductor|bioc|github)\b").expect("源提示正则必须有效")
+    });
     let source_hint = hint_re
         .captures(remaining)
         .and_then(|capture| capture.get(1))
@@ -249,10 +251,11 @@ pub fn generate_script_with_remote_versions(
                 output.push(format!(
                     "# [{source_label} 已验证{remote_version} | 自动同步]"
                 ));
-                if show_remote_version && is_clean_version(&best.latest_version) {
-                    if best.source != "github" {
-                        version = best.latest_version.clone();
-                    }
+                if show_remote_version
+                    && is_clean_version(&best.latest_version)
+                    && best.source != "github"
+                {
+                    version = best.latest_version.clone();
                 }
             } else {
                 output.push(format!(
@@ -390,7 +393,12 @@ fn choose_best_result<'a>(
             "github" => 3,
             _ => 4,
         };
-        (hint_match, strict_name, source, if exact_repo { 0 } else { 1 })
+        (
+            hint_match,
+            strict_name,
+            source,
+            if exact_repo { 0 } else { 1 },
+        )
     });
     candidates.into_iter().next()
 }

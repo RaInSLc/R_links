@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [2026-06-20]
+
+### Fixed
+- **[2026-06-20 10:30:00 +08:00] 修复 Rust 回归测试不可编译 + clippy/fmt/版本号一致性**：
+  - 修复 `search.rs` 中 3 个测试夹具缺少 `source_hint` 字段导致的测试编译失败（P0）
+  - 运行 `cargo fmt` 整理 lib.rs、logic.rs、search.rs、storage.rs 格式
+  - 修复 `logic.rs` 中可折叠 if 语句（collapsible_if）
+  - 修复 `search.rs` 中缓存逻辑处的可折叠 if 语句（collapsible_if）
+  - 将 `lib.rs` 中循环内正则编译提取为模块级 `OnceLock` 静态变量，消除 clippy `regex_creation_in_loops` 告警
+  - 统一 `Cargo.toml` 版本号至 `0.1.3`，与 `package.json`/`tauri.conf.json` 一致
+  - 验证：`cargo test --locked` 127 全通过，`cargo clippy --all-targets` 零告警，`cargo fmt --check` 通过，`npx tsc --noEmit` 通过
+
 ## [2026-06-19]
 
 ### Fixed
