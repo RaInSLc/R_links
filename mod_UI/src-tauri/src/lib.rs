@@ -322,6 +322,40 @@ fn stop_search(state: State<'_, SearchState>, run_id: u64) -> bool {
 }
 
 #[tauri::command]
+fn export_diagnostics(app: AppHandle) -> Result<String, String> {
+    let settings = load_existing_settings_for_runtime(&app)?;
+    let public_settings = settings.public_view();
+
+    let cache_count = storage::load_cache(&app)
+        .map(|cache| cache.len())
+        .unwrap_or(0);
+
+    let history_count = storage::load_history(&app)
+        .map(|history| history.len())
+        .unwrap_or(0);
+
+    let diagnostics = serde_json::json!({
+        "app_version": env!("CARGO_PKG_VERSION"),
+        "timestamp": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0),
+        "settings": {
+            "full_search": public_settings.full_search,
+            "proxy": public_settings.proxy,
+            "cran_mirror": public_settings.cran_mirror,
+            "github_token_configured": public_settings.github_token_configured,
+        },
+        "cache_entries": cache_count,
+        "history_entries": history_count,
+        "platform": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+    });
+
+    serde_json::to_string_pretty(&diagnostics).map_err(|e| format!("诊断信息序列化失败: {e}"))
+}
+
+#[tauri::command]
 async fn start_search(
     app: AppHandle,
     state: State<'_, SearchState>,
@@ -397,7 +431,8 @@ pub fn run() {
             clear_package_cache,
             open_package_search,
             start_search,
-            stop_search
+            stop_search,
+            export_diagnostics
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");

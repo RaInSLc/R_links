@@ -1346,6 +1346,26 @@ function App() {
                     >
                       清除缓存
                     </button>
+                    <button
+                      className="button ghost"
+                      onClick={async () => {
+                        try {
+                          const diagnostics = await invoke<string>("export_diagnostics");
+                          const blob = new Blob([diagnostics], { type: "application/json" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `r-links-diagnostics-${Date.now()}.json`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          setStatus("诊断信息已导出");
+                        } catch (error) {
+                          setStatus(`诊断导出失败: ${formatError(error)}`);
+                        }
+                      }}
+                    >
+                      导出诊断
+                    </button>
                   </div>
                 </div>
               </section>
