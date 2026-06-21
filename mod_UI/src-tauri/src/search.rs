@@ -11,9 +11,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use url::Url;
 
-use crate::logic::{
-    infer_bioc_version, is_valid_package_name, normalize_github_repository, parse_inputs,
-};
+use crate::logic::{infer_bioc_version, normalize_github_repository, parse_inputs};
 use crate::models::{
     PackageCacheEntry, PackageInput, SearchResponse, SearchResult, Settings, MAX_FIELD_CHARS,
     MAX_PACKAGE_LINES,
@@ -36,12 +34,9 @@ const MAX_SEARCH_HTTP_REQUESTS: usize = 200;
 const MAX_SEARCH_DURATION: Duration = Duration::from_secs(300);
 const MAX_CONCURRENT_PACKAGES: usize = 6;
 const MAX_SEARCH_RESULTS: usize = MAX_PACKAGE_LINES * 16;
-const MAX_RESULT_MESSAGE_CHARS: usize = 256;
-const MAX_SEARCH_LOG_CHARS: usize = 512;
 const MAX_SEARCH_LOGS: usize = 1_000;
 const SEARCH_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const SEARCH_STOPPED_ERROR: &str = "检索已停止";
-const SEARCH_LOG_EMPTY_MESSAGE: &str = "日志内容为空或已被清理";
 const SEARCH_LOGS_TRUNCATED_MESSAGE: &str = "检索日志达到上限，后续日志已停止记录";
 const SEARCH_RESULTS_TRUNCATED_MESSAGE: &str = "检索结果达到上限，后续来源请求已停止";
 static HTML_VERSION_RE: OnceLock<Regex> = OnceLock::new();
@@ -975,6 +970,10 @@ fn should_attach_github_token(url: &str, settings: &Settings) -> bool {
         })
 }
 
+use crate::search_sanitize::{
+    clean_result_package_name, clean_result_real_name, clean_result_repository,
+    clean_result_source, clean_version, sanitize_log_message, sanitize_search_result_for_emit,
+};
 use crate::search_urls::validate_search_request_url;
 
 fn extract_html_version(html: &str) -> Option<String> {
@@ -1056,17 +1055,6 @@ fn github_package_name_matches_request(real_name: &str, requested: &str) -> bool
     clean_result_package_name(real_name)
         .zip(clean_result_package_name(requested))
         .is_some_and(|(real_name, requested)| real_name.eq_ignore_ascii_case(&requested))
-}
-
-fn clean_version(value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() || trimmed.len() > 64 {
-        return None;
-    }
-    trimmed
-        .chars()
-        .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_'))
-        .then(|| trimmed.to_string())
 }
 
 fn r_universe_package_object(value: &Value) -> Option<&serde_json::Map<String, Value>> {
@@ -1155,138 +1143,6 @@ fn found_result(
     }
 }
 
-fn clean_result_package_name(value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    is_valid_package_name(trimmed).then(|| trimmed.to_string())
-}
-
-fn clean_result_real_name(source: &str, value: &str, fallback: &str) -> Option<String> {
-    match clean_result_package_name(value) {
-        Some(real_name) => Some(real_name),
-        None if source == "github" => None,
-        None => Some(fallback.to_string()),
-    }
-}
-
-fn clean_result_repository(source: &str, value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    match source {
-        "github" => {
-            if trimmed.is_empty() {
-                Some(String::new())
-            } else {
-                normalize_github_repository(trimmed)
-            }
-        }
-        "biocGit" => {
-            if trimmed.is_empty() || is_valid_bioc_version(trimmed) {
-                Some(trimmed.to_string())
-            } else {
-                None
-            }
-        }
-        _ => trimmed.is_empty().then(String::new),
-    }
-}
-
-fn clean_result_source(value: &str) -> String {
-    match value.trim() {
-        "cran" | "bioc" | "biocGit" | "github" | "none" => value.trim().to_string(),
-        _ => "none".to_string(),
-    }
-}
-
-fn sanitize_result_message(value: &str) -> String {
-    value
-        .trim()
-        .chars()
-        .filter(|character| !character.is_control())
-        .take(MAX_RESULT_MESSAGE_CHARS)
-        .collect()
-}
-
-fn sanitize_search_result_for_emit(mut result: SearchResult) -> SearchResult {
-    let fallback_package = clean_result_package_name(&result.package).unwrap_or_default();
-    result.package = fallback_package.clone();
-    result.requested_version = clean_version(&result.requested_version).unwrap_or_default();
-    result.latest_version = clean_version(&result.latest_version).unwrap_or_default();
-    result.source = clean_result_source(&result.source);
-    result.repository =
-        clean_result_repository(&result.source, &result.repository).unwrap_or_default();
-    result.real_name = clean_result_package_name(&result.real_name).unwrap_or(fallback_package);
-    result.message = sanitize_result_message(&result.message);
-    if result.status.is_empty() {
-        result.status = if result.found {
-            "found".to_string()
-        } else {
-            "notFound".to_string()
-        };
-    }
-    result.status = sanitize_log_message(&result.status);
-    if result.found && !is_trusted_emit_result(&result) {
-        result.found = false;
-        result.latest_version.clear();
-        result.repository.clear();
-        result.source = "none".to_string();
-        result.message = "结果字段无效，已忽略".to_string();
-    }
-    result
-}
-
-fn is_trusted_emit_result(result: &SearchResult) -> bool {
-    if result.package.is_empty() || result.real_name.is_empty() || result.latest_version.is_empty()
-    {
-        return false;
-    }
-
-    match result.source.as_str() {
-        "cran" | "bioc" => result.repository.is_empty(),
-        "biocGit" => !result.repository.is_empty(),
-        "github" => github_emit_identity_matches(result),
-        _ => false,
-    }
-}
-
-fn github_emit_identity_matches(result: &SearchResult) -> bool {
-    if result.repository.is_empty() {
-        return false;
-    }
-    if normalize_github_repository(&result.package)
-        .as_deref()
-        .is_some_and(|repository| repository.eq_ignore_ascii_case(&result.repository))
-    {
-        return true;
-    }
-    result.real_name.eq_ignore_ascii_case(&result.package)
-        || result
-            .repository
-            .rsplit('/')
-            .next()
-            .is_some_and(|repo| repo.eq_ignore_ascii_case(&result.real_name))
-}
-
-fn sanitize_log_message(value: &str) -> String {
-    let message = value
-        .trim()
-        .chars()
-        .filter(|character| !character.is_control())
-        .take(MAX_SEARCH_LOG_CHARS)
-        .collect::<String>();
-    if message.is_empty() {
-        SEARCH_LOG_EMPTY_MESSAGE.to_string()
-    } else {
-        message
-    }
-}
-
-fn is_valid_bioc_version(value: &str) -> bool {
-    let parts = value.split('.').collect::<Vec<_>>();
-    parts.len() == 2
-        && parts.iter().all(|part| {
-            !part.is_empty() && part.chars().all(|character| character.is_ascii_digit())
-        })
-}
-
 fn append_search_log(logs: &mut Vec<String>, message: &str) -> Option<String> {
     if logs.len() >= MAX_SEARCH_LOGS {
         return None;
@@ -1323,6 +1179,9 @@ fn append_bounded_search_result(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::search_sanitize::{
+        MAX_RESULT_MESSAGE_CHARS, MAX_SEARCH_LOG_CHARS, SEARCH_LOG_EMPTY_MESSAGE,
+    };
 
     #[test]
     fn builds_clients_for_supported_proxy_schemes() {

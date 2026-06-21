@@ -1,6 +1,7 @@
 mod logic;
 mod models;
 mod search;
+mod search_sanitize;
 mod search_urls;
 mod secrets;
 mod storage;
