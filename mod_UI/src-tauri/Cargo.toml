@@ -21,6 +21,7 @@ tauri-build = { version = "=2.6.2", features = [] }
 tauri = { version = "=2.11.2", features = [] }
 tauri-plugin-clipboard-manager = "=2.3.2"
 tauri-plugin-opener = "=2.5.4"
+futures-util = "=0.3.31"
 regex = "=1.12.4"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls", "socks"] }
 serde = { version = "=1.0.228", features = ["derive"] }

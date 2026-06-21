@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [2026-06-21]
+
+### Added
+- **[2026-06-21 12:00:00 +08:00] `mod_UI/src-tauri` 全局搜索时间预算 + 错误分类 + 受控并发检索**：
+  - 新增 `MAX_SEARCH_DURATION`（300 秒）全局时间预算，`SearchContext` 携带 `deadline` 与 `timed_out` 标志，超时后自动停止剩余来源查询
+  - 为 `SearchResult` 新增 `status` 字段（`found` / `notFound` / `timeout` / `rateLimited`），前端根据状态显示不同颜色徽章
+  - 新增 `github_rate_limited` 标志，GitHub API 触发频率限制时自动标记后续结果为 `rateLimited`
+  - 实现受控并发检索：使用 `futures_util::future::join_all` 按 `MAX_CONCURRENT_PACKAGES`（6）批次并发搜索多个包，共享 HTTP 预算与取消标志
+  - 新增 `futures-util = "=0.3.31"` 依赖用于 `join_all` 并发控制
+  - 前端 `App.tsx` 新增 `status` 字段接口定义、`sanitizeStatus` 白名单校验、超时/频率限制状态徽章样式
+
 ## [2026-06-20]
 
 ### Fixed

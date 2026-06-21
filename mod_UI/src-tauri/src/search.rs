@@ -1,3 +1,4 @@
+use futures_util::future::join_all;
 use regex::Regex;
 use reqwest::{Client, RequestBuilder, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -6,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::OnceLock;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use url::Url;
 
@@ -32,6 +33,8 @@ const MAX_JSON_RESPONSE_BYTES: usize = 1024 * 1024;
 const MAX_GITHUB_SEARCH_ITEMS: usize = 10;
 const MAX_GITHUB_REPOSITORY_CHARS: usize = 200;
 const MAX_SEARCH_HTTP_REQUESTS: usize = 200;
+const MAX_SEARCH_DURATION: Duration = Duration::from_secs(300);
+const MAX_CONCURRENT_PACKAGES: usize = 6;
 const MAX_SEARCH_RESULTS: usize = MAX_PACKAGE_LINES * 16;
 const MAX_RESULT_MESSAGE_CHARS: usize = 256;
 const MAX_SEARCH_LOG_CHARS: usize = 512;
@@ -121,15 +124,33 @@ struct SearchContext<'a> {
     settings: &'a Settings,
     cancelled: &'a AtomicBool,
     budget: &'a RequestBudget,
+    deadline: Instant,
+    timed_out: &'a AtomicBool,
     app: &'a AppHandle,
     run_id: u64,
     logs: &'a mut Vec<String>,
     result_limit_reached: bool,
+    github_rate_limited: bool,
 }
 
 impl SearchContext<'_> {
     fn is_stopped(&self) -> bool {
         self.result_limit_reached || search_stopped(self.cancelled, self.budget)
+    }
+
+    fn is_expired(&self) -> bool {
+        if self.timed_out.load(Ordering::SeqCst) {
+            return true;
+        }
+        if Instant::now() >= self.deadline {
+            self.timed_out.store(true, Ordering::SeqCst);
+            return true;
+        }
+        false
+    }
+
+    fn should_stop(&self) -> bool {
+        self.is_stopped() || self.is_expired()
     }
 
     fn log(&mut self, message: &str) {
@@ -146,31 +167,6 @@ impl SearchContext<'_> {
                 }
                 false
             }
-        }
-    }
-
-    fn push_result(&mut self, results: &mut Vec<SearchResult>, result: SearchResult) {
-        if self.result_limit_reached {
-            return;
-        }
-        let result = sanitize_search_result_for_emit(result);
-        if !append_bounded_search_result(results, result, MAX_SEARCH_RESULTS) {
-            self.result_limit_reached = true;
-            self.log(SEARCH_RESULTS_TRUNCATED_MESSAGE);
-            return;
-        }
-        if let Some(result) = results.last().cloned() {
-            let _ = self.app.emit(
-                "search-progress",
-                SearchProgressEvent {
-                    run_id: self.run_id,
-                    result,
-                },
-            );
-        }
-        if results.len() >= MAX_SEARCH_RESULTS {
-            self.result_limit_reached = true;
-            self.log(SEARCH_RESULTS_TRUNCATED_MESSAGE);
         }
     }
 }
@@ -227,10 +223,13 @@ pub async fn search_packages(
 
     let client = build_client(settings)?;
     let budget = RequestBudget::new(MAX_SEARCH_HTTP_REQUESTS);
+    let timed_out = AtomicBool::new(false);
+    let deadline = Instant::now() + MAX_SEARCH_DURATION;
     let mut results = Vec::new();
     let mut logs = Vec::new();
+    let mut cache_update: HashMap<String, PackageCacheEntry> = HashMap::new();
 
-    let mut cache = match storage::load_cache(app) {
+    let cache = match storage::load_cache(app) {
         Ok(cache) => cache,
         Err(error) => {
             log(app, run_id, &mut logs, &format!("缓存加载失败: {error}"));
@@ -238,182 +237,178 @@ pub async fn search_packages(
         }
     };
 
-    let stopped = {
-        let mut context = SearchContext {
-            client: &client,
-            settings,
-            cancelled,
-            budget: &budget,
-            app,
-            run_id,
-            logs: &mut logs,
-            result_limit_reached: false,
-        };
+    log(
+        app,
+        run_id,
+        &mut logs,
+        &format!(
+            "开始多源检索（超时 {} 秒，最大并发 {}）",
+            MAX_SEARCH_DURATION.as_secs(),
+            MAX_CONCURRENT_PACKAGES
+        ),
+    );
 
-        context.log("开始多源检索");
-        for (index, package) in packages.iter().enumerate() {
-            if context.is_stopped() {
-                break;
-            }
+    let total = packages.len();
+    let mut cache = cache;
+    let mut processed = 0usize;
 
-            let mut loop_package = package.clone();
-            let mut has_retried_casing = false;
+    while processed < packages.len() {
+        if search_stopped(cancelled, &budget) || timed_out.load(Ordering::SeqCst) {
+            break;
+        }
+        if Instant::now() >= deadline {
+            timed_out.store(true, Ordering::SeqCst);
+            break;
+        }
 
-            // 检查缓存
-            let cache_key = loop_package.name.to_ascii_lowercase();
+        let batch_size = MAX_CONCURRENT_PACKAGES.min(packages.len() - processed);
+        let batch = &packages[processed..processed + batch_size];
+        let batch_start = processed;
+
+        let mut batch_tasks = Vec::new();
+        for (offset, package) in batch.iter().enumerate() {
+            let index = batch_start + offset;
+            let cache_key = package.name.to_ascii_lowercase();
+
             if let Some(cached_entry) = cache.get(&cache_key) {
-                context.log(&format!(
-                    "[{}/{}] {} (缓存命中)",
-                    index + 1,
-                    packages.len(),
-                    loop_package.name
-                ));
-                context.push_result(
-                    &mut results,
-                    SearchResult {
-                        package: loop_package.name.clone(),
-                        requested_version: loop_package.version.clone(),
-                        latest_version: cached_entry.version.clone(),
-                        repository: cached_entry.repository.clone(),
-                        real_name: cached_entry.real_name.clone(),
-                        source: cached_entry.source.clone(),
-                        found: true,
-                        message: "缓存命中".to_string(),
+                log(
+                    app,
+                    run_id,
+                    &mut logs,
+                    &format!("[{}/{}] {} (缓存命中)", index + 1, total, package.name),
+                );
+                results.push(SearchResult {
+                    package: package.name.clone(),
+                    requested_version: package.version.clone(),
+                    latest_version: cached_entry.version.clone(),
+                    repository: cached_entry.repository.clone(),
+                    real_name: cached_entry.real_name.clone(),
+                    source: cached_entry.source.clone(),
+                    found: true,
+                    message: "缓存命中".to_string(),
+                    status: "found".to_string(),
+                });
+                let _ = app.emit(
+                    "search-progress",
+                    SearchProgressEvent {
+                        run_id,
+                        result: results.last().unwrap().clone(),
                     },
                 );
                 continue;
             }
 
-            loop {
-                context.log(&format!(
-                    "[{}/{}] 检索 {}{}",
-                    index + 1,
-                    packages.len(),
-                    loop_package.name,
-                    if loop_package.version.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" {}", loop_package.version)
-                    }
-                ));
-
-                let had_found_before = has_found_result_for_package(&results, &loop_package.name);
-                if loop_package.name.contains('/') {
-                    if let Some(result) = search_explicit_github(&mut context, &loop_package).await
-                    {
-                        context.push_result(&mut results, result);
-                    }
-                } else {
-                    if let Some(result) = search_cran(&mut context, &loop_package).await {
-                        context.push_result(&mut results, result);
-                    }
-
-                    if (settings.full_search
-                        || !has_found_result_for_package(&results, &loop_package.name))
-                        && !context.is_stopped()
-                    {
-                        let bioc_results = search_bioconductor(&mut context, &loop_package).await;
-                        for result in bioc_results {
-                            context.push_result(&mut results, result);
-                        }
-                    }
-
-                    if (settings.full_search
-                        || !has_found_result_for_package(&results, &loop_package.name))
-                        && !context.is_stopped()
-                    {
-                        let github_results = search_github(&mut context, &loop_package).await;
-
-                        let mut casing_diff_name = None;
-                        if !has_retried_casing {
-                            for res in &github_results {
-                                if res.found
-                                    && !res.real_name.is_empty()
-                                    && res.real_name != loop_package.name
-                                    && res.real_name.eq_ignore_ascii_case(&loop_package.name)
-                                {
-                                    casing_diff_name = Some(res.real_name.clone());
-                                    break;
-                                }
-                            }
-                        }
-
-                        if let Some(corrected_name) = casing_diff_name {
-                            context.log(&format!(
-                                "检测到包名大小写差异，纠正为: {}，重新进行检索...",
-                                corrected_name
-                            ));
-                            results.retain(|r| !r.package.eq_ignore_ascii_case(&loop_package.name));
-
-                            loop_package.name = corrected_name;
-                            has_retried_casing = true;
-                            continue;
-                        }
-
-                        for result in github_results {
-                            context.push_result(&mut results, result);
-                        }
-                    }
-                }
-
-                if !had_found_before
-                    && !has_found_result_for_package(&results, &loop_package.name)
-                    && !context.is_stopped()
-                {
-                    let result = SearchResult {
-                        package: loop_package.name.clone(),
-                        requested_version: loop_package.version.clone(),
-                        latest_version: String::new(),
-                        repository: String::new(),
-                        real_name: loop_package.name.clone(),
-                        source: "none".to_string(),
-                        found: false,
-                        message: "所有来源均未找到".to_string(),
-                    };
-                    context.push_result(&mut results, result);
-                }
-
-                // 缓存成功找到的结果
-                for result in &results {
-                    let result_key = result.package.to_ascii_lowercase();
-                    if result.found
-                        && !cache.contains_key(&result_key)
-                        && matches!(
-                            result.source.as_str(),
-                            "cran" | "bioc" | "biocGit" | "github"
-                        )
-                    {
-                        let now = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs()
-                            .to_string();
-                        cache.insert(
-                            result_key,
-                            PackageCacheEntry {
-                                package_name: result.real_name.clone(),
-                                source: result.source.clone(),
-                                version: result.latest_version.clone(),
-                                repository: result.repository.clone(),
-                                real_name: result.real_name.clone(),
-                                cached_at: now,
-                            },
-                        );
-                    }
-                }
-
-                break;
-            }
+            batch_tasks.push((index, package.clone()));
         }
 
-        let stopped = context.is_stopped();
-        context.log(if stopped {
-            "检索任务已停止"
-        } else {
-            "检索任务已完成"
-        });
-        stopped
+        if batch_tasks.is_empty() {
+            processed += batch_size;
+            continue;
+        }
+
+        let futures: Vec<_> = batch_tasks
+            .iter()
+            .map(|(index, package)| {
+                let pkg = package.clone();
+                let client_ref = &client;
+                let settings_ref = settings;
+                let cancelled_ref = cancelled;
+                let budget_ref = &budget;
+                let timed_out_ref = &timed_out;
+                let app_ref = app;
+                async move {
+                    let mut task_logs = Vec::new();
+                    let mut task_results = Vec::new();
+                    let mut context = SearchContext {
+                        client: client_ref,
+                        settings: settings_ref,
+                        cancelled: cancelled_ref,
+                        budget: budget_ref,
+                        deadline,
+                        timed_out: timed_out_ref,
+                        app: app_ref,
+                        run_id,
+                        logs: &mut task_logs,
+                        result_limit_reached: false,
+                        github_rate_limited: false,
+                    };
+                    search_one_package(&mut context, &mut task_results, &pkg, *index, total).await;
+                    (task_results, task_logs)
+                }
+            })
+            .collect();
+
+        let outputs = join_all(futures).await;
+
+        let mut task_results = Vec::new();
+        for (task_results_inner, task_logs) in outputs {
+            for msg in &task_logs {
+                log(app, run_id, &mut logs, msg);
+            }
+
+            for result in &task_results_inner {
+                let result_key = result.package.to_ascii_lowercase();
+                if result.found
+                    && !cache.contains_key(&result_key)
+                    && matches!(
+                        result.source.as_str(),
+                        "cran" | "bioc" | "biocGit" | "github"
+                    )
+                {
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                        .to_string();
+                    cache_update.insert(
+                        result_key,
+                        PackageCacheEntry {
+                            package_name: result.real_name.clone(),
+                            source: result.source.clone(),
+                            version: result.latest_version.clone(),
+                            repository: result.repository.clone(),
+                            real_name: result.real_name.clone(),
+                            cached_at: now,
+                        },
+                    );
+                }
+            }
+
+            task_results.extend(task_results_inner);
+        }
+
+        for result in &task_results {
+            if results.len() >= MAX_SEARCH_RESULTS {
+                log(app, run_id, &mut logs, SEARCH_RESULTS_TRUNCATED_MESSAGE);
+                break;
+            }
+            let sanitized = sanitize_search_result_for_emit(result.clone());
+            results.push(sanitized.clone());
+            let _ = app.emit(
+                "search-progress",
+                SearchProgressEvent {
+                    run_id,
+                    result: sanitized,
+                },
+            );
+        }
+
+        processed += batch_size;
+    }
+
+    for (key, entry) in &cache_update {
+        cache.insert(key.clone(), entry.clone());
+    }
+
+    let final_message = if timed_out.load(Ordering::SeqCst) {
+        "检索任务已超时停止"
+    } else if search_stopped(cancelled, &budget) {
+        "检索任务已停止"
+    } else {
+        "检索任务已完成"
     };
+    log(app, run_id, &mut logs, final_message);
+
     if let Err(error) = storage::save_cache(app, &cache) {
         log(app, run_id, &mut logs, &format!("缓存保存失败: {error}"));
     }
@@ -421,8 +416,124 @@ pub async fn search_packages(
         run_id,
         results,
         logs,
-        stopped,
+        stopped: timed_out.load(Ordering::SeqCst) || search_stopped(cancelled, &budget),
     })
+}
+
+async fn search_one_package(
+    context: &mut SearchContext<'_>,
+    results: &mut Vec<SearchResult>,
+    package: &PackageInput,
+    index: usize,
+    total: usize,
+) {
+    let mut loop_package = package.clone();
+    let mut has_retried_casing = false;
+
+    loop {
+        if context.should_stop() {
+            break;
+        }
+
+        context.log(&format!(
+            "[{}/{}] 检索 {}{}",
+            index + 1,
+            total,
+            loop_package.name,
+            if loop_package.version.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", loop_package.version)
+            }
+        ));
+
+        let had_found_before = has_found_result_for_package(results, &loop_package.name);
+        if loop_package.name.contains('/') {
+            if let Some(result) = search_explicit_github(context, &loop_package).await {
+                results.push(result);
+            }
+        } else {
+            if let Some(result) = search_cran(context, &loop_package).await {
+                results.push(result);
+            }
+
+            if (context.settings.full_search
+                || !has_found_result_for_package(results, &loop_package.name))
+                && !context.should_stop()
+            {
+                let bioc_results = search_bioconductor(context, &loop_package).await;
+                for result in bioc_results {
+                    results.push(result);
+                }
+            }
+
+            if (context.settings.full_search
+                || !has_found_result_for_package(results, &loop_package.name))
+                && !context.should_stop()
+            {
+                let github_results = search_github(context, &loop_package).await;
+
+                let mut casing_diff_name = None;
+                if !has_retried_casing {
+                    for res in &github_results {
+                        if res.found
+                            && !res.real_name.is_empty()
+                            && res.real_name != loop_package.name
+                            && res.real_name.eq_ignore_ascii_case(&loop_package.name)
+                        {
+                            casing_diff_name = Some(res.real_name.clone());
+                            break;
+                        }
+                    }
+                }
+
+                if let Some(corrected_name) = casing_diff_name {
+                    context.log(&format!(
+                        "检测到包名大小写差异，纠正为: {}，重新进行检索...",
+                        corrected_name
+                    ));
+                    results.retain(|r| !r.package.eq_ignore_ascii_case(&loop_package.name));
+
+                    loop_package.name = corrected_name;
+                    has_retried_casing = true;
+                    continue;
+                }
+
+                for result in github_results {
+                    results.push(result);
+                }
+            }
+        }
+
+        if !had_found_before
+            && !has_found_result_for_package(results, &loop_package.name)
+            && !context.should_stop()
+        {
+            let (message, status) = if context.timed_out.load(Ordering::SeqCst) {
+                ("检索超时，部分来源未查询".to_string(), "timeout")
+            } else if context.github_rate_limited {
+                (
+                    "GitHub API 频率限制，部分来源未查询".to_string(),
+                    "rateLimited",
+                )
+            } else {
+                ("所有来源均未找到".to_string(), "notFound")
+            };
+            results.push(SearchResult {
+                package: loop_package.name.clone(),
+                requested_version: loop_package.version.clone(),
+                latest_version: String::new(),
+                repository: String::new(),
+                real_name: loop_package.name.clone(),
+                source: "none".to_string(),
+                found: false,
+                message,
+                status: status.to_string(),
+            });
+        }
+
+        break;
+    }
 }
 
 fn has_found_result_for_package(results: &[SearchResult], package_name: &str) -> bool {
@@ -647,7 +758,8 @@ async fn search_github(
         }
     };
     if response.status() == StatusCode::FORBIDDEN {
-        context.log("GitHub API 已触发频率限制");
+        context.log("GitHub API 已触发频率限制（rateLimited）");
+        context.github_rate_limited = true;
         return results;
     }
     if !response.status().is_success() {
@@ -1165,6 +1277,7 @@ fn found_result(
             source: "none".to_string(),
             found: false,
             message: "结果真实包名无效，已忽略".to_string(),
+            status: "notFound".to_string(),
         };
     };
     SearchResult {
@@ -1176,6 +1289,7 @@ fn found_result(
         source,
         found: true,
         message: "验证成功".to_string(),
+        status: "found".to_string(),
     }
 }
 
@@ -1239,6 +1353,14 @@ fn sanitize_search_result_for_emit(mut result: SearchResult) -> SearchResult {
         clean_result_repository(&result.source, &result.repository).unwrap_or_default();
     result.real_name = clean_result_package_name(&result.real_name).unwrap_or(fallback_package);
     result.message = sanitize_result_message(&result.message);
+    if result.status.is_empty() {
+        result.status = if result.found {
+            "found".to_string()
+        } else {
+            "notFound".to_string()
+        };
+    }
+    result.status = sanitize_log_message(&result.status);
     if result.found && !is_trusted_emit_result(&result) {
         result.found = false;
         result.latest_version.clear();
@@ -1323,6 +1445,7 @@ fn log(app: &AppHandle, run_id: u64, logs: &mut Vec<String>, message: &str) {
     }
 }
 
+#[cfg(test)]
 fn append_bounded_search_result(
     results: &mut Vec<SearchResult>,
     result: SearchResult,
@@ -1624,6 +1747,7 @@ mod tests {
             source: "github<script>".to_string(),
             found: true,
             message: format!("ok\n{}", "x".repeat(MAX_RESULT_MESSAGE_CHARS + 20)),
+            status: "found".to_string(),
         });
 
         assert_eq!(result.package, "demo");
@@ -1647,6 +1771,7 @@ mod tests {
             source: "github".to_string(),
             found: true,
             message: "验证成功".to_string(),
+            status: "found".to_string(),
         });
 
         assert!(!result.found);
@@ -1667,6 +1792,7 @@ mod tests {
             source: "github".to_string(),
             found: true,
             message: "验证成功".to_string(),
+            status: "found".to_string(),
         });
 
         assert!(result.found);
@@ -1687,6 +1813,7 @@ mod tests {
                 source: "none".to_string(),
                 found: false,
                 message: "未找到".to_string(),
+                status: "found".to_string(),
             },
             SearchResult {
                 package: "other".to_string(),
@@ -1697,6 +1824,7 @@ mod tests {
                 source: "cran".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             },
         ];
 
@@ -1715,6 +1843,7 @@ mod tests {
             source: "github".to_string(),
             found: true,
             message: "验证成功".to_string(),
+            status: "found".to_string(),
         }];
 
         assert!(has_found_result_for_package(&results, "Owner/Repo"));

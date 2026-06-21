@@ -41,6 +41,7 @@ interface SearchResult {
   source: string;
   found: boolean;
   message: string;
+  status?: string;
 }
 
 interface SearchResponse {
@@ -1100,7 +1101,9 @@ function App() {
                         <span role="cell" className={`source-tag ${result.source}`}>{sourceNames[result.source] ?? result.source}</span>
                         <code role="cell">{result.latestVersion || "—"}</code>
                         <span role="cell" className="repo-cell">{result.repository || "—"}</span>
-                        <span role="cell" className={result.found ? "found" : "missing"}>{result.found ? "已验证" : "未找到"}</span>
+                        <span role="cell" className={result.found ? "found" : result.status === "timeout" ? "timeout" : result.status === "rateLimited" ? "rate-limited" : "missing"}>
+                          {result.status === "timeout" ? "超时" : result.status === "rateLimited" ? "频率限制" : result.found ? "已验证" : "未找到"}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -1633,7 +1636,15 @@ function sanitizeSearchResult(value: unknown): SearchResult {
     source: safeSource(result.source),
     found: safeBoolean(result.found),
     message: safeStatusText(result.message),
+    status: sanitizeStatus(result.status),
   };
+}
+
+function sanitizeStatus(value: unknown): string {
+  const raw = typeof value === "string" ? value : "";
+  return ["found", "notFound", "timeout", "rateLimited"].includes(raw)
+    ? raw
+    : "notFound";
 }
 
 function sanitizeSearchResponse(value: unknown): SearchResponse {

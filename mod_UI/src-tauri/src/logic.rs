@@ -453,6 +453,11 @@ fn sanitize_search_result(result: &SearchResult) -> Option<SearchResult> {
         source,
         found: result.found,
         message,
+        status: if result.found {
+            "found".to_string()
+        } else {
+            "notFound".to_string()
+        },
     })
 }
 
@@ -1242,6 +1247,7 @@ mod tests {
                 source: "cran".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             }],
         )
         .expect("自动模式应按行处理安装归档 URL");
@@ -1547,6 +1553,7 @@ mod tests {
                 source: "cran".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             })
             .collect::<Vec<_>>();
 
@@ -1577,6 +1584,7 @@ mod tests {
                 source: "none".to_string(),
                 found: false,
                 message: "未找到".to_string(),
+                status: "found".to_string(),
             };
             MAX_GENERATE_SEARCH_RESULTS - 1
         ];
@@ -1589,6 +1597,7 @@ mod tests {
             source: "cran".to_string(),
             found: true,
             message: "验证成功".to_string(),
+            status: "found".to_string(),
         });
 
         let output = generate_script(
@@ -1710,6 +1719,7 @@ mod tests {
                 source: "github".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             }],
         )
         .expect("非法检索结果应被忽略并回退基础安装");
@@ -1739,6 +1749,7 @@ mod tests {
                     source: "none".to_string(),
                     found: true,
                     message: "伪造成功".to_string(),
+                    status: "found".to_string(),
                 },
                 SearchResult {
                     package: "demo".to_string(),
@@ -1749,6 +1760,7 @@ mod tests {
                     source: "github".to_string(),
                     found: true,
                     message: "缺少仓库".to_string(),
+                    status: "found".to_string(),
                 },
                 SearchResult {
                     package: "demo".to_string(),
@@ -1759,6 +1771,7 @@ mod tests {
                     source: "github".to_string(),
                     found: true,
                     message: "非法真实包名".to_string(),
+                    status: "found".to_string(),
                 },
             ],
         )
@@ -1791,6 +1804,7 @@ mod tests {
                 source: "github".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             }],
         )
         .expect("身份不匹配的检索结果应被忽略");
@@ -1820,6 +1834,7 @@ mod tests {
                     source: "github".to_string(),
                     found: true,
                     message: "验证成功".to_string(),
+                    status: "found".to_string(),
                 },
                 SearchResult {
                     package: "demo".to_string(),
@@ -1830,6 +1845,7 @@ mod tests {
                     source: "cran".to_string(),
                     found: true,
                     message: "验证成功".to_string(),
+                    status: "found".to_string(),
                 },
             ],
         )
@@ -1858,6 +1874,7 @@ mod tests {
                 source: "github".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             }],
         )
         .expect("合法检索结果应可参与自动路由");
@@ -1886,6 +1903,7 @@ mod tests {
                 source: "cran".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             }],
             false,
         )
@@ -1907,6 +1925,7 @@ mod tests {
                 source: "github".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             }],
             false,
         )
@@ -1935,6 +1954,7 @@ mod tests {
                 source: "biocGit".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             }],
         )
         .expect("合法 Bioconductor 历史版本结果应可生成安装命令");
@@ -1972,6 +1992,7 @@ mod tests {
                 source: "cran".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             }],
         )
         .expect("非法版本检索结果应被忽略");
@@ -2001,6 +2022,7 @@ mod tests {
                 source: "cran".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             }],
         )
         .expect("超长版本检索结果应被忽略");
@@ -2030,6 +2052,7 @@ mod tests {
                 source: "github".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             }],
         )
         .expect("超大字段结果应被忽略并回退基础安装");
@@ -2058,6 +2081,7 @@ mod tests {
                 source: "github".to_string(),
                 found: true,
                 message: "验证成功".to_string(),
+                status: "found".to_string(),
             }],
         )
         .expect("GitHub 智能路由带版本结果应可生成带有 ref 的 install_github");

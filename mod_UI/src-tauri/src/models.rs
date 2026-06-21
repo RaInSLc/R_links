@@ -79,7 +79,7 @@ pub struct GenerateOptions {
     pub mirror: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResult {
     pub package: String,
@@ -90,6 +90,8 @@ pub struct SearchResult {
     pub source: String,
     pub found: bool,
     pub message: String,
+    #[serde(default)]
+    pub status: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -183,6 +183,7 @@ fn generate_script(
                         source: entry.source.clone(),
                         found: true,
                         message: "离线缓存命中".to_string(),
+                        status: "found".to_string(),
                     });
                     continue;
                 }
@@ -224,6 +225,7 @@ fn generate_script(
                         source: source.to_string(),
                         found: true,
                         message: "历史记录命中".to_string(),
+                        status: "found".to_string(),
                     });
                 }
             }

@@ -808,6 +808,14 @@ input:focus-visible,
   color: var(--red);
 }
 
+.timeout {
+  color: #e67e22;
+}
+
+.rate-limited {
+  color: #c0392b;
+}
+
 .log-console {
   height: calc(100vh - 350px);
   min-height: 300px;
