@@ -11,6 +11,13 @@
   - 新增 `futures-util = "=0.3.31"` 依赖用于 `join_all` 并发控制
   - 前端 `App.tsx` 新增 `status` 字段接口定义、`sanitizeStatus` 白名单校验、超时/频率限制状态徽章样式
 
+### Changed
+- **[2026-06-21 15:00:00 +08:00] `mod_UI` 诊断导出 + 前端测试 + 模块拆分**：
+  - 新增 `export_diagnostics` IPC 命令，收集应用版本、脱敏设置、缓存/历史记录数、平台信息，前端提供 JSON 导出按钮
+  - 集成 Vitest + jsdom 测试框架，新增 35 个前端工具函数单元测试（`safeText`、`sanitizeSearchResult`、`dedupeBoundedResults` 等）
+  - 从 `App.tsx` 提取纯工具函数至 `src/utils.ts`（含类型定义与常量），为后续组件拆分奠定基础
+  - 从 `search.rs`（~1967 行）提取 URL 验证逻辑至独立模块 `search_urls.rs`（~140 行），降低单文件复杂度
+
 ## [2026-06-20]
 
 ### Fixed
