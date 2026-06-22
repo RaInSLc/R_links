@@ -133,6 +133,35 @@ pub struct PackageInput {
     pub source_hint: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InputRules {
+    /// 行内分隔符，用于将一行拆分为多个包名（如逗号、分号）
+    pub separators: Vec<String>,
+    /// 是否去除包名两端的引号（" 和 '）
+    pub strip_quotes: bool,
+    /// 是否去除 R 的 c(...) 或 list(...) 包裹
+    pub strip_c_parens: bool,
+    /// 注释字符前缀列表
+    pub comment_chars: Vec<String>,
+    /// 是否将空格也作为分隔符（开启后将禁用版本号提取）
+    pub split_spaces: bool,
+}
+
+impl Default for InputRules {
+    fn default() -> Self {
+        Self {
+            separators: vec![",".to_string(), ";".to_string()],
+            strip_quotes: true,
+            strip_c_parens: true,
+            comment_chars: vec!["#".to_string()],
+            split_spaces: false,
+        }
+    }
+}
+
+pub const INPUT_RULES_FILE_NAME: &str = "input_rules.json";
+
 pub fn normalize_http_url(value: &str, field_name: &str) -> Result<String, String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {

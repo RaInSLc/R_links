@@ -11,8 +11,8 @@ use tauri::{AppHandle, Manager};
 
 use crate::logic;
 use crate::models::{
-    HistoryRecord, PackageCacheEntry, Settings, MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS,
-    MAX_HISTORY_RECORDS, MAX_TOKEN_CHARS,
+    HistoryRecord, InputRules, PackageCacheEntry, Settings, MAX_FIELD_CHARS,
+    MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_TOKEN_CHARS, INPUT_RULES_FILE_NAME,
 };
 use crate::secrets;
 use serde::{Deserialize, Serialize};
@@ -101,6 +101,32 @@ fn ensure_storage_directory(directory: &Path) -> Result<(), String> {
         return Err("应用数据目录不是普通目录".to_string());
     }
     Ok(())
+}
+
+pub fn load_input_rules(app: &AppHandle) -> InputRules {
+    let path = match data_file(app, INPUT_RULES_FILE_NAME) {
+        Ok(p) => p,
+        Err(_) => return InputRules::default(),
+    };
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return InputRules::default(),
+    };
+    serde_json::from_str(&content).unwrap_or_default()
+}
+
+pub fn save_default_input_rules(app: &AppHandle) {
+    let path = match data_file(app, INPUT_RULES_FILE_NAME) {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    if path.exists() {
+        return;
+    }
+    let rules = InputRules::default();
+    if let Ok(content) = serde_json::to_string_pretty(&rules) {
+        let _ = std::fs::write(&path, &content);
+    }
 }
 
 #[cfg(windows)]

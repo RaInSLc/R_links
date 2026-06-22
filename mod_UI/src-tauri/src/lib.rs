@@ -166,9 +166,10 @@ fn generate_script(
     mut results: Vec<SearchResult>,
     show_remote_version: Option<bool>,
 ) -> Result<String, String> {
+    let rules = storage::load_input_rules(&app);
     if results.is_empty() {
         let mut offline_results = Vec::new();
-        if let Ok(packages) = logic::parse_inputs(&input) {
+        if let Ok(packages) = logic::parse_inputs_filtered(&input, &rules) {
             let cache = storage::load_cache(&app).unwrap_or_default();
             let history = storage::load_history(&app).unwrap_or_default();
 
@@ -236,9 +237,9 @@ fn generate_script(
     }
 
     if show_remote_version == Some(false) {
-        logic::generate_script_with_remote_versions(&input, &options, &results, false)
+        logic::generate_script_with_rules(&input, &options, &results, false, &rules)
     } else {
-        logic::generate_script(&input, &options, &results)
+        logic::generate_script_with_rules(&input, &options, &results, true, &rules)
     }
 }
 
@@ -419,6 +420,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             storage::ensure_data_directory(app.handle()).map_err(std::io::Error::other)?;
+            storage::save_default_input_rules(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

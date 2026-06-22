@@ -11,7 +11,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use url::Url;
 
-use crate::logic::{infer_bioc_version, normalize_github_repository, parse_inputs};
+use crate::logic::{
+    infer_bioc_version, normalize_github_repository, parse_inputs_filtered,
+};
 use crate::models::{
     PackageCacheEntry, PackageInput, SearchResponse, SearchResult, Settings, MAX_FIELD_CHARS,
     MAX_PACKAGE_LINES,
@@ -211,7 +213,8 @@ pub async fn search_packages(
     if run_id == 0 {
         return Err("检索任务 ID 无效".to_string());
     }
-    let packages = parse_inputs(input)?;
+    let rules = storage::load_input_rules(app);
+    let packages = parse_inputs_filtered(input, &rules)?;
     if packages.is_empty() {
         return Err("请输入至少一个有效的 R 包".to_string());
     }

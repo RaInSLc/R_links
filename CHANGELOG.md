@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [2026-06-22]
+
+### Added
+- **[2026-06-22 13:00:00 +08:00] 白盒化输入解析规则 + 多分隔符支持**：
+  - 新增 `InputRules` 结构体（`models.rs`），`input_rules.json` 外部配置文件，用户可直接编辑调整解析行为
+  - 新增 `parse_inputs_filtered()` 函数，支持按可配置分隔符（默认 `,` 和 `;`）拆分一行中的多个包名
+  - 新增 `strip_r_parens_wrapper()`，自动剥离 `c(...)` / `list(...)` R 向量包裹语法
+  - `split_by_separators()` 支持配置 `strip_quotes`（去除引号）和 `split_spaces`（空格分隔，默认关闭）
+  - URL 行保持完整不被分隔符拆分
+  - 启动时自动在应用数据目录创建 `input_rules.json` 默认文件
+  - 前端同步更新 `activeInputLineCount` / `classifyInputProfile` / `collectBrowserSearchNames` 以支持逗号/分号分隔
+  - 新增 10 个端到端测试覆盖逗号分隔、c() 向量、分号分隔、带版本号逗号分隔、list()、空格分隔、混合分隔、真实 R 代码输入等场景
+  - 验证：cargo test 148/148 通过，clippy 零告警，tsc 零错误，vitest 35/35 通过
+
 ## [2026-06-21]
 
 ### Added

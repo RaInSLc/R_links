@@ -37,6 +37,18 @@ export const MAX_PACKAGE_LINES = 500;
 export const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
 export const MAX_SEARCH_RESULT_SCAN = MAX_SEARCH_RESULTS * 2;
 export const MAX_SEARCH_LOGS = 1_000;
+const INPUT_SEPARATORS = /[,;]/;
+function splitInputLine(line: string): string[] {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith("#")) return [];
+  let content = trimmed;
+  const cParens = trimmed.match(/^(?:c|list)\((.+)\)$/s);
+  if (cParens) content = cParens[1];
+  return content
+    .split(INPUT_SEPARATORS)
+    .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
+    .filter((s) => s.length > 0);
+}
 export const MAX_STATUS_CHARS = 512;
 export const MAX_RESULT_FIELD_CHARS = 2_048;
 export const MAX_VERSION_CHARS = 64;
@@ -296,7 +308,7 @@ export function activeInputLineCount(value: string) {
   let count = 0;
   for (const line of value.split(/\r?\n/)) {
     if (isActiveInputLine(line)) {
-      count += 1;
+      count += splitInputLine(line).length;
     }
   }
   return count;
@@ -346,21 +358,21 @@ export function collectBrowserSearchNames(value: string, limit: number) {
   const seen = new Set<string>();
   const boundedLimit = Math.max(0, Math.floor(limit));
   const lines = value.split(/\r?\n/);
-  let activeLines = 0;
+  let totalPackages = 0;
   for (let index = 0; index < lines.length; index += 1) {
     if (!isActiveInputLine(lines[index])) {
       continue;
     }
-    activeLines += 1;
-    if (activeLines > MAX_PACKAGE_LINES) {
-      break;
+    for (const segment of splitInputLine(lines[index])) {
+      totalPackages += 1;
+      if (totalPackages > MAX_PACKAGE_LINES) break;
+      const name = segment.split("/").pop() ?? segment;
+      if (isBrowserSearchPackageName(name) && !seen.has(name)) {
+        seen.add(name);
+        allNames.push(name);
+      }
     }
-    const token = lines[index].trim().split(/\s+/)[0];
-    const name = token.split("/").pop() ?? token;
-    if (isBrowserSearchPackageName(name) && !seen.has(name)) {
-      seen.add(name);
-      allNames.push(name);
-    }
+    if (totalPackages > MAX_PACKAGE_LINES) break;
   }
   return {
     names: allNames.slice(0, boundedLimit),
@@ -376,17 +388,20 @@ export function classifyInputProfile(value: string): { total: number; archiveUrl
     if (!raw || raw.startsWith("#")) {
       continue;
     }
-    profile.total += 1;
-    if (profile.total > MAX_PACKAGE_LINES) {
-      break;
-    }
     if (/^https:\/\//i.test(raw)) {
+      profile.total += 1;
       profile.archiveUrls += 1;
+      if (profile.total > MAX_PACKAGE_LINES) break;
       continue;
     }
-    if (raw.split(/\s+/)[0].includes("/")) {
-      profile.repositories += 1;
+    for (const segment of splitInputLine(raw)) {
+      profile.total += 1;
+      if (profile.total > MAX_PACKAGE_LINES) break;
+      if (segment.includes("/")) {
+        profile.repositories += 1;
+      }
     }
+    if (profile.total > MAX_PACKAGE_LINES) break;
   }
   return profile;
 }

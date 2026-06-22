@@ -6,8 +6,9 @@ use url::Url;
 
 use crate::models::{
     normalize_cran_mirror_url, normalize_https_url, url_has_explicit_port, GenerateOptions,
-    HistoryRecord, PackageInput, SearchResult, MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS,
-    MAX_HISTORY_RECORDS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
+    HistoryRecord, InputRules, PackageInput, SearchResult, MAX_FIELD_CHARS,
+    MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES,
+    MAX_SCRIPT_CHARS,
 };
 
 const MAX_GENERATE_METHOD_CHARS: usize = 32;
@@ -30,23 +31,116 @@ static BASE_HISTORY_RE: OnceLock<[Regex; 4]> = OnceLock::new();
 static INSTALL_URL_HISTORY_RE: OnceLock<Regex> = OnceLock::new();
 static CRAN_HISTORY_RE: OnceLock<[Regex; 2]> = OnceLock::new();
 
-pub fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
+#[allow(dead_code)]
+pub(crate) fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
+    parse_inputs_filtered(input, &InputRules::default())
+}
+
+pub fn parse_inputs_filtered(
+    input: &str,
+    rules: &InputRules,
+) -> Result<Vec<PackageInput>, String> {
     validate_input_size(input)?;
 
     let mut packages = Vec::new();
-    for (index, line) in input.lines().enumerate() {
+    for (line_idx, line) in input.lines().enumerate() {
         let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
+        if trimmed.is_empty() || is_comment_line(trimmed, rules) {
             continue;
         }
-        let package = parse_input_line(trimmed)
-            .ok_or_else(|| format!("第 {} 行输入格式无效或包含不允许的字符", index + 1))?;
-        packages.push(package);
-        if packages.len() > MAX_PACKAGE_LINES {
-            return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+        let line_num = line_idx + 1;
+
+        if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+            if let Some(pkg) = parse_input_line(trimmed) {
+                packages.push(pkg);
+            } else {
+                return Err(format!("第 {line_num} 行 URL 输入格式无效"));
+            }
+            if packages.len() > MAX_PACKAGE_LINES {
+                return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+            }
+            continue;
+        }
+
+        let preprocessed = if rules.strip_c_parens {
+            strip_r_parens_wrapper(trimmed)
+        } else {
+            trimmed.to_string()
+        };
+
+        let segments = split_by_separators(&preprocessed, rules);
+        for (seg_idx, segment) in segments.iter().enumerate() {
+            let cleaned = if rules.strip_quotes {
+                segment.trim_matches(['"', '\'']).trim().to_string()
+            } else {
+                segment.trim().to_string()
+            };
+            if cleaned.is_empty() {
+                continue;
+            }
+            let pkg = parse_input_line(&cleaned).ok_or_else(|| {
+                format!("第 {line_num} 行第 {} 段输入格式无效", seg_idx + 1)
+            })?;
+            packages.push(pkg);
+            if packages.len() > MAX_PACKAGE_LINES {
+                return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+            }
         }
     }
     Ok(packages)
+}
+
+fn is_comment_line(line: &str, rules: &InputRules) -> bool {
+    let trimmed = line.trim();
+    rules.comment_chars.iter().any(|c| trimmed.starts_with(c))
+}
+
+fn strip_r_parens_wrapper(line: &str) -> String {
+    let trimmed = line.trim();
+    for prefix in &["c(", "list("] {
+        if let Some(inner) = trimmed.strip_prefix(prefix) {
+            if let Some(end) = inner.rfind(')').map(|pos| &inner[..pos]) {
+                return end.to_string();
+            }
+        }
+    }
+    trimmed.to_string()
+}
+
+fn split_by_separators(line: &str, rules: &InputRules) -> Vec<String> {
+    let mut result = vec![line.to_string()];
+
+    for sep in &rules.separators {
+        let mut next = Vec::new();
+        for part in &result {
+            for sub in part.split(sep.as_str()) {
+                let trimmed = sub.trim();
+                if !trimmed.is_empty() {
+                    next.push(trimmed.to_string());
+                }
+            }
+        }
+        result = next;
+    }
+
+    if rules.split_spaces {
+        let mut next = Vec::new();
+        for part in &result {
+            for sub in part.split_whitespace() {
+                let trimmed = sub.trim();
+                if !trimmed.is_empty() {
+                    next.push(trimmed.to_string());
+                }
+            }
+        }
+        result = next;
+    }
+
+    if result.is_empty() {
+        vec![line.to_string()]
+    } else {
+        result
+    }
 }
 
 pub fn parse_input_line(line: &str) -> Option<PackageInput> {
@@ -176,6 +270,7 @@ pub fn extract_package_name(input: &str) -> String {
     value.rsplit('/').next().unwrap_or(value).to_string()
 }
 
+#[allow(dead_code)]
 pub fn generate_script(
     input: &str,
     options: &GenerateOptions,
@@ -184,6 +279,20 @@ pub fn generate_script(
     generate_script_with_remote_versions(input, options, results, true)
 }
 
+pub fn generate_script_with_rules(
+    input: &str,
+    options: &GenerateOptions,
+    results: &[SearchResult],
+    show_remote_version: bool,
+    rules: &InputRules,
+) -> Result<String, String> {
+    let requested_method = normalize_generate_method(&options.method)?;
+    validate_search_results_count(results)?;
+    let packages = parse_inputs_filtered(input, rules)?;
+    generate_script_inner(options, results, show_remote_version, requested_method, packages)
+}
+
+#[allow(dead_code)]
 pub fn generate_script_with_remote_versions(
     input: &str,
     options: &GenerateOptions,
@@ -193,6 +302,16 @@ pub fn generate_script_with_remote_versions(
     let requested_method = normalize_generate_method(&options.method)?;
     validate_search_results_count(results)?;
     let packages = parse_inputs(input)?;
+    generate_script_inner(options, results, show_remote_version, requested_method, packages)
+}
+
+fn generate_script_inner(
+    options: &GenerateOptions,
+    results: &[SearchResult],
+    show_remote_version: bool,
+    requested_method: &str,
+    packages: Vec<PackageInput>,
+) -> Result<String, String> {
     if packages.is_empty() {
         return Ok("等待输入...".to_string());
     }
@@ -2087,5 +2206,137 @@ mod tests {
         .expect("GitHub 智能路由带版本结果应可生成带有 ref 的 install_github");
 
         assert!(output.contains("remotes::install_github(\"owner/demo@v1.2.3\""));
+    }
+
+    #[test]
+    fn parses_comma_separated_quoted_packages() {
+        let packages = parse_inputs_filtered(
+            "\"ChIPseeker\", \"clusterProfiler\", \"TxDb.Hsapiens.UCSC.hg38.knownGene\"",
+            &InputRules::default(),
+        )
+        .expect("逗号分隔引用包名应可解析");
+        assert_eq!(packages.len(), 3);
+        assert_eq!(packages[0].name, "ChIPseeker");
+        assert_eq!(packages[1].name, "clusterProfiler");
+        assert_eq!(packages[2].name, "TxDb.Hsapiens.UCSC.hg38.knownGene");
+    }
+
+    #[test]
+    fn parses_semicolon_separated_packages() {
+        let packages = parse_inputs_filtered(
+            "dplyr; ggplot2; tidyr; shiny",
+            &InputRules::default(),
+        )
+        .expect("分号分隔包名应可解析");
+        assert_eq!(packages.len(), 4);
+        assert_eq!(packages[0].name, "dplyr");
+        assert_eq!(packages[2].name, "tidyr");
+    }
+
+    #[test]
+    fn parses_r_c_vector_syntax() {
+        let packages = parse_inputs_filtered(
+            "c(\"Seurat\", \"dplyr\", \"ggplot2\")",
+            &InputRules::default(),
+        )
+        .expect("R c() 向量应可解析");
+        assert_eq!(packages.len(), 3);
+        assert_eq!(packages[0].name, "Seurat");
+        assert_eq!(packages[1].name, "dplyr");
+        assert_eq!(packages[2].name, "ggplot2");
+    }
+
+    #[test]
+    fn parses_mixed_separator_lines() {
+        let packages = parse_inputs_filtered(
+            "pkg1; pkg2, pkg3\npkg4, pkg5",
+            &InputRules::default(),
+        )
+        .expect("混合分隔符多行输入应可解析");
+        assert_eq!(packages.len(), 5);
+        assert_eq!(packages[0].name, "pkg1");
+        assert_eq!(packages[3].name, "pkg4");
+    }
+
+    #[test]
+    fn parses_comma_separated_with_versions() {
+        let packages = parse_inputs_filtered(
+            "GSVA 1.50.0, dplyr 1.0.0, ggplot2",
+            &InputRules::default(),
+        )
+        .expect("逗号分隔带版本应可解析");
+        assert_eq!(packages.len(), 3);
+        assert_eq!(packages[0].name, "GSVA");
+        assert_eq!(packages[0].version, "1.50.0");
+        assert_eq!(packages[1].name, "dplyr");
+        assert_eq!(packages[1].version, "1.0.0");
+        assert_eq!(packages[2].name, "ggplot2");
+        assert_eq!(packages[2].version, "");
+    }
+
+    #[test]
+    fn parses_list_variant_syntax() {
+        let packages = parse_inputs_filtered(
+            "list(\"pkg1\", \"pkg2\")",
+            &InputRules::default(),
+        )
+        .expect("list() 包裹应可解析");
+        assert_eq!(packages.len(), 2);
+        assert_eq!(packages[0].name, "pkg1");
+        assert_eq!(packages[1].name, "pkg2");
+    }
+
+    #[test]
+    fn parses_url_lines_bypass_separator_splitting() {
+        let packages = parse_inputs_filtered(
+            "https://example.org/src/contrib/demo_1.0.0.tar.gz",
+            &InputRules::default(),
+        )
+        .expect("URL 行应保持完整");
+        assert_eq!(packages.len(), 1);
+        assert_eq!(packages[0].name, "demo");
+    }
+
+    #[test]
+    fn test_strip_r_parens_wrapper() {
+        assert_eq!(
+            strip_r_parens_wrapper("c(\"pkg1\", \"pkg2\")"),
+            "\"pkg1\", \"pkg2\""
+        );
+        assert_eq!(
+            strip_r_parens_wrapper("list(\"pkg1\")"),
+            "\"pkg1\""
+        );
+        assert_eq!(
+            strip_r_parens_wrapper("plain_line"),
+            "plain_line"
+        );
+    }
+
+    #[test]
+    fn parses_space_separated_with_split_spaces_enabled() {
+        let rules = InputRules {
+            split_spaces: true,
+            separators: Vec::new(),
+            ..InputRules::default()
+        };
+        let packages = parse_inputs_filtered(
+            "pkg1 pkg2 pkg3",
+            &rules,
+        )
+        .expect("空格分隔 (split_spaces=true) 应可解析");
+        assert_eq!(packages.len(), 3);
+        assert_eq!(packages[0].name, "pkg1");
+        assert_eq!(packages[2].name, "pkg3");
+    }
+
+    #[test]
+    fn parses_complex_real_world_input() {
+        let input = "c(\"ChIPseeker\", \"clusterProfiler\", \"TxDb.Hsapiens.UCSC.hg38.knownGene\", \"org.Hs.eg.db\", \"enrichplot\")";
+        let packages = parse_inputs_filtered(input, &InputRules::default())
+            .expect("真实世界 R c() 输入应可解析");
+        assert_eq!(packages.len(), 5);
+        assert_eq!(packages[0].name, "ChIPseeker");
+        assert_eq!(packages[4].name, "enrichplot");
     }
 }
