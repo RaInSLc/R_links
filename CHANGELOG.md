@@ -885,4 +885,13 @@
 - �Ż� App ��������Ӧ������˫��ת���е���Ӧʽ�ϵ㣨��1080px����1200px����Ϊ�ı�����ʹ��������Ӵ�ֱ���칦�ܣ���ʹ��־����߶�����Ӧ��
 
 ## [Unreleased]
-- ���������������ܣ����� Tauri Updater �� GitHub Actions/Releases�����ڽ����������ṩӦ�ø��º��Զ����ذ�װ֧�֡�
+- 引入 Tauri Updater + GitHub Actions/Releases 机制，提供应用更新检查和自动下载安装支持
+- **[2026-06-22 14:40:00 +08:00] 设置面板新增输入过滤规则编辑界面**：
+  - 新增 `load_input_rules` / `save_input_rules` Tauri IPC 命令
+  - SettingsView 新增"输入过滤规则"面板，支持可视化编辑分隔符、引号剥离、c()/list() 剥离、空格分割、注释字符
+  - Rust `InputRules` 结构体直接通过 JSON 序列化与前端交互
+- **[2026-06-22 14:40:00 +08:00] 设置面板新增安装策略默认值配置**：
+  - Settings 新增 `conditional`、`install_dependencies`、`show_remote_version` 三个持久化布尔字段
+  - SettingsView 新增"安装策略默认值"面板，可配置条件安装、安装依赖、同步远程版本的默认开关状态
+   - App.tsx 工作台初始化时从 settings 读取开关默认值，替代原先的硬编码 `useState(true)`
+   - 设置面板策略开关切改时自动持久化（`persistSettings` 支持 Partial overrides），无需手动点"保存设置"

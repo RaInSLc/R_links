@@ -1,7 +1,7 @@
 import { PanelHeader, Toggle } from "./components";
 import { MAX_RESULT_FIELD_CHARS, MAX_TOKEN_CHARS } from "./utils";
 import { mirrors } from "./types";
-import type { Settings } from "./types";
+import type { InputRules, Settings } from "./types";
 
 interface SettingsViewProps {
   settings: Settings;
@@ -17,6 +17,9 @@ interface SettingsViewProps {
   onTokenToggle: () => void;
   onClearToken: () => void;
   onFullSearchChange: (v: boolean) => void;
+  onConditionalChange: (v: boolean) => void;
+  onInstallDependenciesChange: (v: boolean) => void;
+  onShowRemoteVersionChange: (v: boolean) => void;
   onCranMirrorChange: (value: string) => void;
   onMirrorSelect: (value: string) => void;
   onSaveSettings: () => void;
@@ -25,15 +28,21 @@ interface SettingsViewProps {
   onCheckUpdates: () => void;
   onClearCache: () => Promise<void>;
   onExportDiagnostics: () => Promise<void>;
+  inputRules: InputRules;
+  onInputRulesChange: (rules: InputRules) => void;
+  onSaveInputRules: () => void;
+  inputRulesBusy: boolean;
 }
 
 export function SettingsView({
   settings, tokenConfigured, showToken, settingsBusy,
   currentTheme, currentFont, checkingUpdate, updateMessage,
   onProxyChange, onTokenChange, onTokenToggle, onClearToken,
-  onFullSearchChange, onCranMirrorChange, onMirrorSelect,
+  onFullSearchChange, onConditionalChange, onInstallDependenciesChange, onShowRemoteVersionChange,
+  onCranMirrorChange, onMirrorSelect,
   onSaveSettings, onThemeChange, onFontChange,
   onCheckUpdates, onClearCache, onExportDiagnostics,
+  inputRules, onInputRulesChange, onSaveInputRules, inputRulesBusy,
 }: SettingsViewProps) {
   return (
     <div className="settings-layout">
@@ -129,6 +138,47 @@ export function SettingsView({
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="panel settings-panel">
+        <PanelHeader step="策略" title="安装策略默认值" meta="工作台初始状态" />
+        <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
+          <Toggle checked={settings.conditional} label="条件安装" description="默认开启：已安装时自动跳过" onChange={onConditionalChange} />
+          <Toggle checked={settings.installDependencies} label="安装依赖" description="默认开启：dependencies = TRUE" onChange={onInstallDependenciesChange} />
+          <Toggle checked={settings.showRemoteVersion} label="同步远程版本" description="默认开启：显示版本并生成精确版本安装" onChange={onShowRemoteVersionChange} />
+        </div>
+      </section>
+
+      <section className="panel settings-panel">
+        <PanelHeader step="过滤" title="输入过滤规则" meta="白盒化正则配置" />
+        <div className="field" style={{ margin: "0 17px" }}>
+          <span>分隔符</span>
+          <small>用于将一行拆分为多个包名（逗号分隔多个值）</small>
+          <input
+            value={inputRules.separators.join(",")}
+            onChange={(event) => onInputRulesChange({ ...inputRules, separators: event.currentTarget.value.split(",").map(s => s.trim()).filter(Boolean) })}
+            placeholder=", ;"
+            maxLength={MAX_RESULT_FIELD_CHARS}
+          />
+        </div>
+        <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
+          <Toggle checked={inputRules.stripQuotes} label="去除引号" description="去除包名两端的 &quot; 和 '" onChange={(v) => onInputRulesChange({ ...inputRules, stripQuotes: v })} />
+          <Toggle checked={inputRules.stripCParens} label="去除 c()/list()" description="去除 R 的 c(...) 或 list(...) 包裹" onChange={(v) => onInputRulesChange({ ...inputRules, stripCParens: v })} />
+          <Toggle checked={inputRules.splitSpaces} label="空格分割" description="将空格也作为分隔符（开启后禁用版本号提取）" onChange={(v) => onInputRulesChange({ ...inputRules, splitSpaces: v })} />
+        </div>
+        <div className="field" style={{ margin: "0 17px" }}>
+          <span>注释字符</span>
+          <small>以这些字符开头的行将被忽略（逗号分隔）</small>
+          <input
+            value={inputRules.commentChars.join(",")}
+            onChange={(event) => onInputRulesChange({ ...inputRules, commentChars: event.currentTarget.value.split(",").map(s => s.trim()).filter(Boolean) })}
+            placeholder="#"
+            maxLength={MAX_RESULT_FIELD_CHARS}
+          />
+        </div>
+        <button className="button primary save-button" onClick={onSaveInputRules} disabled={inputRulesBusy}>
+          {inputRulesBusy ? "处理中..." : "保存过滤规则"}
+        </button>
       </section>
 
       <section className="panel settings-panel">

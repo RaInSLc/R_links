@@ -16,6 +16,9 @@ pub struct Settings {
     pub github_token: String,
     pub cran_mirror: String,
     pub full_search: bool,
+    pub conditional: bool,
+    pub install_dependencies: bool,
+    pub show_remote_version: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -25,6 +28,9 @@ pub struct PublicSettings {
     pub github_token_configured: bool,
     pub cran_mirror: String,
     pub full_search: bool,
+    pub conditional: bool,
+    pub install_dependencies: bool,
+    pub show_remote_version: bool,
 }
 
 impl Default for Settings {
@@ -34,6 +40,9 @@ impl Default for Settings {
             github_token: String::new(),
             cran_mirror: "https://cloud.r-project.org".to_string(),
             full_search: false,
+            conditional: true,
+            install_dependencies: true,
+            show_remote_version: true,
         }
     }
 }
@@ -49,6 +58,9 @@ impl Settings {
             github_token,
             cran_mirror,
             full_search: self.full_search,
+            conditional: self.conditional,
+            install_dependencies: self.install_dependencies,
+            show_remote_version: self.show_remote_version,
         })
     }
 
@@ -58,6 +70,9 @@ impl Settings {
             github_token_configured: !self.github_token.trim().is_empty(),
             cran_mirror: self.cran_mirror.clone(),
             full_search: self.full_search,
+            conditional: self.conditional,
+            install_dependencies: self.install_dependencies,
+            show_remote_version: self.show_remote_version,
         }
     }
 

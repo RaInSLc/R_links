@@ -34,12 +34,22 @@ const MALFORMED_SETTINGS_BACKUP_NOTICE: &str = "设置文件格式损坏，原�
 static STORAGE_WRITE_LOCK: Mutex<()> = Mutex::new(());
 static STORAGE_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct StoredSettings {
     proxy: String,
     cran_mirror: String,
     full_search: bool,
+    #[serde(default = "default_true")]
+    conditional: bool,
+    #[serde(default = "default_true")]
+    install_dependencies: bool,
+    #[serde(default = "default_true")]
+    show_remote_version: bool,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     github_token: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -61,6 +71,9 @@ impl StoredSettings {
             github_token,
             cran_mirror: self.cran_mirror,
             full_search: self.full_search,
+            conditional: self.conditional,
+            install_dependencies: self.install_dependencies,
+            show_remote_version: self.show_remote_version,
         }
         .normalized()
     }
@@ -73,11 +86,14 @@ impl StoredSettings {
             github_token_protected: secrets::protect_string(&settings.github_token)?,
             cran_mirror: settings.cran_mirror,
             full_search: settings.full_search,
+            conditional: settings.conditional,
+            install_dependencies: settings.install_dependencies,
+            show_remote_version: settings.show_remote_version,
         })
     }
 }
 
-fn data_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
+pub fn data_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
     let directory = ensure_data_directory(app)?;
     Ok(directory.join(name))
 }

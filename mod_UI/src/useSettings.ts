@@ -9,6 +9,8 @@ import {
 import type { Settings } from "./types";
 import { defaultSettings } from "./types";
 
+type SettingsBoolField = "fullSearch" | "conditional" | "installDependencies" | "showRemoteVersion";
+
 type SetStatus = (s: string) => void;
 
 export function useSettings(setStatus: SetStatus) {
@@ -31,6 +33,9 @@ export function useSettings(setStatus: SetStatus) {
           githubToken: "",
           cranMirror: clean.cranMirror,
           fullSearch: clean.fullSearch,
+          conditional: clean.conditional,
+          installDependencies: clean.installDependencies,
+          showRemoteVersion: clean.showRemoteVersion,
         });
         setTokenConfigured(clean.githubTokenConfigured);
       })
@@ -81,11 +86,11 @@ export function useSettings(setStatus: SetStatus) {
     return true;
   }
 
-  async function persistSettings() {
+  async function persistSettings(overrides?: Partial<Pick<Settings, SettingsBoolField>>) {
     if (!beginSettingsOperation()) return;
     const actionSeq = settingsActionSeq.current + 1;
     settingsActionSeq.current = actionSeq;
-    const settingsSnapshot = settings;
+    const settingsSnapshot = overrides ? { ...settings, ...overrides } : settings;
     try {
       const publicSettings = sanitizePublicSettings(
         await invoke<PublicSettings>("save_settings", { settings: settingsSnapshot }),
@@ -100,6 +105,9 @@ export function useSettings(setStatus: SetStatus) {
         githubToken: "",
         cranMirror: publicSettings.cranMirror,
         fullSearch: publicSettings.fullSearch,
+        conditional: publicSettings.conditional,
+        installDependencies: publicSettings.installDependencies,
+        showRemoteVersion: publicSettings.showRemoteVersion,
       });
       setShowToken(false);
       setStatus("设置已保存并立即生效");
@@ -133,6 +141,9 @@ export function useSettings(setStatus: SetStatus) {
         githubToken: "",
         cranMirror: publicSettings.cranMirror,
         fullSearch: publicSettings.fullSearch,
+        conditional: publicSettings.conditional,
+        installDependencies: publicSettings.installDependencies,
+        showRemoteVersion: publicSettings.showRemoteVersion,
       }));
       setShowToken(false);
       setStatus("已清除保存的 GitHub Token");

@@ -16,7 +16,8 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, State};
 
 use models::{
-    GenerateOptions, HistoryRecord, PublicSettings, SearchResponse, SearchResult, Settings,
+    GenerateOptions, HistoryRecord, InputRules, PublicSettings, SearchResponse, SearchResult,
+    Settings,
 };
 
 const MAX_BROWSER_OPEN_REQUESTS: usize = 30;
@@ -156,6 +157,27 @@ impl BrowserOpenLimiter {
         opened_at.push_back(now);
         Ok(())
     }
+}
+
+#[tauri::command]
+fn load_input_rules(app: AppHandle) -> Result<InputRules, String> {
+    let path = storage::data_file(&app, "input_rules.json")
+        .map_err(|e| format!("获取输入规则文件路径失败: {e}"))?;
+    if !path.exists() {
+        return Ok(InputRules::default());
+    }
+    let content =
+        std::fs::read_to_string(&path).map_err(|e| format!("读取输入规则文件失败: {e}"))?;
+    serde_json::from_str(&content).map_err(|e| format!("解析输入规则失败: {e}"))
+}
+
+#[tauri::command]
+fn save_input_rules(app: AppHandle, rules: InputRules) -> Result<(), String> {
+    let path = storage::data_file(&app, "input_rules.json")
+        .map_err(|e| format!("获取输入规则文件路径失败: {e}"))?;
+    let content = serde_json::to_string_pretty(&rules)
+        .map_err(|e| format!("序列化输入规则失败: {e}"))?;
+    std::fs::write(&path, &content).map_err(|e| format!("写入输入规则文件失败: {e}"))
 }
 
 #[tauri::command]
@@ -436,7 +458,9 @@ pub fn run() {
             open_package_search,
             start_search,
             stop_search,
-            export_diagnostics
+            export_diagnostics,
+            load_input_rules,
+            save_input_rules
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");
@@ -593,6 +617,7 @@ mod tests {
             github_token: "ghp_new".to_string(),
             cran_mirror: "https://cloud.r-project.org".to_string(),
             full_search: true,
+            ..Settings::default()
         };
 
         let public = merge_runtime_settings(incoming, &existing)
@@ -620,6 +645,7 @@ mod tests {
             github_token: String::new(),
             cran_mirror: "https://cloud.r-project.org".to_string(),
             full_search: false,
+            ..Settings::default()
         };
         let merged = merge_runtime_settings(incoming, &Settings::default())
             .expect("损坏旧设置恢复保存时不应要求旧 Token");
@@ -645,6 +671,7 @@ mod tests {
             github_token: String::new(),
             cran_mirror: "https://cloud.r-project.org".to_string(),
             full_search: true,
+            ..Settings::default()
         };
         let merged =
             merge_runtime_settings(incoming, &recovered).expect("默认恢复设置应可参与运行时合并");
@@ -680,6 +707,7 @@ mod tests {
             github_token: "ghp_saved".to_string(),
             cran_mirror: "https://cloud.r-project.org".to_string(),
             full_search: true,
+            ..Settings::default()
         }
         .normalized()
         .expect("设置应可规范化");

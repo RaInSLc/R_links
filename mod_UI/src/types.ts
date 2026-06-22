@@ -16,6 +16,17 @@ export interface Settings {
   githubToken: string;
   cranMirror: string;
   fullSearch: boolean;
+  conditional: boolean;
+  installDependencies: boolean;
+  showRemoteVersion: boolean;
+}
+
+export interface InputRules {
+  separators: string[];
+  stripQuotes: boolean;
+  stripCParens: boolean;
+  commentChars: string[];
+  splitSpaces: boolean;
 }
 
 export interface InputProfile {
@@ -39,6 +50,17 @@ export const defaultSettings: Settings = {
   githubToken: "",
   cranMirror: "https://cloud.r-project.org",
   fullSearch: false,
+  conditional: true,
+  installDependencies: true,
+  showRemoteVersion: true,
+};
+
+export const defaultInputRules: InputRules = {
+  separators: [",", ";"],
+  stripQuotes: true,
+  stripCParens: true,
+  commentChars: ["#"],
+  splitSpaces: false,
 };
 
 export const methods: Array<{

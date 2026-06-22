@@ -17,7 +17,7 @@ import {
   MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS,
   type HistoryRecord,
 } from "./utils";
-import { type View, type Method } from "./types";
+import { type View, type Method, type InputRules, defaultInputRules, defaultSettings } from "./types";
 
 function App() {
   const [view, setView] = useState<View>("workspace");
@@ -32,6 +32,8 @@ function App() {
   const [status, setStatus] = useState("就绪");
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
+  const [inputRules, setInputRules] = useState<InputRules>(defaultInputRules);
+  const [inputRulesBusy, setInputRulesBusy] = useState(false);
 
   const latestInputRef = useRef("");
   const latestScriptRef = useRef("等待输入...");
@@ -71,6 +73,25 @@ function App() {
   const foundCount = results.filter((r) => r.found).length;
   const uniqueFoundCount = new Set(results.filter((r) => r.found).map((r) => r.package)).size;
   const summaryProgress = packageCount ? Math.min(100, (uniqueFoundCount / packageCount) * 100) : 0;
+
+  const settingsLoadedRef = useRef(false);
+  useEffect(() => {
+    if (settingsLoadedRef.current) return;
+    if (settings.conditional !== defaultSettings.conditional ||
+        settings.installDependencies !== defaultSettings.installDependencies ||
+        settings.showRemoteVersion !== defaultSettings.showRemoteVersion) {
+      setConditional(settings.conditional);
+      setInstallDependencies(settings.installDependencies);
+      setShowRemoteVersion(settings.showRemoteVersion);
+      settingsLoadedRef.current = true;
+    }
+  }, [settings.conditional, settings.installDependencies, settings.showRemoteVersion]);
+
+  useEffect(() => {
+    invoke<InputRules>("load_input_rules")
+      .then((rules) => setInputRules(rules))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", currentTheme);
@@ -265,6 +286,18 @@ function App() {
     return !methodSupportsInput(candidate, inputProfile);
   }
 
+  async function saveInputRules() {
+    setInputRulesBusy(true);
+    try {
+      await invoke("save_input_rules", { rules: inputRules });
+      setStatus("过滤规则已保存并立即生效");
+    } catch (error) {
+      setStatus(`保存过滤规则失败: ${formatError(error)}`);
+    } finally {
+      setInputRulesBusy(false);
+    }
+  }
+
   function handleStartSearch() {
     startSearch(input, settings, inputTooLarge, () => setView("report"), () => setMethod("auto"));
   }
@@ -358,6 +391,21 @@ function App() {
               onTokenToggle={() => setShowToken((v) => !v)}
               onClearToken={clearSavedToken}
               onFullSearchChange={(v) => updateSettingsFromUser((c) => ({ ...c, fullSearch: v }))}
+              onConditionalChange={(v) => {
+                setConditional(v);
+                updateSettingsFromUser((c) => ({ ...c, conditional: v }));
+                persistSettings({ conditional: v });
+              }}
+              onInstallDependenciesChange={(v) => {
+                setInstallDependencies(v);
+                updateSettingsFromUser((c) => ({ ...c, installDependencies: v }));
+                persistSettings({ installDependencies: v });
+              }}
+              onShowRemoteVersionChange={(v) => {
+                setShowRemoteVersion(v);
+                updateSettingsFromUser((c) => ({ ...c, showRemoteVersion: v }));
+                persistSettings({ showRemoteVersion: v });
+              }}
               onCranMirrorChange={(v) => acceptSettingValue("cranMirror", v)}
               onMirrorSelect={(v) => updateSettingsFromUser((c) => ({ ...c, cranMirror: v }))}
               onSaveSettings={persistSettings}
@@ -380,6 +428,10 @@ function App() {
                   setStatus("诊断信息已导出");
                 } catch (error) { setStatus(`诊断导出失败: ${formatError(error)}`); }
               }}
+              inputRules={inputRules}
+              onInputRulesChange={setInputRules}
+              onSaveInputRules={saveInputRules}
+              inputRulesBusy={inputRulesBusy}
             />
           )}
         </section>
