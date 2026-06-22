@@ -21,6 +21,7 @@
   - **`App.tsx` 使用 `utils.ts` + 组件提取**：App.tsx 改为 import `utils.ts` 导出的类型/常量/函数，消除 ~250 行重复定义；提取 NavButton、PanelHeader、Toggle、Metric、EmptyState 至独立 `components.tsx` 模块；tsc 与 35 个测试全部通过
   - **全面提取 `App.tsx` 内联定义**：创建 `src/types.ts` 存放视图/方法/设置等类型定义与数据数组（`methods`、`mirrors`、`sourceNames`）；将所有剩余纯函数（`appendBounded`、`inputValueTooLarge`、`sanitizeHistoryRecord`、`classifyInputProfile`、`nextSearchRunId` 等）迁移至 `utils.ts`；App.tsx 缩减至 1258 行（-244 行），tsc 与 35 个测试通过
   - **提取视图组件**：创建 `WorkspaceView.tsx`、`ReportView.tsx`、`HistoryView.tsx`、`SettingsView.tsx` 四个独立视图组件；App.tsx 进一步缩减至 892 行（-366 行），tsc 与 35 个测试通过
+  - **提取自定义 Hooks**：创建 `useSettings.ts`（设置状态 + 加载/保存/清除 Token）、`useHistory.ts`（历史状态 + 保存队列/复制/删除）、`useSearch.ts`（搜索状态 + 事件监听/启停/浏览器搜索）；App.tsx 缩减至 391 行（-501 行），tsc 与 35 个测试通过
 
 ## [2026-06-20]
 
