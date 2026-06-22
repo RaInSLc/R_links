@@ -7,116 +7,26 @@ import {
 } from "@tauri-apps/plugin-clipboard-manager";
 import "./App.css";
 import { NavButton, PanelHeader, Toggle, Metric, EmptyState } from "./components";
-import { asArray, asRecord, formatError,
-  isActiveInputLine, mapBounded, MAX_HISTORY_FIELD_CHARS, MAX_PACKAGE_LINES,
-  MAX_RESULT_FIELD_CHARS, MAX_SEARCH_LOGS, MAX_SEARCH_RESULTS, MAX_VERSION_CHARS,
-  nonEmptyLineCountExceeds, resultIdentityKey, safeBoolean, safeRunId,
-  safeStatusText, safeText, sanitizeSearchResponse, sanitizeSearchResult,
+import { appendBounded, asArray, asRecord, formatError, upsertBoundedResult,
+  inputValueTooLarge, scriptValueTooLarge, settingsValueTooLargeOrUnsafe,
+  githubTokenTextAllowed, settingsFieldLabel, activeInputLineCount,
+  nonEmptyLineBytesExceeds,
+  mapBounded, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS,
+  MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_RESULT_FIELD_CHARS,
+  MAX_SCRIPT_CHARS, MAX_SEARCH_LOGS, MAX_SEARCH_RESULTS, MAX_SEARCH_TABS,
+  MAX_TOKEN_CHARS,
+  BROWSER_SEARCH_CONFIRM_THRESHOLD, HISTORY_LOAD_WAIT_TIMEOUT_MS,
+  safeRunId, safeStatusText,
+  sanitizePublicSettings, sanitizeHistoryRecord, sanitizeSearchResponse,
+  sanitizeSearchResult, collectBrowserSearchNames,
+  classifyInputProfile, methodSupportsInput, nextSearchRunId,
   utf8Length,
   type HistoryRecord, type PublicSettings, type SearchResponse, type SearchResult } from "./utils";
-
-type View = "workspace" | "report" | "history" | "settings";
-type Method =
-  | "auto"
-  | "devtools"
-  | "remotes"
-  | "github"
-  | "base"
-  | "version"
-  | "biocManager"
-  | "checkSystem";
-
-interface Settings {
-  proxy: string;
-  githubToken: string;
-  cranMirror: string;
-  fullSearch: boolean;
-}
-
-interface SearchLogEvent {
-  runId: number;
-  message: string;
-}
-
-interface SearchProgressEvent {
-  runId: number;
-  result: SearchResult;
-}
-
-interface InputProfile {
-  total: number;
-  archiveUrls: number;
-  repositories: number;
-}
-
-const defaultSettings: Settings = {
-  proxy: "",
-  githubToken: "",
-  cranMirror: "https://cloud.r-project.org",
-  fullSearch: false,
-};
-
-const MAX_INPUT_CHARS = 100_000;
-const MAX_INPUT_LINE_BYTES = 2_048;
-const BROWSER_SEARCH_CONFIRM_THRESHOLD = 10;
-const MAX_SEARCH_TABS = 30;
-const MAX_SCRIPT_CHARS = 1_000_000;
-const MAX_TOKEN_CHARS = 512;
-const MAX_HISTORY_RECORDS = 100;
-const HISTORY_LOAD_WAIT_TIMEOUT_MS = 5_000;
-
-const methods: Array<{
-  id: Method;
-  title: string;
-  description: string;
-}> = [
-  { id: "auto", title: "智能路由", description: "根据检索结果自动选择来源" },
-  { id: "base", title: "CRAN", description: "install.packages" },
-  { id: "biocManager", title: "Bioconductor", description: "BiocManager::install" },
-  { id: "github", title: "GitHub", description: "remotes::install_github" },
-  { id: "remotes", title: "远程地址", description: "remotes::install_url" },
-  { id: "devtools", title: "devtools", description: "devtools::install_url" },
-  { id: "version", title: "版本查询", description: "packageVersion" },
-  { id: "checkSystem", title: "系统检查", description: "批量检查是否已安装" },
-];
-
-const mirrors = [
-  { label: "Posit Cloud", value: "https://cloud.r-project.org" },
-  { label: "清华大学", value: "https://mirrors.tuna.tsinghua.edu.cn/CRAN/" },
-  { label: "中国科学技术大学", value: "https://mirrors.ustc.edu.cn/CRAN/" },
-  { label: "北京外国语大学", value: "https://mirrors.bfsu.edu.cn/CRAN/" },
-];
-
-const sourceNames: Record<string, string> = {
-  cran: "CRAN",
-  bioc: "Bioconductor",
-  biocGit: "Bioc 历史版",
-  github: "GitHub",
-  none: "未找到",
-};
-
-let searchRunCounter = 0;
-
-function appendBounded<T>(items: T[], item: T, limit: number) {
-  if (items.length >= limit) {
-    return items;
-  }
-  return [...items, item];
-}
-
-function upsertBoundedResult(items: SearchResult[], item: SearchResult, limit: number) {
-  const key = resultIdentityKey(item);
-  const index = items.findIndex((current) => resultIdentityKey(current) === key);
-  if (index >= 0) {
-    const next = [...items];
-    next[index] = item;
-    return next;
-  }
-  if (items.length >= limit) {
-    return items;
-  }
-  return [...items, item];
-}
+import {
+  type View, type Method, type Settings,
+  type SearchLogEvent, type SearchProgressEvent,
+  defaultSettings, methods, mirrors, sourceNames,
+} from "./types";
 
 function App() {
   const [view, setView] = useState<View>("workspace");
@@ -1343,160 +1253,6 @@ function App() {
       </main>
     </div>
   );
-}
-
-function inputValueTooLarge(value: string) {
-  return (
-    value.length > MAX_INPUT_CHARS ||
-    inputHasDisallowedControlCharacters(value) ||
-    nonEmptyLineCountExceeds(value, MAX_PACKAGE_LINES) ||
-    nonEmptyLineBytesExceeds(value, MAX_INPUT_LINE_BYTES) ||
-    utf8Length(value) > MAX_INPUT_CHARS
-  );
-}
-
-function scriptValueTooLarge(value: string) {
-  return value.length > MAX_SCRIPT_CHARS || utf8Length(value) > MAX_SCRIPT_CHARS;
-}
-
-function settingsValueTooLargeOrUnsafe(value: string, limit: number) {
-  return value.length > limit || utf8Length(value) > limit || /[\p{C}]/u.test(value);
-}
-
-function githubTokenTextAllowed(value: string) {
-  return /^[\x21-\x7E]*$/.test(value);
-}
-
-function settingsFieldLabel(field: keyof Pick<Settings, "proxy" | "githubToken" | "cranMirror">) {
-  switch (field) {
-    case "proxy":
-      return "网络代理";
-    case "githubToken":
-      return "GitHub Token";
-    case "cranMirror":
-      return "CRAN 镜像";
-  }
-}
-
-function activeInputLineCount(value: string) {
-  let count = 0;
-  for (const line of value.split(/\r?\n/)) {
-    if (isActiveInputLine(line)) {
-      count += 1;
-    }
-  }
-  return count;
-}
-
-function nonEmptyLineBytesExceeds(value: string, limit: number) {
-  for (const line of value.split(/\r?\n/)) {
-    if (line.trim() && utf8Length(line) > limit) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function inputHasDisallowedControlCharacters(value: string) {
-  return /[\p{C}]/u.test(value.replace(/[\r\n\t]/g, ""));
-}
-
-function sanitizePublicSettings(value: unknown): PublicSettings {
-  const settings = asRecord(value);
-  return {
-    proxy: safeText(settings.proxy, MAX_RESULT_FIELD_CHARS),
-    githubTokenConfigured: safeBoolean(settings.githubTokenConfigured),
-    cranMirror: safeText(settings.cranMirror, MAX_RESULT_FIELD_CHARS) || defaultSettings.cranMirror,
-    fullSearch: safeBoolean(settings.fullSearch),
-  };
-}
-
-function sanitizeHistoryRecord(value: unknown): HistoryRecord {
-  const record = asRecord(value);
-  return {
-    id: safeText(record.id, 64),
-    command: safeText(record.command, MAX_HISTORY_FIELD_CHARS),
-    packageName: safeText(record.packageName, MAX_RESULT_FIELD_CHARS),
-    version: safeText(record.version, MAX_VERSION_CHARS),
-    toolName: safeText(record.toolName, MAX_RESULT_FIELD_CHARS),
-    createdAt: safeText(record.createdAt, 32),
-  };
-}
-
-function isBrowserSearchPackageName(value: string) {
-  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value);
-}
-
-function collectBrowserSearchNames(value: string, limit: number) {
-  const allNames: string[] = [];
-  const seen = new Set<string>();
-  const boundedLimit = Math.max(0, Math.floor(limit));
-  const lines = value.split(/\r?\n/);
-  let activeLines = 0;
-  for (let index = 0; index < lines.length; index += 1) {
-    if (!isActiveInputLine(lines[index])) {
-      continue;
-    }
-    activeLines += 1;
-    if (activeLines > MAX_PACKAGE_LINES) {
-      break;
-    }
-    const token = lines[index].trim().split(/\s+/)[0];
-    const name = token.split("/").pop() ?? token;
-    if (isBrowserSearchPackageName(name) && !seen.has(name)) {
-      seen.add(name);
-      allNames.push(name);
-    }
-  }
-  return {
-    names: allNames.slice(0, boundedLimit),
-    total: allNames.length,
-  };
-}
-
-function classifyInputProfile(value: string): InputProfile {
-  const profile: InputProfile = {
-    total: 0,
-    archiveUrls: 0,
-    repositories: 0,
-  };
-  const lines = value.split(/\r?\n/);
-  for (let index = 0; index < lines.length; index += 1) {
-    const raw = lines[index].trim();
-    if (!raw || raw.startsWith("#")) {
-      continue;
-    }
-    profile.total += 1;
-    if (profile.total > MAX_PACKAGE_LINES) {
-      break;
-    }
-    if (/^https:\/\//i.test(raw)) {
-      profile.archiveUrls += 1;
-      continue;
-    }
-    if (raw.split(/\s+/)[0].includes("/")) {
-      profile.repositories += 1;
-    }
-  }
-  return profile;
-}
-
-function methodSupportsInput(method: Method, profile: InputProfile) {
-  if (profile.total === 0 || method === "auto" || method === "checkSystem") {
-    return true;
-  }
-  if (method === "devtools" || method === "remotes") {
-    return profile.archiveUrls === profile.total;
-  }
-  if (method === "github") {
-    return profile.repositories === profile.total;
-  }
-  return profile.archiveUrls === 0 && profile.repositories === 0;
-}
-
-function nextSearchRunId() {
-  searchRunCounter = (searchRunCounter + 1) % 1000;
-  return Date.now() * 1000 + searchRunCounter;
 }
 
 export default App;

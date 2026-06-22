@@ -224,3 +224,188 @@ export function sanitizeSearchResponse(value: unknown): SearchResponse {
     stopped: safeBoolean(response.stopped),
   };
 }
+
+// -- UI-tier constants --
+
+export const MAX_INPUT_CHARS = 100_000;
+export const MAX_INPUT_LINE_BYTES = 2_048;
+export const BROWSER_SEARCH_CONFIRM_THRESHOLD = 10;
+export const MAX_SEARCH_TABS = 30;
+export const MAX_SCRIPT_CHARS = 1_000_000;
+export const MAX_TOKEN_CHARS = 512;
+export const MAX_HISTORY_RECORDS = 100;
+export const HISTORY_LOAD_WAIT_TIMEOUT_MS = 5_000;
+
+// -- App.tsx helper functions (extracted) --
+
+export function appendBounded<T>(items: T[], item: T, limit: number) {
+  if (items.length >= limit) {
+    return items;
+  }
+  return [...items, item];
+}
+
+export function upsertBoundedResult(items: SearchResult[], item: SearchResult, limit: number) {
+  const key = resultIdentityKey(item);
+  const index = items.findIndex((current) => resultIdentityKey(current) === key);
+  if (index >= 0) {
+    const next = [...items];
+    next[index] = item;
+    return next;
+  }
+  if (items.length >= limit) {
+    return items;
+  }
+  return [...items, item];
+}
+
+export function inputValueTooLarge(value: string) {
+  return (
+    value.length > MAX_INPUT_CHARS ||
+    inputHasDisallowedControlCharacters(value) ||
+    nonEmptyLineCountExceeds(value, MAX_PACKAGE_LINES) ||
+    nonEmptyLineBytesExceeds(value, MAX_INPUT_LINE_BYTES) ||
+    utf8Length(value) > MAX_INPUT_CHARS
+  );
+}
+
+export function scriptValueTooLarge(value: string) {
+  return value.length > MAX_SCRIPT_CHARS || utf8Length(value) > MAX_SCRIPT_CHARS;
+}
+
+export function settingsValueTooLargeOrUnsafe(value: string, limit: number) {
+  return value.length > limit || utf8Length(value) > limit || /[\p{C}]/u.test(value);
+}
+
+export function githubTokenTextAllowed(value: string) {
+  return /^[\x21-\x7E]*$/.test(value);
+}
+
+export function settingsFieldLabel(field: "proxy" | "githubToken" | "cranMirror") {
+  switch (field) {
+    case "proxy":
+      return "网络代理";
+    case "githubToken":
+      return "GitHub Token";
+    case "cranMirror":
+      return "CRAN 镜像";
+  }
+}
+
+export function activeInputLineCount(value: string) {
+  let count = 0;
+  for (const line of value.split(/\r?\n/)) {
+    if (isActiveInputLine(line)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+export function nonEmptyLineBytesExceeds(value: string, limit: number) {
+  for (const line of value.split(/\r?\n/)) {
+    if (line.trim() && utf8Length(line) > limit) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function inputHasDisallowedControlCharacters(value: string) {
+  return /[\p{C}]/u.test(value.replace(/[\r\n\t]/g, ""));
+}
+
+export function sanitizePublicSettings(value: unknown): PublicSettings {
+  const s = asRecord(value);
+  return {
+    proxy: safeText(s.proxy, MAX_RESULT_FIELD_CHARS),
+    githubTokenConfigured: safeBoolean(s.githubTokenConfigured),
+    cranMirror: safeText(s.cranMirror, MAX_RESULT_FIELD_CHARS) || "https://cloud.r-project.org",
+    fullSearch: safeBoolean(s.fullSearch),
+  };
+}
+
+export function sanitizeHistoryRecord(value: unknown): HistoryRecord {
+  const record = asRecord(value);
+  return {
+    id: safeText(record.id, 64),
+    command: safeText(record.command, MAX_HISTORY_FIELD_CHARS),
+    packageName: safeText(record.packageName, MAX_RESULT_FIELD_CHARS),
+    version: safeText(record.version, MAX_VERSION_CHARS),
+    toolName: safeText(record.toolName, MAX_RESULT_FIELD_CHARS),
+    createdAt: safeText(record.createdAt, 32),
+  };
+}
+
+export function isBrowserSearchPackageName(value: string) {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value);
+}
+
+export function collectBrowserSearchNames(value: string, limit: number) {
+  const allNames: string[] = [];
+  const seen = new Set<string>();
+  const boundedLimit = Math.max(0, Math.floor(limit));
+  const lines = value.split(/\r?\n/);
+  let activeLines = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!isActiveInputLine(lines[index])) {
+      continue;
+    }
+    activeLines += 1;
+    if (activeLines > MAX_PACKAGE_LINES) {
+      break;
+    }
+    const token = lines[index].trim().split(/\s+/)[0];
+    const name = token.split("/").pop() ?? token;
+    if (isBrowserSearchPackageName(name) && !seen.has(name)) {
+      seen.add(name);
+      allNames.push(name);
+    }
+  }
+  return {
+    names: allNames.slice(0, boundedLimit),
+    total: allNames.length,
+  };
+}
+
+export function classifyInputProfile(value: string): { total: number; archiveUrls: number; repositories: number } {
+  const profile = { total: 0, archiveUrls: 0, repositories: 0 };
+  const lines = value.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index].trim();
+    if (!raw || raw.startsWith("#")) {
+      continue;
+    }
+    profile.total += 1;
+    if (profile.total > MAX_PACKAGE_LINES) {
+      break;
+    }
+    if (/^https:\/\//i.test(raw)) {
+      profile.archiveUrls += 1;
+      continue;
+    }
+    if (raw.split(/\s+/)[0].includes("/")) {
+      profile.repositories += 1;
+    }
+  }
+  return profile;
+}
+
+export function methodSupportsInput(method: string, profile: { total: number; archiveUrls: number; repositories: number }) {
+  if (profile.total === 0 || method === "auto" || method === "checkSystem") {
+    return true;
+  }
+  if (method === "devtools" || method === "remotes") {
+    return profile.archiveUrls === profile.total;
+  }
+  if (method === "github") {
+    return profile.repositories === profile.total;
+  }
+  return profile.archiveUrls === 0 && profile.repositories === 0;
+}
+
+let searchRunCounter = 0;
+export function nextSearchRunId() {
+  searchRunCounter = (searchRunCounter + 1) % 1000;
+  return Date.now() * 1000 + searchRunCounter;
+}
