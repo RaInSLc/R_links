@@ -17,6 +17,8 @@
   - 集成 Vitest + jsdom 测试框架，新增 35 个前端工具函数单元测试（`safeText`、`sanitizeSearchResult`、`dedupeBoundedResults` 等）
   - 从 `App.tsx` 提取纯工具函数至 `src/utils.ts`（含类型定义与常量），为后续组件拆分奠定基础
   - 从 `search.rs`（~1967 行）提取 URL 验证逻辑至独立模块 `search_urls.rs`（~140 行），降低单文件复杂度
+  - 从 `search.rs` 提取结果清洗函数至独立模块 `search_sanitize.rs`（~200 行含 11 个测试），search.rs 缩减至 ~1685 行
+  - **`App.tsx` 使用 `utils.ts` + 组件提取**：App.tsx 改为 import `utils.ts` 导出的类型/常量/函数，消除 ~250 行重复定义；提取 NavButton、PanelHeader、Toggle、Metric、EmptyState 至独立 `components.tsx` 模块；tsc 与 35 个测试全部通过
 
 ## [2026-06-20]
 

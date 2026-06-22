@@ -6,6 +6,14 @@ import {
   writeText,
 } from "@tauri-apps/plugin-clipboard-manager";
 import "./App.css";
+import { NavButton, PanelHeader, Toggle, Metric, EmptyState } from "./components";
+import { asArray, asRecord, formatError,
+  isActiveInputLine, mapBounded, MAX_HISTORY_FIELD_CHARS, MAX_PACKAGE_LINES,
+  MAX_RESULT_FIELD_CHARS, MAX_SEARCH_LOGS, MAX_SEARCH_RESULTS, MAX_VERSION_CHARS,
+  nonEmptyLineCountExceeds, resultIdentityKey, safeBoolean, safeRunId,
+  safeStatusText, safeText, sanitizeSearchResponse, sanitizeSearchResult,
+  utf8Length,
+  type HistoryRecord, type PublicSettings, type SearchResponse, type SearchResult } from "./utils";
 
 type View = "workspace" | "report" | "history" | "settings";
 type Method =
@@ -25,32 +33,6 @@ interface Settings {
   fullSearch: boolean;
 }
 
-interface PublicSettings {
-  proxy: string;
-  githubTokenConfigured: boolean;
-  cranMirror: string;
-  fullSearch: boolean;
-}
-
-interface SearchResult {
-  package: string;
-  requestedVersion: string;
-  latestVersion: string;
-  repository: string;
-  realName: string;
-  source: string;
-  found: boolean;
-  message: string;
-  status?: string;
-}
-
-interface SearchResponse {
-  runId: number;
-  results: SearchResult[];
-  logs: string[];
-  stopped: boolean;
-}
-
 interface SearchLogEvent {
   runId: number;
   message: string;
@@ -59,15 +41,6 @@ interface SearchLogEvent {
 interface SearchProgressEvent {
   runId: number;
   result: SearchResult;
-}
-
-interface HistoryRecord {
-  id: string;
-  command: string;
-  packageName: string;
-  version: string;
-  toolName: string;
-  createdAt: string;
 }
 
 interface InputProfile {
@@ -84,23 +57,13 @@ const defaultSettings: Settings = {
 };
 
 const MAX_INPUT_CHARS = 100_000;
-const MAX_PACKAGE_LINES = 500;
 const MAX_INPUT_LINE_BYTES = 2_048;
 const BROWSER_SEARCH_CONFIRM_THRESHOLD = 10;
 const MAX_SEARCH_TABS = 30;
 const MAX_SCRIPT_CHARS = 1_000_000;
-const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
-const MAX_SEARCH_RESULT_SCAN = MAX_SEARCH_RESULTS * 2;
-const MAX_SEARCH_LOGS = 1_000;
-const MAX_STATUS_CHARS = 512;
-const MAX_RESULT_FIELD_CHARS = 2_048;
 const MAX_TOKEN_CHARS = 512;
-const MAX_VERSION_CHARS = 64;
-const MAX_SOURCE_CHARS = 16;
 const MAX_HISTORY_RECORDS = 100;
-const MAX_HISTORY_FIELD_CHARS = 8_000;
 const HISTORY_LOAD_WAIT_TIMEOUT_MS = 5_000;
-const utf8Encoder = new TextEncoder();
 
 const methods: Array<{
   id: Method;
@@ -153,39 +116,6 @@ function upsertBoundedResult(items: SearchResult[], item: SearchResult, limit: n
     return items;
   }
   return [...items, item];
-}
-
-function dedupeBoundedResults(items: readonly unknown[], limit: number, scanLimit: number) {
-  const results: SearchResult[] = [];
-  const indexes = new Map<string, number>();
-  const boundedLimit = Math.max(0, Math.floor(limit));
-  const boundedScanLimit = Math.max(0, Math.floor(scanLimit));
-  for (
-    let itemIndex = 0;
-    itemIndex < items.length && itemIndex < boundedScanLimit;
-    itemIndex += 1
-  ) {
-    const item = items[itemIndex];
-    const cleanItem = sanitizeSearchResult(item);
-    const key = resultIdentityKey(cleanItem);
-    const index = indexes.get(key);
-    if (index !== undefined) {
-      results[index] = cleanItem;
-    } else if (results.length < boundedLimit) {
-      indexes.set(key, results.length);
-      results.push(cleanItem);
-    }
-  }
-  return results;
-}
-
-function mapBounded<T, U>(items: readonly T[], limit: number, mapper: (item: T) => U) {
-  const mapped: U[] = [];
-  const boundedLimit = Math.max(0, Math.floor(limit));
-  for (let index = 0; index < items.length && index < boundedLimit; index += 1) {
-    mapped.push(mapper(items[index]));
-  }
-  return mapped;
 }
 
 function App() {
@@ -1415,139 +1345,6 @@ function App() {
   );
 }
 
-function NavButton({
-  active,
-  label,
-  code,
-  badge,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  code: string;
-  badge?: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={active ? "active" : ""}
-      aria-current={active ? "page" : undefined}
-      onClick={onClick}
-    >
-      <span className="nav-code">{code}</span>
-      <strong>{label}</strong>
-      {badge !== undefined && badge > 0 && <small>{badge}</small>}
-    </button>
-  );
-}
-
-function PanelHeader({
-  step,
-  title,
-  meta,
-}: {
-  step: string;
-  title: string;
-  meta: string;
-}) {
-  return (
-    <header className="panel-header">
-      <span>{step}</span>
-      <h2>{title}</h2>
-      <small>{meta}</small>
-    </header>
-  );
-}
-
-function Toggle({
-  checked,
-  label,
-  description,
-  onChange,
-}: {
-  checked: boolean;
-  label: string;
-  description: string;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <label className="toggle">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.currentTarget.checked)} />
-      <span className="toggle-control"><i /></span>
-      <span><strong>{label}</strong><small>{description}</small></span>
-    </label>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  tone = "",
-}: {
-  label: string;
-  value: number;
-  tone?: string;
-}) {
-  return (
-    <div className={`metric ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return <div className="empty-state"><span>—</span>{text}</div>;
-}
-
-function formatError(error: unknown) {
-  try {
-    return safeStatusText(error instanceof Error ? error.message : String(error));
-  } catch {
-    return "未知错误";
-  }
-}
-
-function safeStatusText(value: unknown) {
-  const text = truncateUtf8Bytes(
-    String(value ?? "")
-      .trim()
-      .replace(/[\p{C}]/gu, ""),
-    MAX_STATUS_CHARS,
-  );
-  return text || "未知错误";
-}
-
-function safeText(value: unknown, limit: number) {
-  return truncateUtf8Bytes(
-    String(value ?? "")
-      .trim()
-      .replace(/[\p{C}]/gu, ""),
-    limit,
-  );
-}
-
-function utf8Length(value: string) {
-  return utf8Encoder.encode(value).length;
-}
-
-function truncateUtf8Bytes(value: string, limit: number) {
-  if (utf8Length(value) <= limit) {
-    return value;
-  }
-  let bytes = 0;
-  let output = "";
-  for (const character of value) {
-    const nextBytes = utf8Length(character);
-    if (bytes + nextBytes > limit) {
-      break;
-    }
-    bytes += nextBytes;
-    output += character;
-  }
-  return output;
-}
-
 function inputValueTooLarge(value: string) {
   return (
     value.length > MAX_INPUT_CHARS ||
@@ -1581,19 +1378,6 @@ function settingsFieldLabel(field: keyof Pick<Settings, "proxy" | "githubToken" 
   }
 }
 
-function nonEmptyLineCountExceeds(value: string, limit: number) {
-  let count = 0;
-  for (const line of value.split(/\r?\n/)) {
-    if (isActiveInputLine(line)) {
-      count += 1;
-      if (count > limit) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 function activeInputLineCount(value: string) {
   let count = 0;
   for (const line of value.split(/\r?\n/)) {
@@ -1602,11 +1386,6 @@ function activeInputLineCount(value: string) {
     }
   }
   return count;
-}
-
-function isActiveInputLine(value: string) {
-  const trimmed = value.trim();
-  return Boolean(trimmed) && !trimmed.startsWith("#");
 }
 
 function nonEmptyLineBytesExceeds(value: string, limit: number) {
@@ -1620,74 +1399,6 @@ function nonEmptyLineBytesExceeds(value: string, limit: number) {
 
 function inputHasDisallowedControlCharacters(value: string) {
   return /[\p{C}]/u.test(value.replace(/[\r\n\t]/g, ""));
-}
-
-function safeBoolean(value: unknown) {
-  return value === true;
-}
-
-function safeRunId(value: unknown) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
-function safeSource(value: unknown) {
-  const source = safeText(value, MAX_SOURCE_CHARS);
-  return Object.prototype.hasOwnProperty.call(sourceNames, source) ? source : "none";
-}
-
-function asArray<T>(value: T[] | unknown): T[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function sanitizeSearchResult(value: unknown): SearchResult {
-  const result = asRecord(value);
-  return {
-    package: safeText(result.package, MAX_RESULT_FIELD_CHARS),
-    requestedVersion: safeText(result.requestedVersion, MAX_VERSION_CHARS),
-    latestVersion: safeText(result.latestVersion, MAX_VERSION_CHARS),
-    repository: safeText(result.repository, MAX_RESULT_FIELD_CHARS),
-    realName: safeText(result.realName, MAX_RESULT_FIELD_CHARS),
-    source: safeSource(result.source),
-    found: safeBoolean(result.found),
-    message: safeStatusText(result.message),
-    status: sanitizeStatus(result.status),
-  };
-}
-
-function sanitizeStatus(value: unknown): string {
-  const raw = typeof value === "string" ? value : "";
-  return ["found", "notFound", "timeout", "rateLimited"].includes(raw)
-    ? raw
-    : "notFound";
-}
-
-function sanitizeSearchResponse(value: unknown): SearchResponse {
-  const response = asRecord(value);
-  return {
-    runId: safeRunId(response.runId),
-    results: dedupeBoundedResults(
-      asArray(response.results),
-      MAX_SEARCH_RESULTS,
-      MAX_SEARCH_RESULT_SCAN,
-    ),
-    logs: mapBounded(asArray(response.logs), MAX_SEARCH_LOGS, safeStatusText),
-    stopped: safeBoolean(response.stopped),
-  };
-}
-
-function resultIdentityKey(result: SearchResult) {
-  return [
-    result.package.toLocaleLowerCase(),
-    result.source,
-    result.repository.toLocaleLowerCase(),
-    result.realName.toLocaleLowerCase(),
-  ].join("\u0001");
 }
 
 function sanitizePublicSettings(value: unknown): PublicSettings {
