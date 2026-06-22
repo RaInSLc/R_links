@@ -6,7 +6,11 @@ import {
   writeText,
 } from "@tauri-apps/plugin-clipboard-manager";
 import "./App.css";
-import { NavButton, PanelHeader, Toggle, Metric, EmptyState } from "./components";
+import { NavButton } from "./components";
+import { WorkspaceView } from "./WorkspaceView";
+import { ReportView } from "./ReportView";
+import { HistoryView } from "./HistoryView";
+import { SettingsView } from "./SettingsView";
 import { appendBounded, asArray, asRecord, formatError, upsertBoundedResult,
   inputValueTooLarge, scriptValueTooLarge, settingsValueTooLargeOrUnsafe,
   githubTokenTextAllowed, settingsFieldLabel, activeInputLineCount,
@@ -25,7 +29,7 @@ import { appendBounded, asArray, asRecord, formatError, upsertBoundedResult,
 import {
   type View, type Method, type Settings,
   type SearchLogEvent, type SearchProgressEvent,
-  defaultSettings, methods, mirrors, sourceNames,
+  defaultSettings,
 } from "./types";
 
 function App() {
@@ -781,473 +785,103 @@ function App() {
 
         <section className="content">
           {view === "workspace" && (
-            <div className="workspace-grid">
-              <section className="panel input-panel">
-                <PanelHeader
-                  step="01"
-                  title="输入包列表"
-                  meta={`${packageCount}/${MAX_PACKAGE_LINES} 项`}
-                />
-                <textarea
-                  value={input}
-                  onChange={(event) => acceptInputValue(event.currentTarget.value, "manual")}
-                  placeholder={"每行一个包，例如：\nSeurat 5.2.1\nGSVA 1.50\nbuenrostrolab/FigR\nhttps://example.org/pkg_1.0.tar.gz"}
-                  aria-label="R 包输入列表"
-                  aria-describedby={inputTooLarge ? "input-limit-warning" : undefined}
-                  aria-invalid={inputTooLarge}
-                  spellCheck={false}
-                  maxLength={MAX_INPUT_CHARS + 1}
-                  disabled={searching}
-                />
-                {inputTooLarge && (
-                  <div className="inline-warning" id="input-limit-warning" role="alert">
-                    输入超出限制或包含非法字符：最多 {MAX_PACKAGE_LINES} 行、总计 {MAX_INPUT_CHARS} 字节、单行 {MAX_INPUT_LINE_BYTES} 字节。
-                  </div>
-                )}
-                <div className="input-actions">
-                  <button className="button ghost" onClick={pasteInput} disabled={searching}>粘贴</button>
-                  <button
-                    className="button ghost"
-                    onClick={() => acceptInputValue("", "manual")}
-                    disabled={searching}
-                  >
-                    清空
-                  </button>
-                  <button
-                    className="button ghost wide"
-                    onClick={openSearchTabs}
-                    disabled={searching || openingSearchTabs || inputTooLarge}
-                  >
-                    {openingSearchTabs ? "正在打开..." : "浏览器搜索"}
-                  </button>
-                  {searching ? (
-                    <button className="button danger" onClick={stopSearch}>停止</button>
-                  ) : (
-                    <button className="button primary" onClick={startSearch} disabled={!input.trim() || inputTooLarge}>
-                      开始检索
-                    </button>
-                  )}
-                </div>
-              </section>
-
-              <section className="panel method-panel">
-                <PanelHeader step="02" title="安装策略" meta={settings.fullSearch ? "全量检索" : "快速检索"} />
-                <div className="method-grid">
-                  {methods.map((item) => (
-                    <button
-                      key={item.id}
-                      className={`method-card ${method === item.id ? "selected" : ""}`}
-                      disabled={isMethodDisabled(item.id)}
-                      aria-pressed={method === item.id}
-                      onClick={() => setMethod(item.id)}
-                    >
-                      <span>{item.title}</span>
-                      <small>{item.description}</small>
-                    </button>
-                  ))}
-                </div>
-                <div className="toggle-row">
-                  <Toggle
-                    checked={conditional}
-                    label="条件安装"
-                    description="已安装时自动跳过"
-                    onChange={setConditional}
-                  />
-                  <Toggle
-                    checked={installDependencies}
-                    label="安装依赖"
-                    description="dependencies = TRUE"
-                    onChange={setInstallDependencies}
-                  />
-                  <Toggle
-                    checked={showRemoteVersion}
-                    label="同步远程版本"
-                    description="显示版本并生成精确版本安装"
-                    onChange={setShowRemoteVersion}
-                  />
-                  <Toggle
-                    checked={settings.fullSearch}
-                    label="全量检索"
-                    description="命中后仍继续查询 GitHub"
-                    onChange={(value) =>
-                      updateSettingsFromUser((current) => ({ ...current, fullSearch: value }))
-                    }
-                  />
-                </div>
-              </section>
-
-              <section className="panel script-panel">
-                <header className="panel-header" style={{ gridTemplateColumns: "auto auto 1fr auto" }}>
-                  <span>03</span>
-                  <h2>脚本预览</h2>
-                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginRight: "10px" }}>
-                    <button
-                      className="button ghost"
-                      style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto" }}
-                      onClick={cleanComments}
-                      disabled={scriptTooLarge}
-                    >
-                      移除注释
-                    </button>
-                    <button
-                      className="button primary"
-                      style={{ padding: "4px 12px", fontSize: "11px", height: "30px", minHeight: "auto" }}
-                      onClick={copyScript}
-                      disabled={!script || script === "等待输入..." || scriptTooLarge}
-                    >
-                      复制脚本
-                    </button>
-                  </div>
-                  <small>R Script</small>
-                </header>
-                <pre aria-label="生成的 R 脚本" tabIndex={0}>{script}</pre>
-                {scriptTooLarge && (
-                  <div className="inline-warning">
-                    脚本内容超出限制：最多 {MAX_SCRIPT_CHARS} 字节。
-                  </div>
-                )}
-              </section>
-            </div>
+            <WorkspaceView
+              input={input}
+              inputTooLarge={inputTooLarge}
+              inputProfile={inputProfile}
+              method={method}
+              conditional={conditional}
+              installDependencies={installDependencies}
+              showRemoteVersion={showRemoteVersion}
+              settings={settings}
+              script={script}
+              scriptTooLarge={scriptTooLarge}
+              searching={searching}
+              openingSearchTabs={openingSearchTabs}
+              onInputChange={acceptInputValue}
+              onPaste={pasteInput}
+              onClear={() => acceptInputValue("", "manual")}
+              onOpenSearchTabs={openSearchTabs}
+              onStartSearch={startSearch}
+              onStopSearch={stopSearch}
+              onMethodChange={setMethod}
+              onConditionalChange={setConditional}
+              onInstallDependenciesChange={setInstallDependencies}
+              onShowRemoteVersionChange={setShowRemoteVersion}
+              onFullSearchChange={(v) => updateSettingsFromUser((c) => ({ ...c, fullSearch: v }))}
+              onCopyScript={copyScript}
+              onCleanComments={cleanComments}
+              isMethodDisabled={isMethodDisabled}
+            />
           )}
 
           {view === "report" && (
-            <div className="report-layout">
-              <div className="metric-row">
-                <Metric label="输入包" value={packageCount} />
-                <Metric label="已验证包" value={uniqueFoundCount} tone="success" />
-                <Metric
-                  label="未找到"
-                  value={new Set(results.filter((item) => !item.found).map((item) => item.package)).size}
-                  tone="danger"
-                />
-                <Metric label="来源记录" value={results.length} />
-              </div>
-              <section className="panel report-panel">
-                <PanelHeader step="结果" title="来源验证" meta={searching ? "实时更新" : "已完成"} />
-                {results.length === 0 ? (
-                  <EmptyState text={searching ? "正在等待首条检索结果" : "尚未执行检索"} />
-                ) : (
-                  <div className="result-table" role="table" aria-label="包来源验证结果">
-                    <div className="result-row result-head" role="row">
-                      <span role="columnheader">包名</span>
-                      <span role="columnheader">来源</span>
-                      <span role="columnheader">版本</span>
-                      <span role="columnheader">仓库</span>
-                      <span role="columnheader">状态</span>
-                    </div>
-                    {results.map((result, index) => (
-                      <div className="result-row" role="row" key={`${result.package}-${result.source}-${index}`}>
-                        <strong role="cell">{result.package}</strong>
-                        <span role="cell" className={`source-tag ${result.source}`}>{sourceNames[result.source] ?? result.source}</span>
-                        <code role="cell">{result.latestVersion || "—"}</code>
-                        <span role="cell" className="repo-cell">{result.repository || "—"}</span>
-                        <span role="cell" className={result.found ? "found" : result.status === "timeout" ? "timeout" : result.status === "rateLimited" ? "rate-limited" : "missing"}>
-                          {result.status === "timeout" ? "超时" : result.status === "rateLimited" ? "频率限制" : result.found ? "已验证" : "未找到"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-              <section className="panel log-panel">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <PanelHeader step="日志" title="检索过程" meta={`${logs.length} 行`} />
-                  <button 
-                    className="button ghost" 
-                    style={{ marginRight: "16px", padding: "4px 8px", fontSize: "12px", height: "auto" }}
-                    onClick={() => setLogs([])}
-                    disabled={searching || logs.length === 0}
-                  >
-                    清除日志
-                  </button>
-                </div>
-                <div className="log-console">
-                  {logs.length ? logs.map((line, index) => <div key={`${line}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span>{line}</div>) : <EmptyState text="日志将在检索开始后显示" />}
-                </div>
-              </section>
-            </div>
+            <ReportView
+              results={results}
+              logs={logs}
+              packageCount={packageCount}
+              uniqueFoundCount={uniqueFoundCount}
+              searching={searching}
+              onClearLogs={() => setLogs([])}
+            />
           )}
 
           {view === "history" && (
-            <section className="panel history-panel">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <PanelHeader step="历史" title="最近生成的命令" meta={`最多保留 100 条`} />
-                <input
-                  type="text"
-                  placeholder="搜索包名、来源或命令..."
-                  value={historySearch}
-                  onChange={(e) => setHistorySearch(e.target.value)}
-                  style={{ marginRight: "16px", padding: "4px 8px", fontSize: "12px", width: "200px" }}
-                />
-              </div>
-              {history.length === 0 ? (
-                <EmptyState text="复制脚本后，命令会记录在这里" />
-              ) : (
-                <div className="history-list">
-                  {history
-                    .filter(record => 
-                      (record.packageName && record.packageName.toLowerCase().includes(historySearch.toLowerCase())) ||
-                      (record.toolName && record.toolName.toLowerCase().includes(historySearch.toLowerCase())) ||
-                      (record.command && record.command.toLowerCase().includes(historySearch.toLowerCase()))
-                    )
-                    .map((record) => (
-                    <article className="history-item" key={record.id}>
-                      <div className="history-main">
-                        <div>
-                          <strong>{record.packageName || "R 命令"}</strong>
-                          <span>{record.toolName}{record.version ? ` · v${record.version}` : ""}</span>
-                        </div>
-                        <code>{record.command}</code>
-                      </div>
-                      <div className="history-actions">
-                        <button className="text-button" onClick={() => applyHistoryRecord(record)}>应用</button>
-                        <button className="text-button" onClick={() => copyHistoryRecord(record)}>复制</button>
-                        <button className="text-button danger-text" onClick={() => deleteHistoryRecord(record.id)}>删除</button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
+            <HistoryView
+              history={history}
+              historySearch={historySearch}
+              onHistorySearchChange={setHistorySearch}
+              onApplyRecord={applyHistoryRecord}
+              onCopyRecord={copyHistoryRecord}
+              onDeleteRecord={deleteHistoryRecord}
+            />
           )}
 
           {view === "settings" && (
-            <div className="settings-layout">
-              <section className="panel settings-panel">
-                <PanelHeader step="网络" title="连接设置" meta="独立配置" />
-                <label className="field">
-                  <span>网络代理</span>
-                  <small>支持 127.0.0.1:7890 或无凭据代理 URL，不允许路径或查询参数</small>
-                  <input
-                    value={settings.proxy}
-                    onChange={(event) => acceptSettingValue("proxy", event.currentTarget.value)}
-                    placeholder="不使用代理"
-                    maxLength={MAX_RESULT_FIELD_CHARS}
-                  />
-                </label>
-                <label className="field">
-                  <span>GitHub Token</span>
-                  <small>
-                    {tokenConfigured
-                      ? "已保存 Token；留空保存会继续保留现有 Token"
-                      : "仅保存在本应用的数据目录，用于提高 API 配额"}
-                  </small>
-                  <div className="secret-field">
-                    <input
-                      type={showToken ? "text" : "password"}
-                      value={settings.githubToken}
-                      onChange={(event) => acceptSettingValue("githubToken", event.currentTarget.value)}
-                      placeholder="ghp_..."
-                      autoComplete="off"
-                      spellCheck={false}
-                      maxLength={MAX_TOKEN_CHARS}
-                    />
-                    <button type="button" onClick={() => setShowToken((value) => !value)}>
-                      {showToken ? "隐藏" : "显示"}
-                    </button>
-                  </div>
-                  {tokenConfigured && !settings.githubToken.trim() && (
-                    <button
-                      type="button"
-                      className="text-button danger-text"
-                      onClick={clearSavedToken}
-                      disabled={settingsBusy}
-                    >
-                      清除已保存 Token
-                    </button>
-                  )}
-                </label>
-                <Toggle
-                  checked={settings.fullSearch}
-                  label="全量检索"
-                  description="命中 CRAN 或 Bioconductor 后仍继续查询 GitHub"
-                  onChange={(value) =>
-                    updateSettingsFromUser((current) => ({ ...current, fullSearch: value }))
-                  }
-                />
-                <div style={{ borderTop: "1px solid var(--line)", marginTop: "20px", paddingTop: "12px" }}>
-                  <div className="field" style={{ margin: "0 17px" }}>
-                    <span>界面风格</span>
-                    <small>选择您偏好的系统色彩，切换实时生效</small>
-                    <div className="theme-selector">
-                      <button
-                        type="button"
-                        className={`theme-card ${currentTheme === "office" ? "selected" : ""}`}
-                        onClick={() => handleThemeChange("office")}
-                      >
-                        <div className="theme-preview-dots">
-                          <div className="theme-dot" style={{ background: "#0f172a" }} />
-                          <div className="theme-dot" style={{ background: "#0f4c81" }} />
-                          <div className="theme-dot" style={{ background: "#e6f0fa" }} />
-                        </div>
-                        <span>商务办公蓝</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={`theme-card ${currentTheme === "green" ? "selected" : ""}`}
-                        onClick={() => handleThemeChange("green")}
-                      >
-                        <div className="theme-preview-dots">
-                          <div className="theme-dot" style={{ background: "#112c24" }} />
-                          <div className="theme-dot" style={{ background: "#176b4d" }} />
-                          <div className="theme-dot" style={{ background: "#dcece4" }} />
-                        </div>
-                        <span>墨绿林野</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={`theme-card ${currentTheme === "graphite" ? "selected" : ""}`}
-                        onClick={() => handleThemeChange("graphite")}
-                      >
-                        <div className="theme-preview-dots">
-                          <div className="theme-dot" style={{ background: "#212529" }} />
-                          <div className="theme-dot" style={{ background: "#495057" }} />
-                          <div className="theme-dot" style={{ background: "#f1f3f5" }} />
-                        </div>
-                        <span>石墨暗灰</span>
-                      </button>
-                    </div>
-                  </div>
-                  <div className="field" style={{ margin: "0 17px", marginTop: "24px" }}>
-                    <span>字体风格</span>
-                    <small>选择最适合您显示器的排版</small>
-                    <div className="theme-selector">
-                      <button
-                        type="button"
-                        className={`theme-card ${currentFont === "modern" ? "selected" : ""}`}
-                        onClick={() => handleFontChange("modern")}
-                      >
-                        <div className="theme-preview-dots" style={{ alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ fontFamily: "'Inter', 'Noto Sans SC', sans-serif", fontSize: '15px', fontWeight: 600, color: 'var(--ink)' }}>Aa</span>
-                        </div>
-                        <span>现代 (推荐)</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={`theme-card ${currentFont === "system" ? "selected" : ""}`}
-                        onClick={() => handleFontChange("system")}
-                      >
-                        <div className="theme-preview-dots" style={{ alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ fontFamily: '"Segoe UI", "Microsoft YaHei UI", sans-serif', fontSize: '15px', fontWeight: 600, color: 'var(--ink)' }}>Aa</span>
-                        </div>
-                        <span>系统默认</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={`theme-card ${currentFont === "classic" ? "selected" : ""}`}
-                        onClick={() => handleFontChange("classic")}
-                      >
-                        <div className="theme-preview-dots" style={{ alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ fontFamily: '"SimSun", "宋体", serif', fontSize: '15px', fontWeight: 600, color: 'var(--ink)' }}>Aa</span>
-                        </div>
-                        <span>传统宋体</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="panel settings-panel">
-                <PanelHeader step="系统" title="应用更新" meta="版本维护" />
-                <div className="field">
-                  <span>检查应用更新</span>
-                  <small>检查并安装最新版本的 R Package Command Center</small>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '9px' }}>
-                    <button 
-                      className="button primary" 
-                      onClick={checkForUpdates} 
-                      disabled={checkingUpdate}
-                      style={{ marginLeft: 0 }}
-                    >
-                      {checkingUpdate ? '正在处理...' : '检查更新'}
-                    </button>
-                    {updateMessage && <span style={{fontSize: '14px', color: 'var(--muted)'}}>{updateMessage}</span>}
-                  </div>
-                </div>
-              </section>
-
-              <section className="panel settings-panel">
-                <PanelHeader step="缓存" title="包结果缓存" meta="避免重复检索" />
-                <div className="field">
-                  <span>清除包缓存</span>
-                  <small>已缓存的包将跳过在线检索直接使用历史结果；清除后所有包都会重新在线检索</small>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '9px' }}>
-                    <button 
-                      className="button ghost" 
-                      onClick={async () => {
-                        try {
-                          await invoke("clear_package_cache");
-                          setStatus("包缓存已清除");
-                        } catch (error) {
-                          setStatus(`缓存清除失败: ${formatError(error)}`);
-                        }
-                      }}
-                      style={{ marginLeft: 0 }}
-                    >
-                      清除缓存
-                    </button>
-                    <button
-                      className="button ghost"
-                      onClick={async () => {
-                        try {
-                          const diagnostics = await invoke<string>("export_diagnostics");
-                          const blob = new Blob([diagnostics], { type: "application/json" });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement("a");
-                          a.href = url;
-                          a.download = `r-links-diagnostics-${Date.now()}.json`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                          setStatus("诊断信息已导出");
-                        } catch (error) {
-                          setStatus(`诊断导出失败: ${formatError(error)}`);
-                        }
-                      }}
-                    >
-                      导出诊断
-                    </button>
-                  </div>
-                </div>
-              </section>
-
-              <section className="panel settings-panel">
-                <PanelHeader step="镜像" title="CRAN 镜像" meta="实时影响脚本" />
-                <div className="mirror-list">
-                  {mirrors.map((mirror) => (
-                    <button
-                      key={mirror.value}
-                      className={settings.cranMirror === mirror.value ? "selected" : ""}
-                      aria-pressed={settings.cranMirror === mirror.value}
-                      onClick={() =>
-                        updateSettingsFromUser((current) => ({
-                          ...current,
-                          cranMirror: mirror.value,
-                        }))
-                      }
-                    >
-                      <span>{mirror.label}</span>
-                      <code>{mirror.value}</code>
-                    </button>
-                  ))}
-                </div>
-                <label className="field compact">
-                  <span>自定义镜像</span>
-                  <input
-                    value={settings.cranMirror}
-                    onChange={(event) => acceptSettingValue("cranMirror", event.currentTarget.value)}
-                    placeholder="https://cloud.r-project.org"
-                    maxLength={MAX_RESULT_FIELD_CHARS}
-                  />
-                </label>
-                <button
-                  className="button primary save-button"
-                  onClick={persistSettings}
-                  disabled={settingsBusy}
-                >
-                  {settingsBusy ? "处理中..." : "保存设置"}
-                </button>
-              </section>
-            </div>
+            <SettingsView
+              settings={settings}
+              tokenConfigured={tokenConfigured}
+              showToken={showToken}
+              settingsBusy={settingsBusy}
+              currentTheme={currentTheme}
+              currentFont={currentFont}
+              checkingUpdate={checkingUpdate}
+              updateMessage={updateMessage}
+              onProxyChange={(v) => acceptSettingValue("proxy", v)}
+              onTokenChange={(v) => acceptSettingValue("githubToken", v)}
+              onTokenToggle={() => setShowToken((v) => !v)}
+              onClearToken={clearSavedToken}
+              onFullSearchChange={(v) => updateSettingsFromUser((c) => ({ ...c, fullSearch: v }))}
+              onCranMirrorChange={(v) => acceptSettingValue("cranMirror", v)}
+              onMirrorSelect={(v) => updateSettingsFromUser((c) => ({ ...c, cranMirror: v }))}
+              onSaveSettings={persistSettings}
+              onThemeChange={handleThemeChange}
+              onFontChange={handleFontChange}
+              onCheckUpdates={checkForUpdates}
+              onClearCache={async () => {
+                try {
+                  await invoke("clear_package_cache");
+                  setStatus("包缓存已清除");
+                } catch (error) {
+                  setStatus(`缓存清除失败: ${formatError(error)}`);
+                }
+              }}
+              onExportDiagnostics={async () => {
+                try {
+                  const diagnostics = await invoke<string>("export_diagnostics");
+                  const blob = new Blob([diagnostics], { type: "application/json" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `r-links-diagnostics-${Date.now()}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  setStatus("诊断信息已导出");
+                } catch (error) {
+                  setStatus(`诊断导出失败: ${formatError(error)}`);
+                }
+              }}
+            />
           )}
         </section>
       </main>
