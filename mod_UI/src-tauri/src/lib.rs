@@ -161,23 +161,12 @@ impl BrowserOpenLimiter {
 
 #[tauri::command]
 fn load_input_rules(app: AppHandle) -> Result<InputRules, String> {
-    let path = storage::data_file(&app, "input_rules.json")
-        .map_err(|e| format!("获取输入规则文件路径失败: {e}"))?;
-    if !path.exists() {
-        return Ok(InputRules::default());
-    }
-    let content =
-        std::fs::read_to_string(&path).map_err(|e| format!("读取输入规则文件失败: {e}"))?;
-    serde_json::from_str(&content).map_err(|e| format!("解析输入规则失败: {e}"))
+    Ok(storage::load_input_rules(&app))
 }
 
 #[tauri::command]
 fn save_input_rules(app: AppHandle, rules: InputRules) -> Result<(), String> {
-    let path = storage::data_file(&app, "input_rules.json")
-        .map_err(|e| format!("获取输入规则文件路径失败: {e}"))?;
-    let content = serde_json::to_string_pretty(&rules)
-        .map_err(|e| format!("序列化输入规则失败: {e}"))?;
-    std::fs::write(&path, &content).map_err(|e| format!("写入输入规则文件失败: {e}"))
+    storage::save_input_rules(&app, &rules)
 }
 
 #[tauri::command]

@@ -35,9 +35,9 @@ export interface InputProfile {
   repositories: number;
 }
 
-export interface SearchLogEvent {
+export interface SearchLogBatchEvent {
   runId: number;
-  message: string;
+  messages: string[];
 }
 
 export interface SearchProgressEvent {

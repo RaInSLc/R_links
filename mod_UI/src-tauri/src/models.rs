@@ -175,6 +175,40 @@ impl Default for InputRules {
     }
 }
 
+impl InputRules {
+    pub fn normalized(&self) -> Self {
+        let mut separators: Vec<String> = self
+            .separators
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty() && s.len() <= 16 && !s.chars().any(char::is_control))
+            .take(20)
+            .collect();
+        if separators.is_empty() {
+            separators = vec![",".to_string(), ";".to_string()];
+        }
+
+        let mut comment_chars: Vec<String> = self
+            .comment_chars
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty() && s.len() <= 16 && !s.chars().any(char::is_control))
+            .take(20)
+            .collect();
+        if comment_chars.is_empty() {
+            comment_chars = vec!["#".to_string()];
+        }
+
+        Self {
+            separators,
+            strip_quotes: self.strip_quotes,
+            strip_c_parens: self.strip_c_parens,
+            comment_chars,
+            split_spaces: self.split_spaces,
+        }
+    }
+}
+
 pub const INPUT_RULES_FILE_NAME: &str = "input_rules.json";
 
 pub fn normalize_http_url(value: &str, field_name: &str) -> Result<String, String> {

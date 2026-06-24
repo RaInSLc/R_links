@@ -36,10 +36,7 @@ pub(crate) fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
     parse_inputs_filtered(input, &InputRules::default())
 }
 
-pub fn parse_inputs_filtered(
-    input: &str,
-    rules: &InputRules,
-) -> Result<Vec<PackageInput>, String> {
+pub fn parse_inputs_filtered(input: &str, rules: &InputRules) -> Result<Vec<PackageInput>, String> {
     validate_input_size(input)?;
 
     let mut packages = Vec::new();
@@ -78,9 +75,8 @@ pub fn parse_inputs_filtered(
             if cleaned.is_empty() {
                 continue;
             }
-            let pkg = parse_input_line(&cleaned).ok_or_else(|| {
-                format!("第 {line_num} 行第 {} 段输入格式无效", seg_idx + 1)
-            })?;
+            let pkg = parse_input_line(&cleaned)
+                .ok_or_else(|| format!("第 {line_num} 行第 {} 段输入格式无效", seg_idx + 1))?;
             packages.push(pkg);
             if packages.len() > MAX_PACKAGE_LINES {
                 return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
@@ -289,7 +285,13 @@ pub fn generate_script_with_rules(
     let requested_method = normalize_generate_method(&options.method)?;
     validate_search_results_count(results)?;
     let packages = parse_inputs_filtered(input, rules)?;
-    generate_script_inner(options, results, show_remote_version, requested_method, packages)
+    generate_script_inner(
+        options,
+        results,
+        show_remote_version,
+        requested_method,
+        packages,
+    )
 }
 
 #[allow(dead_code)]
@@ -302,7 +304,13 @@ pub fn generate_script_with_remote_versions(
     let requested_method = normalize_generate_method(&options.method)?;
     validate_search_results_count(results)?;
     let packages = parse_inputs(input)?;
-    generate_script_inner(options, results, show_remote_version, requested_method, packages)
+    generate_script_inner(
+        options,
+        results,
+        show_remote_version,
+        requested_method,
+        packages,
+    )
 }
 
 fn generate_script_inner(
@@ -2223,11 +2231,9 @@ mod tests {
 
     #[test]
     fn parses_semicolon_separated_packages() {
-        let packages = parse_inputs_filtered(
-            "dplyr; ggplot2; tidyr; shiny",
-            &InputRules::default(),
-        )
-        .expect("分号分隔包名应可解析");
+        let packages =
+            parse_inputs_filtered("dplyr; ggplot2; tidyr; shiny", &InputRules::default())
+                .expect("分号分隔包名应可解析");
         assert_eq!(packages.len(), 4);
         assert_eq!(packages[0].name, "dplyr");
         assert_eq!(packages[2].name, "tidyr");
@@ -2248,11 +2254,9 @@ mod tests {
 
     #[test]
     fn parses_mixed_separator_lines() {
-        let packages = parse_inputs_filtered(
-            "pkg1; pkg2, pkg3\npkg4, pkg5",
-            &InputRules::default(),
-        )
-        .expect("混合分隔符多行输入应可解析");
+        let packages =
+            parse_inputs_filtered("pkg1; pkg2, pkg3\npkg4, pkg5", &InputRules::default())
+                .expect("混合分隔符多行输入应可解析");
         assert_eq!(packages.len(), 5);
         assert_eq!(packages[0].name, "pkg1");
         assert_eq!(packages[3].name, "pkg4");
@@ -2260,11 +2264,9 @@ mod tests {
 
     #[test]
     fn parses_comma_separated_with_versions() {
-        let packages = parse_inputs_filtered(
-            "GSVA 1.50.0, dplyr 1.0.0, ggplot2",
-            &InputRules::default(),
-        )
-        .expect("逗号分隔带版本应可解析");
+        let packages =
+            parse_inputs_filtered("GSVA 1.50.0, dplyr 1.0.0, ggplot2", &InputRules::default())
+                .expect("逗号分隔带版本应可解析");
         assert_eq!(packages.len(), 3);
         assert_eq!(packages[0].name, "GSVA");
         assert_eq!(packages[0].version, "1.50.0");
@@ -2276,11 +2278,8 @@ mod tests {
 
     #[test]
     fn parses_list_variant_syntax() {
-        let packages = parse_inputs_filtered(
-            "list(\"pkg1\", \"pkg2\")",
-            &InputRules::default(),
-        )
-        .expect("list() 包裹应可解析");
+        let packages = parse_inputs_filtered("list(\"pkg1\", \"pkg2\")", &InputRules::default())
+            .expect("list() 包裹应可解析");
         assert_eq!(packages.len(), 2);
         assert_eq!(packages[0].name, "pkg1");
         assert_eq!(packages[1].name, "pkg2");
@@ -2303,14 +2302,8 @@ mod tests {
             strip_r_parens_wrapper("c(\"pkg1\", \"pkg2\")"),
             "\"pkg1\", \"pkg2\""
         );
-        assert_eq!(
-            strip_r_parens_wrapper("list(\"pkg1\")"),
-            "\"pkg1\""
-        );
-        assert_eq!(
-            strip_r_parens_wrapper("plain_line"),
-            "plain_line"
-        );
+        assert_eq!(strip_r_parens_wrapper("list(\"pkg1\")"), "\"pkg1\"");
+        assert_eq!(strip_r_parens_wrapper("plain_line"), "plain_line");
     }
 
     #[test]
@@ -2320,11 +2313,8 @@ mod tests {
             separators: Vec::new(),
             ..InputRules::default()
         };
-        let packages = parse_inputs_filtered(
-            "pkg1 pkg2 pkg3",
-            &rules,
-        )
-        .expect("空格分隔 (split_spaces=true) 应可解析");
+        let packages = parse_inputs_filtered("pkg1 pkg2 pkg3", &rules)
+            .expect("空格分隔 (split_spaces=true) 应可解析");
         assert_eq!(packages.len(), 3);
         assert_eq!(packages[0].name, "pkg1");
         assert_eq!(packages[2].name, "pkg3");

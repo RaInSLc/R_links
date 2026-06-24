@@ -153,10 +153,10 @@ export function SettingsView({
         <PanelHeader step="过滤" title="输入过滤规则" meta="白盒化正则配置" />
         <div className="field" style={{ margin: "0 17px" }}>
           <span>分隔符</span>
-          <small>用于将一行拆分为多个包名（逗号分隔多个值）</small>
+          <small>用于将一行拆分为多个包名（空格分隔多个值，如 `, ;`）</small>
           <input
-            value={inputRules.separators.join(",")}
-            onChange={(event) => onInputRulesChange({ ...inputRules, separators: event.currentTarget.value.split(",").map(s => s.trim()).filter(Boolean) })}
+            value={inputRules.separators.join(" ")}
+            onChange={(event) => onInputRulesChange({ ...inputRules, separators: event.currentTarget.value.split(" ").map(s => s.trim()).filter(Boolean) })}
             placeholder=", ;"
             maxLength={MAX_RESULT_FIELD_CHARS}
           />
@@ -168,10 +168,10 @@ export function SettingsView({
         </div>
         <div className="field" style={{ margin: "0 17px" }}>
           <span>注释字符</span>
-          <small>以这些字符开头的行将被忽略（逗号分隔）</small>
+          <small>以这些字符开头的行将被忽略（空格分隔多个值）</small>
           <input
-            value={inputRules.commentChars.join(",")}
-            onChange={(event) => onInputRulesChange({ ...inputRules, commentChars: event.currentTarget.value.split(",").map(s => s.trim()).filter(Boolean) })}
+            value={inputRules.commentChars.join(" ")}
+            onChange={(event) => onInputRulesChange({ ...inputRules, commentChars: event.currentTarget.value.split(" ").map(s => s.trim()).filter(Boolean) })}
             placeholder="#"
             maxLength={MAX_RESULT_FIELD_CHARS}
           />

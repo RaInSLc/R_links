@@ -11,9 +11,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use url::Url;
 
-use crate::logic::{
-    infer_bioc_version, normalize_github_repository, parse_inputs_filtered,
-};
+use crate::logic::{infer_bioc_version, normalize_github_repository, parse_inputs_filtered};
 use crate::models::{
     PackageCacheEntry, PackageInput, SearchResponse, SearchResult, Settings, MAX_FIELD_CHARS,
     MAX_PACKAGE_LINES,
@@ -61,9 +59,9 @@ struct GithubDescription {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SearchLogEvent {
+pub struct SearchLogBatchEvent {
     pub run_id: u64,
-    pub message: String,
+    pub messages: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -151,7 +149,10 @@ impl SearchContext<'_> {
     }
 
     fn log(&mut self, message: &str) {
-        log(self.app, self.run_id, self.logs, message);
+        if append_search_log(self.logs, message).is_some() {
+            // Note: We don't emit immediately here to avoid duplicate/frequent emits.
+            // They will be collected and emitted as a batch in `search_packages`.
+        }
     }
 
     fn acquire_request_budget(&mut self) -> bool {
@@ -182,6 +183,7 @@ async fn await_or_stop<T>(
     future: impl Future<Output = T>,
     cancelled: &AtomicBool,
     budget: &RequestBudget,
+    deadline: Instant,
 ) -> Result<T, String> {
     if search_stopped(cancelled, budget) {
         return Err(SEARCH_STOPPED_ERROR.to_string());
@@ -190,6 +192,7 @@ async fn await_or_stop<T>(
     tokio::select! {
         biased;
         _ = wait_until_search_stopped(cancelled, budget) => Err(SEARCH_STOPPED_ERROR.to_string()),
+        _ = tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)) => Err("检索任务超时".to_string()),
         result = future => Ok(result),
     }
 }
@@ -198,7 +201,7 @@ async fn send_request(
     context: &SearchContext<'_>,
     request: RequestBuilder,
 ) -> Result<reqwest::Response, String> {
-    await_or_stop(request.send(), context.cancelled, context.budget)
+    await_or_stop(request.send(), context.cancelled, context.budget, context.deadline)
         .await?
         .map_err(|error| error.to_string())
 }
@@ -339,9 +342,12 @@ pub async fn search_packages(
         let outputs = join_all(futures).await;
 
         let mut task_results = Vec::new();
+        let mut batch_new_logs = Vec::new();
         for (task_results_inner, task_logs) in outputs {
             for msg in &task_logs {
-                log(app, run_id, &mut logs, msg);
+                if let Some(msg) = append_search_log(&mut logs, msg) {
+                    batch_new_logs.push(msg);
+                }
             }
 
             for result in &task_results_inner {
@@ -387,6 +393,16 @@ pub async fn search_packages(
                 SearchProgressEvent {
                     run_id,
                     result: sanitized,
+                },
+            );
+        }
+
+        if !batch_new_logs.is_empty() {
+            let _ = app.emit(
+                "search-log-batch",
+                SearchLogBatchEvent {
+                    run_id,
+                    messages: batch_new_logs,
                 },
             );
         }
@@ -772,6 +788,7 @@ async fn search_github(
         MAX_JSON_RESPONSE_BYTES,
         context.cancelled,
         context.budget,
+        context.deadline,
     )
     .await
     {
@@ -857,6 +874,7 @@ async fn github_description(
                 MAX_DESCRIPTION_BYTES,
                 context.cancelled,
                 context.budget,
+                context.deadline,
             )
             .await
             .ok()?;
@@ -904,6 +922,7 @@ async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Option<String> 
         MAX_TEXT_RESPONSE_BYTES,
         context.cancelled,
         context.budget,
+        context.deadline,
     )
     .await
     .ok()
@@ -932,6 +951,7 @@ async fn get_json(context: &mut SearchContext<'_>, url: &str) -> Option<Value> {
         MAX_JSON_RESPONSE_BYTES,
         context.cancelled,
         context.budget,
+        context.deadline,
     )
     .await
     .ok()?;
@@ -943,6 +963,7 @@ async fn read_limited_text(
     limit: usize,
     cancelled: &AtomicBool,
     budget: &RequestBudget,
+    deadline: Instant,
 ) -> Result<String, String> {
     if let Some(length) = response.content_length() {
         if length > limit as u64 {
@@ -951,7 +972,7 @@ async fn read_limited_text(
     }
 
     let mut bytes = Vec::new();
-    while let Some(chunk) = await_or_stop(response.chunk(), cancelled, budget)
+    while let Some(chunk) = await_or_stop(response.chunk(), cancelled, budget, deadline)
         .await?
         .map_err(|_| "读取响应失败".to_string())?
     {
@@ -1162,7 +1183,13 @@ fn append_search_log(logs: &mut Vec<String>, message: &str) -> Option<String> {
 
 fn log(app: &AppHandle, run_id: u64, logs: &mut Vec<String>, message: &str) {
     if let Some(message) = append_search_log(logs, message) {
-        let _ = app.emit("search-log", SearchLogEvent { run_id, message });
+        let _ = app.emit(
+            "search-log-batch",
+            SearchLogBatchEvent {
+                run_id,
+                messages: vec![message],
+            },
+        );
     }
 }
 
@@ -1450,14 +1477,14 @@ mod tests {
 
     #[test]
     fn serializes_search_events_with_run_id() {
-        let event = SearchLogEvent {
+        let event = SearchLogBatchEvent {
             run_id: 42,
-            message: "开始".to_string(),
+            messages: vec!["开始".to_string()],
         };
         let encoded = serde_json::to_string(&event).expect("事件应可序列化");
 
         assert!(encoded.contains("\"runId\":42"));
-        assert!(encoded.contains("\"message\""));
+        assert!(encoded.contains("\"messages\""));
     }
 
     #[test]

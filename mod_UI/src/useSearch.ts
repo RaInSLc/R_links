@@ -8,7 +8,7 @@ import {
   BROWSER_SEARCH_CONFIRM_THRESHOLD, MAX_SEARCH_LOGS, MAX_SEARCH_RESULTS, MAX_SEARCH_TABS,
   type SearchResponse, type SearchResult,
 } from "./utils";
-import type { Settings, SearchLogEvent, SearchProgressEvent } from "./types";
+import type { Settings, SearchLogBatchEvent, SearchProgressEvent } from "./types";
 
 type SetStatus = (s: string) => void;
 
@@ -24,13 +24,20 @@ export function useSearch(setStatus: SetStatus) {
 
   useEffect(() => {
     let active = true;
-    const unlistenLog = listen<SearchLogEvent>(
-      "search-log",
+    const unlistenLog = listen<SearchLogBatchEvent>(
+      "search-log-batch",
       (event) => {
         const payload = asRecord(event.payload);
         if (!active || safeRunId(payload.runId) !== activeSearchRunId.current) return;
         hasSearchEvidenceRef.current = true;
-        setLogs((current) => appendBounded(current, safeStatusText(payload.message), MAX_SEARCH_LOGS));
+        const messages = Array.isArray(payload.messages) ? payload.messages.map(m => safeStatusText(String(m))) : [];
+        setLogs((current) => {
+            let next = [...current];
+            for (const msg of messages) {
+                next = appendBounded(next, msg, MAX_SEARCH_LOGS);
+            }
+            return next;
+        });
       },
     ).catch((error) => {
       if (active) setStatus(`检索日志监听失败: ${formatError(error)}`);

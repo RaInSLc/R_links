@@ -11,8 +11,8 @@ use tauri::{AppHandle, Manager};
 
 use crate::logic;
 use crate::models::{
-    HistoryRecord, InputRules, PackageCacheEntry, Settings, MAX_FIELD_CHARS,
-    MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_TOKEN_CHARS, INPUT_RULES_FILE_NAME,
+    HistoryRecord, InputRules, PackageCacheEntry, Settings, INPUT_RULES_FILE_NAME, MAX_FIELD_CHARS,
+    MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_TOKEN_CHARS,
 };
 use crate::secrets;
 use serde::{Deserialize, Serialize};
@@ -124,11 +124,22 @@ pub fn load_input_rules(app: &AppHandle) -> InputRules {
         Ok(p) => p,
         Err(_) => return InputRules::default(),
     };
-    let content = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return InputRules::default(),
+    if !path_entry_exists(&path).unwrap_or(false) {
+        return InputRules::default();
+    }
+    let Some(content) =
+        read_storage_file_with_recovery(app, INPUT_RULES_FILE_NAME, 64 * 1024, "输入规则文件")
+            .unwrap_or(None)
+    else {
+        return InputRules::default();
     };
-    serde_json::from_str(&content).unwrap_or_default()
+    match serde_json::from_str::<InputRules>(&content) {
+        Ok(rules) => rules.normalized(),
+        Err(_) => {
+            let _ = backup_corrupt_file(app, INPUT_RULES_FILE_NAME, &content);
+            InputRules::default()
+        }
+    }
 }
 
 pub fn save_default_input_rules(app: &AppHandle) {
@@ -141,8 +152,15 @@ pub fn save_default_input_rules(app: &AppHandle) {
     }
     let rules = InputRules::default();
     if let Ok(content) = serde_json::to_string_pretty(&rules) {
-        let _ = std::fs::write(&path, &content);
+        let _ = atomic_write(&path, &content);
     }
+}
+
+pub fn save_input_rules(app: &AppHandle, rules: &InputRules) -> Result<(), String> {
+    let path = data_file(app, INPUT_RULES_FILE_NAME)?;
+    let normalized = rules.normalized();
+    let content = serde_json::to_string_pretty(&normalized).map_err(|error| error.to_string())?;
+    atomic_write(&path, &content)
 }
 
 #[cfg(windows)]

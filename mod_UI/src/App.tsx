@@ -14,7 +14,7 @@ import {
   formatError, scriptValueTooLarge, activeInputLineCount,
   nonEmptyLineBytesExceeds, methodSupportsInput, classifyInputProfile,
   MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES,
-  MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS,
+  MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS, utf8Length,
   type HistoryRecord,
 } from "./utils";
 import { type View, type Method, type InputRules, defaultInputRules, defaultSettings } from "./types";
@@ -60,11 +60,7 @@ function App() {
 
   const packageCount = useMemo(() => activeInputLineCount(input), [input]);
   const inputProfile = useMemo(() => classifyInputProfile(input), [input]);
-  const inputBytes = useMemo(() => {
-    let bytes = 0;
-    for (const c of input) bytes += c.length > 1 ? 2 : 1;
-    return bytes;
-  }, [input]);
+  const inputBytes = useMemo(() => utf8Length(input), [input]);
   const inputTooLarge =
     inputBytes > MAX_INPUT_CHARS ||
     packageCount > MAX_PACKAGE_LINES ||
@@ -117,8 +113,8 @@ function App() {
     if (
       value.length > MAX_INPUT_CHARS ||
       /[\p{C}]/u.test(value.replace(/[\r\n\t]/g, "")) ||
-      nonEmptyLineBytesExceeds(input, MAX_INPUT_LINE_BYTES) ||
-      inputBytes > MAX_INPUT_CHARS
+      nonEmptyLineBytesExceeds(value, MAX_INPUT_LINE_BYTES) ||
+      utf8Length(value) > MAX_INPUT_CHARS
     ) {
       setStatus(
         `${source === "clipboard" ? "剪贴板内容" : "输入"}超出限制或包含非法字符：最多 ${MAX_PACKAGE_LINES} 行、总计 ${MAX_INPUT_CHARS} 字节、单行 ${MAX_INPUT_LINE_BYTES} 字节`,
