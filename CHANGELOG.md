@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## [2026-06-24 23:07:00 +08:00]
+
+### Fixed
+- 重构了 `search.rs` 中的 `search_cran`、`search_bioconductor`、`find_bioc_history`、`search_github` 和 `search_explicit_github` 的返回值，支持将底层网络及解析异常（非 404）向上抛出。
+- 重构了 `search_one_package` 中的错误结算机制，发生网络/服务端异常时，不再误报为 `notFound`，而是收集具体的错误信息并标记状态为 `error`。
+- 修复了前端状态解析器 `sanitizeStatus` 以支持接收并正常清洗新的 `error` 状态，并在 `ReportView.tsx` 中将其渲染为“检索异常”的提示文本与深红样式。
+
+### Added
+- 编写了 4 个前端单元测试文件，包含：
+  - `useHistory.test.ts`：测试历史记录的异步加载、复制与删除行为。
+  - `useSearch.test.ts`：测试检索运行状态变迁与日志批处理的 `runId` 异常过滤。
+  - `SettingsView.test.tsx`：测试设置视图下的各种配置保存按钮交互和回调。
+  - `App.test.tsx`：测试输入包列表在字节长度超限以及包含非法控制字符时的拦截与状态提示。
+
+### CI/CD
+- 在 `.github/workflows/ci.yml` 中新增了 `Check Version Consistency` 版本一致性校验步骤，通过内联 Node 脚本自动对比 `package.json`、`Cargo.toml` 和 `tauri.conf.json` 三处版本。
+- 设置了全局环境变量 `CARGO_TARGET_DIR=target/ci_target`，以降低 Windows 上并发构建的文件锁定概率，避免 `LNK1104` 阻断。
+
 ## [2026-06-24 19:01:53 +08:00]
 
 ### Docs

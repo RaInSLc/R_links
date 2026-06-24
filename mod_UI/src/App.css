@@ -816,6 +816,10 @@ input:focus-visible,
   color: #c0392b;
 }
 
+.error {
+  color: #c0392b;
+}
+
 .log-console {
   height: calc(100vh - 350px);
   min-height: 300px;

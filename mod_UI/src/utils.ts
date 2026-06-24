@@ -123,7 +123,7 @@ export function safeSource(value: unknown): string {
 
 export function sanitizeStatus(value: unknown): string {
   const raw = typeof value === "string" ? value : "";
-  return ["found", "notFound", "timeout", "rateLimited"].includes(raw) ? raw : "notFound";
+  return ["found", "notFound", "timeout", "rateLimited", "error"].includes(raw) ? raw : "notFound";
 }
 
 export function asRecord(value: unknown): Record<string, unknown> {

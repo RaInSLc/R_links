@@ -121,8 +121,6 @@ struct SearchContext<'a> {
     budget: &'a RequestBudget,
     deadline: Instant,
     timed_out: &'a AtomicBool,
-    app: &'a AppHandle,
-    run_id: u64,
     logs: &'a mut Vec<String>,
     result_limit_reached: bool,
     github_rate_limited: bool,
@@ -201,9 +199,14 @@ async fn send_request(
     context: &SearchContext<'_>,
     request: RequestBuilder,
 ) -> Result<reqwest::Response, String> {
-    await_or_stop(request.send(), context.cancelled, context.budget, context.deadline)
-        .await?
-        .map_err(|error| error.to_string())
+    await_or_stop(
+        request.send(),
+        context.cancelled,
+        context.budget,
+        context.deadline,
+    )
+    .await?
+    .map_err(|error| error.to_string())
 }
 
 pub async fn search_packages(
@@ -316,7 +319,6 @@ pub async fn search_packages(
                 let cancelled_ref = cancelled;
                 let budget_ref = &budget;
                 let timed_out_ref = &timed_out;
-                let app_ref = app;
                 async move {
                     let mut task_logs = Vec::new();
                     let mut task_results = Vec::new();
@@ -327,8 +329,6 @@ pub async fn search_packages(
                         budget: budget_ref,
                         deadline,
                         timed_out: timed_out_ref,
-                        app: app_ref,
-                        run_id,
                         logs: &mut task_logs,
                         result_limit_reached: false,
                         github_rate_limited: false,
@@ -443,6 +443,7 @@ async fn search_one_package(
 ) {
     let mut loop_package = package.clone();
     let mut has_retried_casing = false;
+    let mut errors = Vec::new();
 
     loop {
         if context.should_stop() {
@@ -463,21 +464,23 @@ async fn search_one_package(
 
         let had_found_before = has_found_result_for_package(results, &loop_package.name);
         if loop_package.name.contains('/') {
-            if let Some(result) = search_explicit_github(context, &loop_package).await {
-                results.push(result);
+            match search_explicit_github(context, &loop_package).await {
+                Ok(Some(result)) => {
+                    results.push(result);
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    errors.push(format!("GitHub仓库验证失败: {error}"));
+                }
             }
         } else {
-            if let Some(result) = search_cran(context, &loop_package).await {
-                results.push(result);
-            }
-
-            if (context.settings.full_search
-                || !has_found_result_for_package(results, &loop_package.name))
-                && !context.should_stop()
-            {
-                let bioc_results = search_bioconductor(context, &loop_package).await;
-                for result in bioc_results {
+            match search_cran(context, &loop_package).await {
+                Ok(Some(result)) => {
                     results.push(result);
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    errors.push(format!("CRAN 检索失败: {error}"));
                 }
             }
 
@@ -485,36 +488,57 @@ async fn search_one_package(
                 || !has_found_result_for_package(results, &loop_package.name))
                 && !context.should_stop()
             {
-                let github_results = search_github(context, &loop_package).await;
-
-                let mut casing_diff_name = None;
-                if !has_retried_casing {
-                    for res in &github_results {
-                        if res.found
-                            && !res.real_name.is_empty()
-                            && res.real_name != loop_package.name
-                            && res.real_name.eq_ignore_ascii_case(&loop_package.name)
-                        {
-                            casing_diff_name = Some(res.real_name.clone());
-                            break;
+                match search_bioconductor(context, &loop_package).await {
+                    Ok(bioc_results) => {
+                        for result in bioc_results {
+                            results.push(result);
                         }
                     }
+                    Err(error) => {
+                        errors.push(format!("Bioconductor 检索失败: {error}"));
+                    }
                 }
+            }
 
-                if let Some(corrected_name) = casing_diff_name {
-                    context.log(&format!(
-                        "检测到包名大小写差异，纠正为: {}，重新进行检索...",
-                        corrected_name
-                    ));
-                    results.retain(|r| !r.package.eq_ignore_ascii_case(&loop_package.name));
+            if (context.settings.full_search
+                || !has_found_result_for_package(results, &loop_package.name))
+                && !context.should_stop()
+            {
+                match search_github(context, &loop_package).await {
+                    Ok(github_results) => {
+                        let mut casing_diff_name = None;
+                        if !has_retried_casing {
+                            for res in &github_results {
+                                if res.found
+                                    && !res.real_name.is_empty()
+                                    && res.real_name != loop_package.name
+                                    && res.real_name.eq_ignore_ascii_case(&loop_package.name)
+                                {
+                                    casing_diff_name = Some(res.real_name.clone());
+                                    break;
+                                }
+                            }
+                        }
 
-                    loop_package.name = corrected_name;
-                    has_retried_casing = true;
-                    continue;
-                }
+                        if let Some(corrected_name) = casing_diff_name {
+                            context.log(&format!(
+                                "检测到包名大小写差异，纠正为: {}，重新进行检索...",
+                                corrected_name
+                            ));
+                            results.retain(|r| !r.package.eq_ignore_ascii_case(&loop_package.name));
 
-                for result in github_results {
-                    results.push(result);
+                            loop_package.name = corrected_name;
+                            has_retried_casing = true;
+                            continue;
+                        }
+
+                        for result in github_results {
+                            results.push(result);
+                        }
+                    }
+                    Err(error) => {
+                        errors.push(format!("GitHub 检索失败: {error}"));
+                    }
                 }
             }
         }
@@ -530,6 +554,8 @@ async fn search_one_package(
                     "GitHub API 频率限制，部分来源未查询".to_string(),
                     "rateLimited",
                 )
+            } else if !errors.is_empty() {
+                (errors.join("; "), "error")
             } else {
                 ("所有来源均未找到".to_string(), "notFound")
             };
@@ -578,57 +604,75 @@ fn build_client(settings: &Settings) -> Result<Client, String> {
 async fn search_cran(
     context: &mut SearchContext<'_>,
     package: &PackageInput,
-) -> Option<SearchResult> {
+) -> Result<Option<SearchResult>, String> {
     let url = format!(
         "https://cloud.r-project.org/web/packages/{}/index.html",
         urlencoding::encode(&package.name)
     );
     let html = get_text(context, &url).await?;
-    let version = extract_html_version(&html)?;
+    let html = match html {
+        Some(html) => html,
+        None => return Ok(None),
+    };
+    let version =
+        extract_html_version(&html).ok_or_else(|| "CRAN HTML 响应解析失败".to_string())?;
     context.log(&format!("CRAN 命中版本 {version}"));
-    Some(found_result(package, &version, "", &package.name, "cran"))
+    Ok(Some(found_result(
+        package,
+        &version,
+        "",
+        &package.name,
+        "cran",
+    )))
 }
 
 async fn search_bioconductor(
     context: &mut SearchContext<'_>,
     package: &PackageInput,
-) -> Vec<SearchResult> {
+) -> Result<Vec<SearchResult>, String> {
     for category in BIOC_CATEGORIES {
-        if context.is_stopped() {
-            return Vec::new();
+        if context.should_stop() {
+            return Ok(Vec::new());
         }
         let release_url = format!(
             "https://bioconductor.org/packages/release/{category}/html/{}.html",
             urlencoding::encode(&package.name)
         );
-        if let Some(html) = get_text(context, &release_url).await {
-            if let Some(release_version) = extract_html_version(&html) {
-                if !package.version.is_empty()
-                    && !version_compatible(&release_version, &package.version)
-                {
-                    if let Some(history) = find_bioc_history(context, package, category).await {
-                        return vec![history];
+        match get_text(context, &release_url).await {
+            Ok(Some(html)) => {
+                if let Some(release_version) = extract_html_version(&html) {
+                    if !package.version.is_empty()
+                        && !version_compatible(&release_version, &package.version)
+                    {
+                        if let Some(history) = find_bioc_history(context, package, category).await?
+                        {
+                            return Ok(vec![history]);
+                        }
                     }
+                    context.log(&format!("Bioconductor Release 命中版本 {release_version}"));
+                    return Ok(vec![found_result(
+                        package,
+                        &release_version,
+                        "",
+                        &package.name,
+                        "bioc",
+                    )]);
                 }
-                context.log(&format!("Bioconductor Release 命中版本 {release_version}"));
-                return vec![found_result(
-                    package,
-                    &release_version,
-                    "",
-                    &package.name,
-                    "bioc",
-                )];
+            }
+            Ok(None) => {}
+            Err(error) => {
+                return Err(error);
             }
         }
     }
-    Vec::new()
+    Ok(Vec::new())
 }
 
 async fn find_bioc_history(
     context: &mut SearchContext<'_>,
     package: &PackageInput,
     category: &str,
-) -> Option<SearchResult> {
+) -> Result<Option<SearchResult>, String> {
     let mut versions = BIOC_VERSIONS.to_vec();
     let parts = package
         .version
@@ -646,43 +690,49 @@ async fn find_bioc_history(
     }
 
     for bioc_version in versions {
-        if context.is_stopped() {
-            return None;
+        if context.should_stop() {
+            return Ok(None);
         }
         let url = format!(
             "https://bioconductor.org/packages/{bioc_version}/{category}/html/{}.html",
             urlencoding::encode(&package.name)
         );
-        if let Some(html) = get_text(context, &url).await {
-            if let Some(version) = extract_html_version(&html) {
-                if version_compatible(&version, &package.version) {
-                    context.log(&format!("Bioconductor {bioc_version} 匹配版本 {version}"));
-                    return Some(found_result(
-                        package,
-                        &version,
-                        bioc_version,
-                        &package.name,
-                        "biocGit",
-                    ));
+        match get_text(context, &url).await {
+            Ok(Some(html)) => {
+                if let Some(version) = extract_html_version(&html) {
+                    if version_compatible(&version, &package.version) {
+                        context.log(&format!("Bioconductor {bioc_version} 匹配版本 {version}"));
+                        return Ok(Some(found_result(
+                            package,
+                            &version,
+                            bioc_version,
+                            &package.name,
+                            "biocGit",
+                        )));
+                    }
                 }
+            }
+            Ok(None) => {}
+            Err(error) => {
+                return Err(error);
             }
         }
     }
-    None
+    Ok(None)
 }
 
 async fn search_explicit_github(
     context: &mut SearchContext<'_>,
     package: &PackageInput,
-) -> Option<SearchResult> {
+) -> Result<Option<SearchResult>, String> {
     context.log("验证指定 GitHub 仓库");
     let Some(repository) = normalize_github_repository(&package.name) else {
         context.log("GitHub 仓库格式无效，已跳过");
-        return None;
+        return Ok(None);
     };
     let description = match github_description(context, &repository).await {
-        Some(desc) => desc,
-        None => {
+        Ok(Some(desc)) => desc,
+        Ok(None) => {
             let package_name = repository
                 .rsplit('/')
                 .next()
@@ -693,27 +743,31 @@ async fn search_explicit_github(
                 version: "unknown".to_string(),
             }
         }
+        Err(error) => {
+            return Err(error);
+        }
     };
-    Some(found_result(
+    Ok(Some(found_result(
         package,
         &description.version,
         &repository,
         &description.package_name,
         "github",
-    ))
+    )))
 }
 
 async fn search_github(
     context: &mut SearchContext<'_>,
     package: &PackageInput,
-) -> Vec<SearchResult> {
+) -> Result<Vec<SearchResult>, String> {
     let mut results = Vec::new();
     let mut seen = HashSet::new();
     let universe_url = format!(
         "https://r-universe.dev/api/search?q=package:{}&limit=1",
         urlencoding::encode(&package.name)
     );
-    if let Some(value) = get_json(context, &universe_url).await {
+    let universe_res = get_json(context, &universe_url).await;
+    if let Ok(Some(value)) = universe_res {
         if let Some(object) = r_universe_package_object(&value) {
             if let Some(real_name) = object.get("Package").and_then(Value::as_str) {
                 if !github_package_name_matches_request(real_name, &package.name) {
@@ -742,71 +796,43 @@ async fn search_github(
                 }
             }
         }
+    } else if let Err(error) = universe_res {
+        context.log(&format!("R-Universe 检索异常: {error}"));
     }
 
     if !results.is_empty() && !context.settings.full_search {
-        return results;
+        return Ok(results);
     }
 
     let url = format!(
         "https://api.github.com/search/repositories?q={}+language:R&sort=stars&per_page=10",
         urlencoding::encode(&package.name)
     );
-    let request = match authorized_get(context.client, &url, context.settings) {
-        Ok(request) => request,
-        Err(error) => {
-            context.log(&error);
-            return results;
-        }
-    };
+    let request = authorized_get(context.client, &url, context.settings)?;
     if !context.acquire_request_budget() {
-        return results;
+        return Ok(results);
     }
-    let response = match send_request(context, request).await {
-        Ok(response) => response,
-        Err(error) => {
-            if !context.is_stopped() {
-                context.log(&format!("GitHub 请求失败: {error}"));
-            }
-            return results;
-        }
-    };
+    let response = send_request(context, request).await?;
     if response.status() == StatusCode::FORBIDDEN {
         context.log("GitHub API 已触发频率限制（rateLimited）");
         context.github_rate_limited = true;
-        return results;
+        return Ok(results);
     }
     if !response.status().is_success() {
-        context.log(&format!(
-            "GitHub API 返回 HTTP {}",
-            response.status().as_u16()
-        ));
-        return results;
+        let err_msg = format!("GitHub API 返回 HTTP {}", response.status().as_u16());
+        context.log(&err_msg);
+        return Err(err_msg);
     }
-    let text = match read_limited_text(
+    let text = read_limited_text(
         response,
         MAX_JSON_RESPONSE_BYTES,
         context.cancelled,
         context.budget,
         context.deadline,
     )
-    .await
-    {
-        Ok(value) => value,
-        Err(error) => {
-            if !context.is_stopped() {
-                context.log(&format!("GitHub 响应读取失败: {error}"));
-            }
-            return results;
-        }
-    };
-    let body = match serde_json::from_str::<GithubSearchResponse>(&text) {
-        Ok(value) => value,
-        Err(error) => {
-            context.log(&format!("GitHub 响应解析失败: {error}"));
-            return results;
-        }
-    };
+    .await?;
+    let body = serde_json::from_str::<GithubSearchResponse>(&text)
+        .map_err(|e| format!("GitHub 响应解析失败: {e}"))?;
 
     for full_name in bounded_github_response_repositories(body) {
         if context.is_stopped() {
@@ -819,71 +845,109 @@ async fn search_github(
             continue;
         }
         if let Some(repository_name) = normalize_github_repository(&full_name) {
-            if let Some(description) = github_description(context, &repository_name).await {
-                if !github_package_name_matches_request(&description.package_name, &package.name) {
-                    continue;
+            match github_description(context, &repository_name).await {
+                Ok(Some(description)) => {
+                    if !github_package_name_matches_request(
+                        &description.package_name,
+                        &package.name,
+                    ) {
+                        continue;
+                    }
+                    seen.insert(repository_name.to_ascii_lowercase());
+                    results.push(found_result(
+                        package,
+                        &description.version,
+                        &repository_name,
+                        &description.package_name,
+                        "github",
+                    ));
                 }
-                seen.insert(repository_name.to_ascii_lowercase());
-                results.push(found_result(
-                    package,
-                    &description.version,
-                    &repository_name,
-                    &description.package_name,
-                    "github",
-                ));
-            } else if lower_repo == lower_package {
-                // 兜底逻辑：如果拿不到 DESCRIPTION（比如 mono-repo），但仓库名精确匹配请求包名，则信任该结果
-                seen.insert(repository_name.to_ascii_lowercase());
-                results.push(found_result(
-                    package,
-                    "unknown",
-                    &repository_name,
-                    repo_name,
-                    "github",
-                ));
+                Ok(None) => {
+                    if lower_repo == lower_package {
+                        // 兜底逻辑：如果拿不到 DESCRIPTION（比如 mono-repo），但仓库名精确匹配请求包名，则信任该结果
+                        seen.insert(repository_name.to_ascii_lowercase());
+                        results.push(found_result(
+                            package,
+                            "unknown",
+                            &repository_name,
+                            repo_name,
+                            "github",
+                        ));
+                    }
+                }
+                Err(error) => {
+                    context.log(&format!("获取 GitHub DESCRIPTION 异常: {error}"));
+                }
             }
         }
     }
-    results
+    Ok(results)
 }
 
 async fn github_description(
     context: &mut SearchContext<'_>,
     repository: &str,
-) -> Option<GithubDescription> {
+) -> Result<Option<GithubDescription>, String> {
+    let mut last_error = None;
     for branch in ["HEAD", "master", "main", "devel"] {
         if context.is_stopped() {
-            return None;
+            return Ok(None);
         }
         let url = format!("https://raw.githubusercontent.com/{repository}/{branch}/DESCRIPTION");
-        let response = match authorized_get(context.client, &url, context.settings) {
-            Ok(request) => {
-                if !context.acquire_request_budget() {
-                    return None;
-                }
-                send_request(context, request).await.ok()?
-            }
+        let request = match authorized_get(context.client, &url, context.settings) {
+            Ok(request) => request,
             Err(error) => {
                 context.log(&error);
-                return None;
+                return Err(error);
             }
         };
-        if response.status().is_success() {
-            let description = read_limited_text(
-                response,
-                MAX_DESCRIPTION_BYTES,
-                context.cancelled,
-                context.budget,
-                context.deadline,
-            )
-            .await
-            .ok()?;
-            if let Some(description) = extract_description_metadata(&description) {
-                return Some(description);
+        if !context.acquire_request_budget() {
+            return Ok(None);
+        }
+        match send_request(context, request).await {
+            Ok(response) => {
+                if response.status() == StatusCode::NOT_FOUND {
+                    continue;
+                }
+                if !response.status().is_success() {
+                    let err = format!("HTTP 错误: {}", response.status());
+                    context.log(&err);
+                    last_error = Some(err);
+                    continue;
+                }
+                let description_text = match read_limited_text(
+                    response,
+                    MAX_DESCRIPTION_BYTES,
+                    context.cancelled,
+                    context.budget,
+                    context.deadline,
+                )
+                .await
+                {
+                    Ok(text) => text,
+                    Err(e) => {
+                        context.log(&e);
+                        last_error = Some(e);
+                        continue;
+                    }
+                };
+                if let Some(description) = extract_description_metadata(&description_text) {
+                    return Ok(Some(description));
+                }
+            }
+            Err(error) => {
+                if !context.is_stopped() {
+                    context.log(&format!("GitHub DESCRIPTION 请求失败: {error}"));
+                }
+                last_error = Some(error);
             }
         }
     }
-    None
+    if let Some(err) = last_error {
+        Err(err)
+    } else {
+        Ok(None)
+    }
 }
 
 fn authorized_get(
@@ -902,49 +966,55 @@ fn authorized_get(
     })
 }
 
-async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Option<String> {
+async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Result<Option<String>, String> {
     if context.is_stopped() {
-        return None;
+        return Ok(None);
     }
     if let Err(error) = validate_search_request_url(url) {
         context.log(&error);
-        return None;
+        return Err(error);
     }
     if !context.acquire_request_budget() {
-        return None;
+        return Ok(None);
     }
-    let response = send_request(context, context.client.get(url)).await.ok()?;
+    let response = send_request(context, context.client.get(url)).await?;
+    if response.status() == StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
     if !response.status().is_success() {
-        return None;
+        return Err(format!("HTTP错误: {}", response.status()));
     }
-    read_limited_text(
+    let text = read_limited_text(
         response,
         MAX_TEXT_RESPONSE_BYTES,
         context.cancelled,
         context.budget,
         context.deadline,
     )
-    .await
-    .ok()
+    .await?;
+    Ok(Some(text))
 }
 
-async fn get_json(context: &mut SearchContext<'_>, url: &str) -> Option<Value> {
+async fn get_json(context: &mut SearchContext<'_>, url: &str) -> Result<Option<Value>, String> {
     if context.is_stopped() {
-        return None;
+        return Ok(None);
     }
     let request = match authorized_get(context.client, url, context.settings) {
         Ok(request) => request,
         Err(error) => {
             context.log(&error);
-            return None;
+            return Err(error);
         }
     };
     if !context.acquire_request_budget() {
-        return None;
+        return Ok(None);
     }
-    let response = send_request(context, request).await.ok()?;
+    let response = send_request(context, request).await?;
+    if response.status() == StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
     if !response.status().is_success() {
-        return None;
+        return Err(format!("HTTP错误: {}", response.status()));
     }
     let text = read_limited_text(
         response,
@@ -953,9 +1023,10 @@ async fn get_json(context: &mut SearchContext<'_>, url: &str) -> Option<Value> {
         context.budget,
         context.deadline,
     )
-    .await
-    .ok()?;
-    serde_json::from_str(&text).ok()
+    .await?;
+    serde_json::from_str(&text)
+        .map_err(|e| format!("JSON解析失败: {}", e))
+        .map(Some)
 }
 
 async fn read_limited_text(

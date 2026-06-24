@@ -45,8 +45,8 @@ export function ReportView({
                 <span role="cell" className={`source-tag ${result.source}`}>{sourceNames[result.source] ?? result.source}</span>
                 <code role="cell">{result.latestVersion || "—"}</code>
                 <span role="cell" className="repo-cell">{result.repository || "—"}</span>
-                <span role="cell" className={result.found ? "found" : result.status === "timeout" ? "timeout" : result.status === "rateLimited" ? "rate-limited" : "missing"}>
-                  {result.status === "timeout" ? "超时" : result.status === "rateLimited" ? "频率限制" : result.found ? "已验证" : "未找到"}
+                <span role="cell" className={result.found ? "found" : result.status === "timeout" ? "timeout" : result.status === "rateLimited" ? "rate-limited" : result.status === "error" ? "error" : "missing"}>
+                  {result.status === "timeout" ? "超时" : result.status === "rateLimited" ? "频率限制" : result.status === "error" ? "检索异常" : result.found ? "已验证" : "未找到"}
                 </span>
               </div>
             ))}
