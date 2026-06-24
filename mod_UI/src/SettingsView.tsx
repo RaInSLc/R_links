@@ -176,7 +176,7 @@ export function SettingsView({
             maxLength={MAX_RESULT_FIELD_CHARS}
           />
         </div>
-        <button className="button primary save-button" onClick={onSaveInputRules} disabled={inputRulesBusy}>
+        <button className="button primary save-button" onClick={() => onSaveInputRules()} disabled={inputRulesBusy}>
           {inputRulesBusy ? "处理中..." : "保存过滤规则"}
         </button>
       </section>
@@ -231,7 +231,7 @@ export function SettingsView({
             maxLength={MAX_RESULT_FIELD_CHARS}
           />
         </label>
-        <button className="button primary save-button" onClick={onSaveSettings} disabled={settingsBusy}>
+        <button className="button primary save-button" onClick={() => onSaveSettings()} disabled={settingsBusy}>
           {settingsBusy ? "处理中..." : "保存设置"}
         </button>
       </section>
