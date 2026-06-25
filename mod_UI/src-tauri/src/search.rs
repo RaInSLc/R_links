@@ -637,71 +637,70 @@ async fn search_cran(
         urlencoding::encode(&package.name)
     );
     let html = get_text(context, &url).await?;
-    let html = match html {
-        Some(html) => html,
-        None => {
-            // 如果在主页没找到，尝试从 CRAN Archive 归档区寻找包的历史版本
-            let archive_url = format!(
-                "https://cloud.r-project.org/src/contrib/Archive/{}/",
-                urlencoding::encode(&package.name)
-            );
-            context.log(&format!(
-                "CRAN 主页未找到包 {}，尝试检索 Archive 归档...",
-                package.name
-            ));
-            match get_text(context, &archive_url).await? {
-                Some(archive_html) => {
-                    let versions = extract_archive_versions(&archive_html, &package.name);
-                    if versions.is_empty() {
-                        return Ok(None);
-                    }
-                    let mut latest_version = versions[0].clone();
-                    for v in &versions {
-                        if compare_versions(v, &latest_version) == std::cmp::Ordering::Greater {
-                            latest_version = v.clone();
-                        }
-                    }
+    let version = html.as_deref().and_then(extract_html_version);
 
-                    let target_version = if !package.version.is_empty() {
-                        if versions
-                            .iter()
-                            .any(|v| version_compatible(v, &package.version))
-                        {
-                            let matched = versions
-                                .iter()
-                                .find(|v| version_compatible(v, &package.version))
-                                .unwrap();
-                            matched.clone()
-                        } else {
-                            return Ok(None);
-                        }
-                    } else {
-                        latest_version
-                    };
+    if let Some(version) = version {
+        context.log(&format!("CRAN 命中版本 {version}"));
+        return Ok(Some(found_result(
+            package,
+            &version,
+            "",
+            &package.name,
+            "cran",
+        )));
+    }
 
-                    context.log(&format!("CRAN Archive 命中归档版本 {target_version}"));
-                    return Ok(Some(found_result(
-                        package,
-                        &target_version,
-                        "",
-                        &package.name,
-                        "cran",
-                    )));
-                }
-                None => return Ok(None),
+    // 如果主页请求失败（404），或者主页中无法提取出版本号（例如包已被移出 CRAN 官方主页并归档）
+    // 尝试从 CRAN Archive 归档区寻找包的历史版本
+    let archive_url = format!(
+        "https://cloud.r-project.org/src/contrib/Archive/{}/",
+        urlencoding::encode(&package.name)
+    );
+    context.log(&format!(
+        "CRAN 主页未找到包 {} 的有效版本，尝试检索 Archive 归档...",
+        package.name
+    ));
+    match get_text(context, &archive_url).await? {
+        Some(archive_html) => {
+            let versions = extract_archive_versions(&archive_html, &package.name);
+            if versions.is_empty() {
+                return Ok(None);
             }
+            let mut latest_version = versions[0].clone();
+            for v in &versions {
+                if compare_versions(v, &latest_version) == std::cmp::Ordering::Greater {
+                    latest_version = v.clone();
+                }
+            }
+
+            let target_version = if !package.version.is_empty() {
+                if versions
+                    .iter()
+                    .any(|v| version_compatible(v, &package.version))
+                {
+                    let matched = versions
+                        .iter()
+                        .find(|v| version_compatible(v, &package.version))
+                        .unwrap();
+                    matched.clone()
+                } else {
+                    return Ok(None);
+                }
+            } else {
+                latest_version
+            };
+
+            context.log(&format!("CRAN Archive 命中归档版本 {target_version}"));
+            return Ok(Some(found_result(
+                package,
+                &target_version,
+                "",
+                &package.name,
+                "cran",
+            )));
         }
-    };
-    let version =
-        extract_html_version(&html).ok_or_else(|| "CRAN HTML 响应解析失败".to_string())?;
-    context.log(&format!("CRAN 命中版本 {version}"));
-    Ok(Some(found_result(
-        package,
-        &version,
-        "",
-        &package.name,
-        "cran",
-    )))
+        None => Ok(None),
+    }
 }
 
 async fn search_bioconductor(
