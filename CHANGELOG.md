@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [2026-06-25 11:00:00 +08:00]
+
+### Fixed
+- 修复了 `validate_search_request_url` 安全白名单过滤器，添加了对 CRAN Archive 归档区 URL 路径模式（`https://cloud.r-project.org/src/contrib/Archive/{package}/`）的支持，允许对已下架包的安全抓取请求，解决了移至归档区的包（如 qs）检索异常的故障。
+
 ## [2026-06-25 10:35:00 +08:00]
 
 ### Added

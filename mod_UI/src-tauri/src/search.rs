@@ -1445,6 +1445,8 @@ mod tests {
     fn validates_search_request_url_scope() {
         for url in [
             "https://cloud.r-project.org/web/packages/demo/index.html",
+            "https://cloud.r-project.org/src/contrib/Archive/demo/",
+            "https://cloud.r-project.org/src/contrib/Archive/demo",
             "https://bioconductor.org/packages/release/bioc/html/demo.html",
             "https://bioconductor.org/packages/3.18/bioc/html/demo.html",
             "https://bioconductor.org/packages/release/data/annotation/html/demo.html",
@@ -1467,6 +1469,9 @@ mod tests {
             "https://cloud.r-project.org/web/packages/demo/index.html?mirror=evil",
             "https://cloud.r-project.org/web/packages/owner/repo/index.html",
             "https://cloud.r-project.org/web/packages/demo/extra/index.html",
+            "https://cloud.r-project.org/src/contrib/Archive/demo/extra",
+            "https://cloud.r-project.org/src/contrib/Archive/demo/index.html",
+            "https://cloud.r-project.org/src/contrib/Archive/demo/?mirror=evil",
             "https://bioconductor.org/packages/release/bioc/html/owner/repo.html",
             "https://bioconductor.org/packages/release/unknown/html/demo.html",
             "https://bioconductor.org/packages/release/data/unknown/html/demo.html",

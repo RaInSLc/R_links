@@ -19,7 +19,11 @@ pub(crate) fn validate_search_request_url(value: &str) -> Result<(), String> {
         .ok_or_else(|| "检索 URL 缺少主机名，已阻止请求".to_string())?;
     let path = parsed.path();
     let allowed = match host {
-        "cloud.r-project.org" => parsed.query().is_none() && is_allowed_cran_package_path(&parsed),
+        "cloud.r-project.org" => {
+            parsed.query().is_none()
+                && (is_allowed_cran_package_path(&parsed)
+                    || is_allowed_cran_archive_path(&parsed))
+        }
         "bioconductor.org" => parsed.query().is_none() && is_allowed_bioc_package_path(&parsed),
         "r-universe.dev" => path == "/api/search" && is_allowed_r_universe_query(&parsed),
         "api.github.com" => {
@@ -54,6 +58,18 @@ fn is_allowed_cran_package_path(url: &Url) -> bool {
             && segments[1] == "packages"
             && is_valid_search_package_query(segments[2])
             && segments[3] == "index.html"
+    })
+}
+
+fn is_allowed_cran_archive_path(url: &Url) -> bool {
+    url.path_segments().is_some_and(|segments| {
+        let segments = segments.collect::<Vec<_>>();
+        (segments.len() == 4 || segments.len() == 5)
+            && segments[0] == "src"
+            && segments[1] == "contrib"
+            && segments[2] == "Archive"
+            && is_valid_search_package_query(segments[3])
+            && (segments.len() == 4 || segments[4].is_empty())
     })
 }
 
