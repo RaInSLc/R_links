@@ -40,9 +40,18 @@ pub fn parse_inputs_filtered(input: &str, rules: &InputRules) -> Result<Vec<Pack
     validate_input_size(input)?;
 
     let mut packages = Vec::new();
+    let exclude_regexes: Vec<regex::Regex> = rules
+        .exclude_regex
+        .iter()
+        .filter_map(|pattern| regex::Regex::new(pattern).ok())
+        .collect();
+
     for (line_idx, line) in input.lines().enumerate() {
         let trimmed = line.trim();
         if trimmed.is_empty() || is_comment_line(trimmed, rules) {
+            continue;
+        }
+        if exclude_regexes.iter().any(|re| re.is_match(trimmed)) {
             continue;
         }
         let line_num = line_idx + 1;
@@ -73,6 +82,9 @@ pub fn parse_inputs_filtered(input: &str, rules: &InputRules) -> Result<Vec<Pack
                 segment.trim().to_string()
             };
             if cleaned.is_empty() {
+                continue;
+            }
+            if exclude_regexes.iter().any(|re| re.is_match(&cleaned)) {
                 continue;
             }
             let pkg = parse_input_line(&cleaned)

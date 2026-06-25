@@ -161,6 +161,9 @@ pub struct InputRules {
     pub comment_chars: Vec<String>,
     /// 是否将空格也作为分隔符（开启后将禁用版本号提取）
     pub split_spaces: bool,
+    /// 自定义排除正则列表，匹配的行/段在解析时将被静默忽略
+    #[serde(default)]
+    pub exclude_regex: Vec<String>,
 }
 
 impl Default for InputRules {
@@ -171,6 +174,7 @@ impl Default for InputRules {
             strip_c_parens: true,
             comment_chars: vec!["#".to_string()],
             split_spaces: false,
+            exclude_regex: Vec::new(),
         }
     }
 }
@@ -199,12 +203,22 @@ impl InputRules {
             comment_chars = vec!["#".to_string()];
         }
 
+        let exclude_regex: Vec<String> = self
+            .exclude_regex
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty() && s.len() <= 256)
+            .filter(|s| regex::Regex::new(s).is_ok())
+            .take(10)
+            .collect();
+
         Self {
             separators,
             strip_quotes: self.strip_quotes,
             strip_c_parens: self.strip_c_parens,
             comment_chars,
             split_spaces: self.split_spaces,
+            exclude_regex,
         }
     }
 }

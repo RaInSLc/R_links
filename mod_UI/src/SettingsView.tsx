@@ -176,6 +176,29 @@ export function SettingsView({
             maxLength={MAX_RESULT_FIELD_CHARS}
           />
         </div>
+        <div className="field" style={{ margin: "0 17px", marginTop: "15px" }}>
+          <span>自定义排除正则</span>
+          <small>匹配这些正则表达式的行/段将被直接忽略（每行一个）</small>
+          <textarea
+            value={(inputRules.excludeRegex || []).join("\n")}
+            onChange={(event) => onInputRulesChange({ ...inputRules, excludeRegex: event.currentTarget.value.split("\n").map(s => s.trim()).filter(Boolean) })}
+            placeholder="例如: ^library\( 或 ^install\.packages\("
+            rows={3}
+            style={{ 
+              width: "100%", 
+              boxSizing: "border-box", 
+              marginTop: "5px", 
+              padding: "8px 12px", 
+              borderRadius: "6px", 
+              border: "1px solid var(--border)", 
+              background: "var(--background)", 
+              color: "var(--foreground)", 
+              fontFamily: "monospace", 
+              fontSize: "13px", 
+              resize: "vertical" 
+            }}
+          />
+        </div>
         <button className="button primary save-button" onClick={() => onSaveInputRules()} disabled={inputRulesBusy}>
           {inputRulesBusy ? "处理中..." : "保存过滤规则"}
         </button>

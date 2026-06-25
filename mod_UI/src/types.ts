@@ -27,6 +27,7 @@ export interface InputRules {
   stripCParens: boolean;
   commentChars: string[];
   splitSpaces: boolean;
+  excludeRegex: string[];
 }
 
 export interface InputProfile {
@@ -61,6 +62,7 @@ export const defaultInputRules: InputRules = {
   stripCParens: true,
   commentChars: ["#"],
   splitSpaces: false,
+  excludeRegex: [],
 };
 
 export const methods: Array<{
