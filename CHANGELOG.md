@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [2026-06-25 10:35:00 +08:00]
+
+### Added
+- 在 `search_cran` 函数中新增了对 CRAN Archive 归档区历史版本的爬取解析和匹配逻辑（`extract_archive_versions`/`compare_versions`）。当包在 CRAN 主页因下架被 404 过滤时，系统能自动定位其 Archive 归档页，抓取全部版本，并选中最大/匹配版本以 `remotes::install_version` 的远程命令输出，解决被移入 Archive 后的包无法检索的痛点。
+
 ## [2026-06-24 23:07:00 +08:00]
 
 ### Fixed

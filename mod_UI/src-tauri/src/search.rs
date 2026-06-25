@@ -601,6 +601,33 @@ fn build_client(settings: &Settings) -> Result<Client, String> {
     builder.build().map_err(|error| error.to_string())
 }
 
+fn parse_version(v: &str) -> Vec<i32> {
+    v.split(['.', '-', '_'])
+        .filter_map(|s| s.parse::<i32>().ok())
+        .collect()
+}
+
+fn compare_versions(v1: &str, v2: &str) -> std::cmp::Ordering {
+    parse_version(v1).cmp(&parse_version(v2))
+}
+
+fn extract_archive_versions(html: &str, package_name: &str) -> Vec<String> {
+    let pattern = format!(
+        r#"{}_([0-9A-Za-z.-]+)\.tar\.gz"#,
+        regex::escape(package_name)
+    );
+    let Ok(re) = Regex::new(&pattern) else {
+        return Vec::new();
+    };
+    let mut versions = Vec::new();
+    for cap in re.captures_iter(html) {
+        if let Some(version) = cap.get(1) {
+            versions.push(version.as_str().to_string());
+        }
+    }
+    versions
+}
+
 async fn search_cran(
     context: &mut SearchContext<'_>,
     package: &PackageInput,
@@ -612,7 +639,58 @@ async fn search_cran(
     let html = get_text(context, &url).await?;
     let html = match html {
         Some(html) => html,
-        None => return Ok(None),
+        None => {
+            // 如果在主页没找到，尝试从 CRAN Archive 归档区寻找包的历史版本
+            let archive_url = format!(
+                "https://cloud.r-project.org/src/contrib/Archive/{}/",
+                urlencoding::encode(&package.name)
+            );
+            context.log(&format!(
+                "CRAN 主页未找到包 {}，尝试检索 Archive 归档...",
+                package.name
+            ));
+            match get_text(context, &archive_url).await? {
+                Some(archive_html) => {
+                    let versions = extract_archive_versions(&archive_html, &package.name);
+                    if versions.is_empty() {
+                        return Ok(None);
+                    }
+                    let mut latest_version = versions[0].clone();
+                    for v in &versions {
+                        if compare_versions(v, &latest_version) == std::cmp::Ordering::Greater {
+                            latest_version = v.clone();
+                        }
+                    }
+
+                    let target_version = if !package.version.is_empty() {
+                        if versions
+                            .iter()
+                            .any(|v| version_compatible(v, &package.version))
+                        {
+                            let matched = versions
+                                .iter()
+                                .find(|v| version_compatible(v, &package.version))
+                                .unwrap();
+                            matched.clone()
+                        } else {
+                            return Ok(None);
+                        }
+                    } else {
+                        latest_version
+                    };
+
+                    context.log(&format!("CRAN Archive 命中归档版本 {target_version}"));
+                    return Ok(Some(found_result(
+                        package,
+                        &target_version,
+                        "",
+                        &package.name,
+                        "cran",
+                    )));
+                }
+                None => return Ok(None),
+            }
+        }
     };
     let version =
         extract_html_version(&html).ok_or_else(|| "CRAN HTML 响应解析失败".to_string())?;
