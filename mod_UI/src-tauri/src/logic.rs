@@ -344,6 +344,7 @@ fn generate_script_inner(
 
     let mut output = Vec::new();
     for package in packages {
+        let mut is_cran_archive = false;
         let is_archive_url = package.raw.starts_with("https://");
         if is_archive_url && !matches!(requested_method, "auto" | "devtools" | "remotes") {
             return Err(format!(
@@ -368,6 +369,7 @@ fn generate_script_inner(
             .then(|| choose_best_result(&package.name, &results, package.source_hint.as_deref()))
             .flatten()
         {
+            is_cran_archive = best.source == "cran" && best.repository == "archive";
             let source_label = source_label(&best.source);
             let remote_version = if show_remote_version {
                 format!(": v{}", best.latest_version)
@@ -378,7 +380,7 @@ fn generate_script_inner(
                 output.push(format!(
                     "# [{source_label} 已验证{remote_version} | 自动同步]"
                 ));
-                if show_remote_version
+                if (show_remote_version || is_cran_archive)
                     && is_clean_version(&best.latest_version)
                     && best.source != "github"
                 {
@@ -442,12 +444,18 @@ fn generate_script_inner(
             };
         }
 
+        let command_mirror = if is_cran_archive {
+            "https://cloud.r-project.org".to_string()
+        } else {
+            mirror.clone()
+        };
+
         output.push(generate_command(
             &value,
             &method,
             &version,
             options.conditional,
-            &mirror,
+            &command_mirror,
             options.install_dependencies,
         )?);
     }

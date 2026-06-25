@@ -694,7 +694,7 @@ async fn search_cran(
             return Ok(Some(found_result(
                 package,
                 &target_version,
-                "",
+                "archive",
                 &package.name,
                 "cran",
             )));

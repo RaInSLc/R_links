@@ -3,7 +3,8 @@
 ## [2026-06-25 11:35:00 +08:00]
 
 ### Fixed
-- 修复了下架归档包（如 `qs`）的主页请求流程。由于下架包的 CRAN 主网页依然会返回 200 OK（但内容中并无有效 `Version:` 字段且带有 removed 声明），重构了 `search_cran` 逻辑，在主网页不存在或解析不到版本号时平滑 fallback 到 Archive 归档区进行检索，消除了“CRAN HTML 响应解析失败”的检索异常故障。
+- 修复了下架归档包（如 `qs`）的主页请求流程与脚本生成策略。当主网页不存在或解析不到版本号时平滑 fallback 到 Archive 归档区进行检索。
+- 在“智能路由”生成策略中拦截归档包结果（repository 标记为 `"archive"`），无论是否开启“同步远程版本”均强制使用归档中获取的最新版本号，并指定使用官方源 `https://cloud.r-project.org` 作为默认 repos 渲染 `remotes::install_version` 指令，彻底解决了归档包用 `install.packages` 导致安装失败的故障。
 
 ## [2026-06-25 11:00:00 +08:00]
 
