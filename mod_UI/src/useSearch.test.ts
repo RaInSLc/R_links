@@ -14,15 +14,12 @@ vi.mock('@tauri-apps/api/event', () => ({
 
 describe('useSearch Hook', () => {
   let logCallback: (event: any) => void;
-  let progressCallback: (event: any) => void;
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(tauriEvent.listen).mockImplementation(async (event, callback) => {
       if (event === 'search-log-batch') {
         logCallback = callback;
-      } else if (event === 'search-progress') {
-        progressCallback = callback;
       }
       return () => undefined;
     });
@@ -52,7 +49,7 @@ describe('useSearch Hook', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
 
-    let searchPromise;
+    let searchPromise: Promise<void> | undefined;
     act(() => {
       searchPromise = result.current.startSearch(
         'ggplot2',
@@ -77,7 +74,7 @@ describe('useSearch Hook', () => {
     expect(result.current.logs).toContain('测试日志信息 2');
 
     await act(async () => {
-      await searchPromise;
+      if (searchPromise) await searchPromise;
     });
   });
 
@@ -103,7 +100,7 @@ describe('useSearch Hook', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
 
-    let searchPromise;
+    let searchPromise: Promise<void> | undefined;
     act(() => {
       searchPromise = result.current.startSearch(
         'ggplot2',
@@ -124,7 +121,7 @@ describe('useSearch Hook', () => {
     });
 
     await act(async () => {
-      await searchPromise;
+      if (searchPromise) await searchPromise;
     });
 
     expect(result.current.logs).not.toContain('异常日志');

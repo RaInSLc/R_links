@@ -1,7 +1,7 @@
 # CHANGELOG
 
 ## [2026-06-24]
-- [2026-06-24 23:07:00 +08:00] 后端重构，支持底层网络与解析错误显式传递；前端 ReportView 支持呈现 error 状态，增加 useHistory/useSearch/SettingsView/App 四个单元测试，CI/CD 设置 CARGO_TARGET_DIR 并增加版本一致性检查。
+- [2026-06-24 23:07:00 +08:00] 后端重构，支持底层网络与解析错误显式传递；前端 ReportView 支持呈现 error 状态，增加 useHistory/useSearch/SettingsView/App 四个单元测试（已修复生产编译时出现的 5 处严格模式 TypeScript 类型错误），CI/CD 设置 CARGO_TARGET_DIR 并增加版本一致性检查。
 
 ## [2026-06-15]
 

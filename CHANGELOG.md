@@ -10,7 +10,7 @@
 ### Added
 - 编写了 4 个前端单元测试文件，包含：
   - `useHistory.test.ts`：测试历史记录的异步加载、复制与删除行为。
-  - `useSearch.test.ts`：测试检索运行状态变迁与日志批处理的 `runId` 异常过滤。
+  - `useSearch.test.ts`：测试检索运行状态变迁与日志批处理的 `runId` 异常过滤（已修复生产构建时的 TypeScript 类型严格检查错误）。
   - `SettingsView.test.tsx`：测试设置视图下的各种配置保存按钮交互和回调。
   - `App.test.tsx`：测试输入包列表在字节长度超限以及包含非法控制字符时的拦截与状态提示。
 
