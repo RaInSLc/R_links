@@ -164,6 +164,9 @@ pub struct InputRules {
     /// 自定义排除正则列表，匹配的行/段在解析时将被静默忽略
     #[serde(default)]
     pub exclude_regex: Vec<String>,
+    /// 自定义排除包名关键词列表，被匹配的包名在解析时将被静默忽略
+    #[serde(default)]
+    pub exclude_keywords: Vec<String>,
 }
 
 impl Default for InputRules {
@@ -175,6 +178,7 @@ impl Default for InputRules {
             comment_chars: vec!["#".to_string()],
             split_spaces: false,
             exclude_regex: Vec::new(),
+            exclude_keywords: Vec::new(),
         }
     }
 }
@@ -212,6 +216,14 @@ impl InputRules {
             .take(10)
             .collect();
 
+        let exclude_keywords: Vec<String> = self
+            .exclude_keywords
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty() && s.len() <= 64 && !s.chars().any(char::is_control))
+            .take(50)
+            .collect();
+
         Self {
             separators,
             strip_quotes: self.strip_quotes,
@@ -219,6 +231,7 @@ impl InputRules {
             comment_chars,
             split_spaces: self.split_spaces,
             exclude_regex,
+            exclude_keywords,
         }
     }
 }

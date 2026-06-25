@@ -199,6 +199,16 @@ export function SettingsView({
             }}
           />
         </div>
+        <div className="field" style={{ margin: "0 17px", marginTop: "15px" }}>
+          <span>自定义排除关键词</span>
+          <small>匹配这些词（不区分大小写）的包名将被忽略（空格分隔多个值）</small>
+          <input
+            value={(inputRules.excludeKeywords || []).join(" ")}
+            onChange={(event) => onInputRulesChange({ ...inputRules, excludeKeywords: event.currentTarget.value.split(" ").map(s => s.trim()).filter(Boolean) })}
+            placeholder="例如: library require if else"
+            maxLength={MAX_RESULT_FIELD_CHARS}
+          />
+        </div>
         <button className="button primary save-button" onClick={() => onSaveInputRules()} disabled={inputRulesBusy}>
           {inputRulesBusy ? "处理中..." : "保存过滤规则"}
         </button>

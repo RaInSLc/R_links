@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-06-25 15:10:00 +08:00]
+
+### Added
+- **R 包加载/安装语法前缀智能剥离**：
+  - 扩展了 `strip_r_parens_wrapper` 剥离逻辑，支持自动检测并剥离诸如 `library(...)`, `require(...)`, `requireNamespace(...)`, `install.packages(...)`, `devtools::install_github(...)`, `BiocManager::install(...)` 等 R 常见命令包裹，只提取里层真正的包名进行精准解析。
+- **内置包名黑名单与自定义排除关键词过滤**：
+  - 在 `InputRules` 中引入了 `exclude_keywords` 字段，支持自定义排除关键词列表，不区分大小写进行过滤。
+  - 在后端 `parse_inputs` 解析段的循环体中，增加了包名黑名单拦截检测。对于内置控制流和常见函数词（如 `if`, `else`, `library`, `require` 等）以及用户自定义的排除关键词包名，在解析为对应包名后直接予以静默跳过，避免其被误认作合法包名（如 "library"）进行检索生成。
+  - 在前端设置页的“输入过滤规则”模块下，添加了**“自定义排除关键词”**输入项（空格分隔），并对齐了对应的 TypeScript 类型约束及测试断言。
+
 ## [2026-06-25 12:20:00 +08:00]
 
 ### Added

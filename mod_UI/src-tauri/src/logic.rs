@@ -87,7 +87,47 @@ pub fn parse_inputs_filtered(input: &str, rules: &InputRules) -> Result<Vec<Pack
             if exclude_regexes.iter().any(|re| re.is_match(&cleaned)) {
                 continue;
             }
-            let pkg = parse_input_line(&cleaned)
+            let pkg_opt = parse_input_line(&cleaned);
+            if let Some(ref pkg) = pkg_opt {
+                let pkg_name_lower = pkg.name.to_ascii_lowercase();
+                let is_builtin_blacklisted = matches!(
+                    pkg_name_lower.as_str(),
+                    "if" | "else"
+                        | "for"
+                        | "while"
+                        | "function"
+                        | "in"
+                        | "repeat"
+                        | "next"
+                        | "break"
+                        | "true"
+                        | "false"
+                        | "nil"
+                        | "null"
+                        | "library"
+                        | "require"
+                        | "install"
+                        | "packages"
+                        | "repos"
+                        | "dependencies"
+                        | "version"
+                        | "upgrade"
+                        | "never"
+                        | "quietly"
+                        | "c"
+                        | "list"
+                        | "packageversion"
+                );
+                let is_user_blacklisted = rules
+                    .exclude_keywords
+                    .iter()
+                    .any(|kw| kw.eq_ignore_ascii_case(&pkg.name));
+
+                if is_builtin_blacklisted || is_user_blacklisted {
+                    continue;
+                }
+            }
+            let pkg = pkg_opt
                 .ok_or_else(|| format!("第 {line_num} 行第 {} 段输入格式无效", seg_idx + 1))?;
             packages.push(pkg);
             if packages.len() > MAX_PACKAGE_LINES {
@@ -105,7 +145,18 @@ fn is_comment_line(line: &str, rules: &InputRules) -> bool {
 
 fn strip_r_parens_wrapper(line: &str) -> String {
     let trimmed = line.trim();
-    for prefix in &["c(", "list("] {
+    for prefix in &[
+        "c(",
+        "list(",
+        "library(",
+        "require(",
+        "requireNamespace(",
+        "install.packages(",
+        "devtools::install_github(",
+        "remotes::install_github(",
+        "remotes::install_version(",
+        "BiocManager::install(",
+    ] {
         if let Some(inner) = trimmed.strip_prefix(prefix) {
             if let Some(end) = inner.rfind(')').map(|pos| &inner[..pos]) {
                 return end.to_string();

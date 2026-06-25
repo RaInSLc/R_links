@@ -44,6 +44,7 @@ describe('SettingsView Component', () => {
       stripCParens: true,
       splitSpaces: false,
       excludeRegex: [],
+      excludeKeywords: [],
     },
     onInputRulesChange: vi.fn(),
     onSaveInputRules: vi.fn(),
