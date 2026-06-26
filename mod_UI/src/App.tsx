@@ -294,6 +294,34 @@ function App() {
     }
   }
 
+  function handleTempFilter(text: string, mode: "chars" | "lines") {
+    if (!text) return;
+    let nextValue = "";
+    if (mode === "chars") {
+      try {
+        const regex = new RegExp(text, "g");
+        nextValue = input.replace(regex, "");
+      } catch {
+        nextValue = input.split(text).join("");
+      }
+    } else {
+      const lines = input.split(/\r?\n/);
+      let regex: RegExp | null = null;
+      try {
+        regex = new RegExp(text);
+      } catch {}
+      const filtered = lines.filter((line) => {
+        if (regex) {
+          return !regex.test(line);
+        }
+        return !line.includes(text);
+      });
+      nextValue = filtered.join("\n");
+    }
+    acceptInputValue(nextValue, "manual");
+    setStatus(`已临时过滤: ${mode === "chars" ? "剔除匹配字符" : "剔除匹配整行"}`);
+  }
+
   function handleStartSearch() {
     startSearch(input, settings, inputTooLarge, () => setView("report"), () => setMethod("auto"));
   }
@@ -360,10 +388,7 @@ function App() {
                 updateSettingsFromUser((c) => ({ ...c, useCache: v }));
                 persistSettings({ useCache: v });
               }}
-              onUseFilterChange={(v) => {
-                updateSettingsFromUser((c) => ({ ...c, useFilter: v }));
-                persistSettings({ useFilter: v });
-              }}
+              onTempFilter={handleTempFilter}
               onCopyScript={copyScript} onCleanComments={cleanComments}
               isMethodDisabled={isMethodDisabled}
             />

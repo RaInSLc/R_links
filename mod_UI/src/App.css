@@ -476,6 +476,34 @@ input:focus-visible,
   font-size: 15px;
 }
 
+.temp-filter-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--row-hover);
+  align-items: center;
+}
+
+.temp-filter-input {
+  flex: 1;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--ink);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 150ms ease;
+}
+
+.temp-filter-input:focus {
+  border-color: var(--theme-color);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
 .input-actions,
 .script-actions {
   display: flex;

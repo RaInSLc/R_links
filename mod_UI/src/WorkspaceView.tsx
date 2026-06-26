@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PanelHeader, Toggle } from "./components";
 import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS } from "./utils";
 import type { Method, Settings } from "./types";
@@ -28,7 +29,7 @@ interface WorkspaceViewProps {
   onShowRemoteVersionChange: (v: boolean) => void;
   onFullSearchChange: (v: boolean) => void;
   onUseCacheChange: (v: boolean) => void;
-  onUseFilterChange: (v: boolean) => void;
+  onTempFilter: (text: string, mode: "chars" | "lines") => void;
   onCopyScript: () => void;
   onCleanComments: () => void;
   isMethodDisabled: (candidate: Method) => boolean;
@@ -42,9 +43,10 @@ export function WorkspaceView({
   onInputChange, onPaste, onClear, onOpenSearchTabs, onStartSearch, onStopSearch,
   onMethodChange, onConditionalChange, onInstallDependenciesChange,
   onShowRemoteVersionChange, onFullSearchChange,
-  onUseCacheChange, onUseFilterChange,
+  onUseCacheChange, onTempFilter,
   onCopyScript, onCleanComments, isMethodDisabled,
 }: WorkspaceViewProps) {
+  const [filterText, setFilterText] = useState("");
 
   return (
     <div className="workspace-grid">
@@ -66,6 +68,32 @@ export function WorkspaceView({
             输入超出限制或包含非法字符：最多 {MAX_PACKAGE_LINES} 行、总计 {MAX_INPUT_CHARS} 字节、单行 {MAX_INPUT_LINE_BYTES} 字节。
           </div>
         )}
+        <div className="temp-filter-bar">
+          <input
+            type="text"
+            className="temp-filter-input"
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            placeholder="临时过滤：输入字符/正则..."
+            disabled={searching}
+          />
+          <button
+            type="button"
+            className="button ghost"
+            onClick={() => onTempFilter(filterText, "chars")}
+            disabled={searching || !filterText.trim()}
+          >
+            剔除字符
+          </button>
+          <button
+            type="button"
+            className="button ghost"
+            onClick={() => onTempFilter(filterText, "lines")}
+            disabled={searching || !filterText.trim()}
+          >
+            剔除整行
+          </button>
+        </div>
         <div className="input-actions">
           <button className="button ghost" onClick={onPaste} disabled={searching}>粘贴</button>
           <button className="button ghost" onClick={onClear} disabled={searching}>清空</button>
@@ -104,7 +132,6 @@ export function WorkspaceView({
           <Toggle checked={showRemoteVersion} label="同步远程版本" description="显示版本并生成精确版本安装" onChange={onShowRemoteVersionChange} />
           <Toggle checked={settings.fullSearch} label="全量检索" description="命中后仍继续查询 GitHub" onChange={onFullSearchChange} />
           <Toggle checked={settings.useCache} label="使用缓存" description="使用包结果缓存" onChange={onUseCacheChange} />
-          <Toggle checked={settings.useFilter} label="过滤规则" description="启用输入过滤规则" onChange={onUseFilterChange} />
         </div>
       </section>
 
