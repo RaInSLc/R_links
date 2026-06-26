@@ -1,6 +1,6 @@
 [package]
 name = "mod_ui"
-version = "0.1.4"
+version = "0.1.5"
 description = "R 包安装命令工作台"
 authors = ["R Links"]
 edition = "2021"
