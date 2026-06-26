@@ -356,6 +356,14 @@ function App() {
               onInstallDependenciesChange={setInstallDependencies}
               onShowRemoteVersionChange={setShowRemoteVersion}
               onFullSearchChange={(v) => updateSettingsFromUser((c) => ({ ...c, fullSearch: v }))}
+              onUseCacheChange={(v) => {
+                updateSettingsFromUser((c) => ({ ...c, useCache: v }));
+                persistSettings({ useCache: v });
+              }}
+              onUseFilterChange={(v) => {
+                updateSettingsFromUser((c) => ({ ...c, useFilter: v }));
+                persistSettings({ useFilter: v });
+              }}
               onCopyScript={copyScript} onCleanComments={cleanComments}
               isMethodDisabled={isMethodDisabled}
             />
@@ -388,6 +396,7 @@ function App() {
               onClearToken={clearSavedToken}
               onFullSearchChange={(v) => updateSettingsFromUser((c) => ({ ...c, fullSearch: v }))}
               onUseCacheChange={(v) => updateSettingsFromUser((c) => ({ ...c, useCache: v }))}
+              onUseFilterChange={(v) => updateSettingsFromUser((c) => ({ ...c, useFilter: v }))}
               onMaxCacheEntriesChange={(v) => updateSettingsFromUser((c) => ({ ...c, maxCacheEntries: v }))}
               onConditionalChange={(v) => {
                 setConditional(v);

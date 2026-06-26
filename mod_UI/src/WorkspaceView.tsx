@@ -27,6 +27,8 @@ interface WorkspaceViewProps {
   onInstallDependenciesChange: (v: boolean) => void;
   onShowRemoteVersionChange: (v: boolean) => void;
   onFullSearchChange: (v: boolean) => void;
+  onUseCacheChange: (v: boolean) => void;
+  onUseFilterChange: (v: boolean) => void;
   onCopyScript: () => void;
   onCleanComments: () => void;
   isMethodDisabled: (candidate: Method) => boolean;
@@ -40,6 +42,7 @@ export function WorkspaceView({
   onInputChange, onPaste, onClear, onOpenSearchTabs, onStartSearch, onStopSearch,
   onMethodChange, onConditionalChange, onInstallDependenciesChange,
   onShowRemoteVersionChange, onFullSearchChange,
+  onUseCacheChange, onUseFilterChange,
   onCopyScript, onCleanComments, isMethodDisabled,
 }: WorkspaceViewProps) {
 
@@ -100,6 +103,8 @@ export function WorkspaceView({
           <Toggle checked={installDependencies} label="安装依赖" description="dependencies = TRUE" onChange={onInstallDependenciesChange} />
           <Toggle checked={showRemoteVersion} label="同步远程版本" description="显示版本并生成精确版本安装" onChange={onShowRemoteVersionChange} />
           <Toggle checked={settings.fullSearch} label="全量检索" description="命中后仍继续查询 GitHub" onChange={onFullSearchChange} />
+          <Toggle checked={settings.useCache} label="使用缓存" description="使用包结果缓存" onChange={onUseCacheChange} />
+          <Toggle checked={settings.useFilter} label="过滤规则" description="启用输入过滤规则" onChange={onUseFilterChange} />
         </div>
       </section>
 

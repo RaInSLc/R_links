@@ -58,6 +58,8 @@ struct StoredSettings {
     use_cache: bool,
     #[serde(default = "default_max_cache_entries")]
     max_cache_entries: usize,
+    #[serde(default = "default_true")]
+    use_filter: bool,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     github_token: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -84,6 +86,7 @@ impl StoredSettings {
             show_remote_version: self.show_remote_version,
             use_cache: self.use_cache,
             max_cache_entries: self.max_cache_entries,
+            use_filter: self.use_filter,
         }
         .normalized()
     }
@@ -101,6 +104,7 @@ impl StoredSettings {
             show_remote_version: settings.show_remote_version,
             use_cache: settings.use_cache,
             max_cache_entries: settings.max_cache_entries,
+            use_filter: settings.use_filter,
         })
     }
 }

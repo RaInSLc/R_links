@@ -13,7 +13,7 @@ use url::Url;
 
 use crate::logic::{infer_bioc_version, normalize_github_repository, parse_inputs_filtered};
 use crate::models::{
-    PackageCacheEntry, PackageInput, SearchResponse, SearchResult, Settings, MAX_FIELD_CHARS,
+    InputRules, PackageCacheEntry, PackageInput, SearchResponse, SearchResult, Settings, MAX_FIELD_CHARS,
     MAX_PACKAGE_LINES,
 };
 use crate::storage;
@@ -219,7 +219,19 @@ pub async fn search_packages(
     if run_id == 0 {
         return Err("检索任务 ID 无效".to_string());
     }
-    let rules = storage::load_input_rules(app);
+    let rules = if settings.use_filter {
+        storage::load_input_rules(app)
+    } else {
+        InputRules {
+            separators: Vec::new(),
+            strip_quotes: true,
+            strip_c_parens: true,
+            comment_chars: Vec::new(),
+            split_spaces: false,
+            exclude_regex: Vec::new(),
+            exclude_keywords: Vec::new(),
+        }
+    };
     let packages = parse_inputs_filtered(input, &rules)?;
     if packages.is_empty() {
         return Err("请输入至少一个有效的 R 包".to_string());

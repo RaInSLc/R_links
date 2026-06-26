@@ -21,6 +21,7 @@ pub struct Settings {
     pub show_remote_version: bool,
     pub use_cache: bool,
     pub max_cache_entries: usize,
+    pub use_filter: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -35,6 +36,7 @@ pub struct PublicSettings {
     pub show_remote_version: bool,
     pub use_cache: bool,
     pub max_cache_entries: usize,
+    pub use_filter: bool,
 }
 
 impl Default for Settings {
@@ -49,6 +51,7 @@ impl Default for Settings {
             show_remote_version: true,
             use_cache: true,
             max_cache_entries: 1000,
+            use_filter: true,
         }
     }
 }
@@ -76,6 +79,7 @@ impl Settings {
             show_remote_version: self.show_remote_version,
             use_cache: self.use_cache,
             max_cache_entries,
+            use_filter: self.use_filter,
         })
     }
 
@@ -90,6 +94,7 @@ impl Settings {
             show_remote_version: self.show_remote_version,
             use_cache: self.use_cache,
             max_cache_entries: self.max_cache_entries,
+            use_filter: self.use_filter,
         }
     }
 

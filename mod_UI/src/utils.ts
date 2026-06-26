@@ -27,6 +27,7 @@ export interface PublicSettings {
   showRemoteVersion: boolean;
   useCache: boolean;
   maxCacheEntries: number;
+  useFilter: boolean;
 }
 
 export interface HistoryRecord {
@@ -344,6 +345,7 @@ export function sanitizePublicSettings(value: unknown): PublicSettings {
     showRemoteVersion: safeBoolean(s.showRemoteVersion),
     useCache: safeBoolean(s.useCache),
     maxCacheEntries: typeof s.maxCacheEntries === "number" && Number.isSafeInteger(s.maxCacheEntries) && s.maxCacheEntries >= 1 && s.maxCacheEntries <= 10000 ? s.maxCacheEntries : 1000,
+    useFilter: safeBoolean(s.useFilter),
   };
 }
 

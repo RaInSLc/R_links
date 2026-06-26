@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-06-26 14:17:00 +08:00]
+
+### Added
+- **过滤规则与缓存临时控制支持**（在搜索界面工作台快速开关并即时持久化生效）：
+  - **后端实现**：在全局 `Settings`、`PublicSettings` 以及 `StoredSettings` 数据流中新增了 `use_filter: bool` 配置；在 `search_packages` 执行时检测此项，若关闭则使用一个仅剥离引号和 c/list 括号的最简规则集，不应用自定义正则、排除词、行内分隔符、注释等，满足“临时关闭复杂过滤规则”的要求。
+  - **前端交互与布局对称**：在 `WorkspaceView` 底部的 Toggle 区域添加了“使用缓存”和“过滤规则”两个开关；更新 CSS 排布使其在原 4 个开关基础上并列共 6 个开关，呈现为 2x3 的完全对称布局；在工作台切换这两个开关时通过 `persistSettings` 实现即时保存生效。在 `SettingsView` 的“策略”面板同步添加“启用输入过滤”控制项，在两端进行完全联动。
+  - **测试与安全**：对齐了前端 `App.test.tsx`、`SettingsView.test.tsx`、`useSettings.test.ts` 以及后端中关于 `use_filter` 字段的 Mock 和序列化测试。双端自动化测试（共计 150 个 Rust 用例与 47 个 Vitest 用例）全部成功跑通。
+
 ## [2026-06-26 14:15:00 +08:00]
 
 ### Added

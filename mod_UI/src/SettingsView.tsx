@@ -21,6 +21,7 @@ interface SettingsViewProps {
   onInstallDependenciesChange: (v: boolean) => void;
   onShowRemoteVersionChange: (v: boolean) => void;
   onUseCacheChange: (v: boolean) => void;
+  onUseFilterChange: (v: boolean) => void;
   onMaxCacheEntriesChange: (value: number) => void;
   onCranMirrorChange: (value: string) => void;
   onMirrorSelect: (value: string) => void;
@@ -41,7 +42,7 @@ export function SettingsView({
   currentTheme, currentFont, checkingUpdate, updateMessage,
   onProxyChange, onTokenChange, onTokenToggle, onClearToken,
   onFullSearchChange, onConditionalChange, onInstallDependenciesChange, onShowRemoteVersionChange,
-  onUseCacheChange, onMaxCacheEntriesChange,
+  onUseCacheChange, onUseFilterChange, onMaxCacheEntriesChange,
   onCranMirrorChange, onMirrorSelect,
   onSaveSettings, onThemeChange, onFontChange,
   onCheckUpdates, onClearCache, onExportDiagnostics,
@@ -149,6 +150,7 @@ export function SettingsView({
           <Toggle checked={settings.conditional} label="条件安装" description="默认开启：已安装时自动跳过" onChange={onConditionalChange} />
           <Toggle checked={settings.installDependencies} label="安装依赖" description="默认开启：dependencies = TRUE" onChange={onInstallDependenciesChange} />
           <Toggle checked={settings.showRemoteVersion} label="同步远程版本" description="默认开启：显示版本并生成精确版本安装" onChange={onShowRemoteVersionChange} />
+          <Toggle checked={settings.useFilter} label="启用输入过滤" description="默认开启：对输入内容应用过滤及排除规则" onChange={onUseFilterChange} />
         </div>
       </section>
 

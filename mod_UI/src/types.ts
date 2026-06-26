@@ -21,6 +21,7 @@ export interface Settings {
   showRemoteVersion: boolean;
   useCache: boolean;
   maxCacheEntries: number;
+  useFilter: boolean;
 }
 
 export interface InputRules {
@@ -59,6 +60,7 @@ export const defaultSettings: Settings = {
   showRemoteVersion: true,
   useCache: true,
   maxCacheEntries: 1000,
+  useFilter: true,
 };
 
 export const defaultInputRules: InputRules = {
