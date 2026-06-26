@@ -38,6 +38,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_max_cache_entries() -> usize {
+    1000
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct StoredSettings {
@@ -50,6 +54,10 @@ struct StoredSettings {
     install_dependencies: bool,
     #[serde(default = "default_true")]
     show_remote_version: bool,
+    #[serde(default = "default_true")]
+    use_cache: bool,
+    #[serde(default = "default_max_cache_entries")]
+    max_cache_entries: usize,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     github_token: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -74,6 +82,8 @@ impl StoredSettings {
             conditional: self.conditional,
             install_dependencies: self.install_dependencies,
             show_remote_version: self.show_remote_version,
+            use_cache: self.use_cache,
+            max_cache_entries: self.max_cache_entries,
         }
         .normalized()
     }
@@ -89,6 +99,8 @@ impl StoredSettings {
             conditional: settings.conditional,
             install_dependencies: settings.install_dependencies,
             show_remote_version: settings.show_remote_version,
+            use_cache: settings.use_cache,
+            max_cache_entries: settings.max_cache_entries,
         })
     }
 }
@@ -726,7 +738,12 @@ pub fn load_cache(app: &AppHandle) -> Result<HashMap<String, PackageCacheEntry>,
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
-            for entry in entries.into_iter().take(MAX_CACHE_ENTRIES) {
+            let limit = load_existing_settings(app)
+                .ok()
+                .flatten()
+                .map(|s| s.max_cache_entries)
+                .unwrap_or(1000);
+            for entry in entries.into_iter().take(limit) {
                 let key = entry.package_name.to_ascii_lowercase();
                 if !key.is_empty() && !entry.source.is_empty() {
                     // 如果是已在 CRAN 下架的包 oncoPredict 且缓存为普通 CRAN 包，强制跳过以触发重新检索
@@ -757,8 +774,13 @@ pub fn save_cache(
     app: &AppHandle,
     cache: &HashMap<String, PackageCacheEntry>,
 ) -> Result<(), String> {
+    let limit = load_existing_settings(app)
+        .ok()
+        .flatten()
+        .map(|s| s.max_cache_entries)
+        .unwrap_or(1000);
     let path = data_file(app, CACHE_FILE_NAME)?;
-    let entries: Vec<&PackageCacheEntry> = cache.values().take(MAX_CACHE_ENTRIES).collect();
+    let entries: Vec<&PackageCacheEntry> = cache.values().take(limit).collect();
     let content = serde_json::to_string_pretty(&entries).map_err(|error| error.to_string())?;
     atomic_write(&path, &content)
 }

@@ -387,6 +387,8 @@ function App() {
               onTokenToggle={() => setShowToken((v) => !v)}
               onClearToken={clearSavedToken}
               onFullSearchChange={(v) => updateSettingsFromUser((c) => ({ ...c, fullSearch: v }))}
+              onUseCacheChange={(v) => updateSettingsFromUser((c) => ({ ...c, useCache: v }))}
+              onMaxCacheEntriesChange={(v) => updateSettingsFromUser((c) => ({ ...c, maxCacheEntries: v }))}
               onConditionalChange={(v) => {
                 setConditional(v);
                 updateSettingsFromUser((c) => ({ ...c, conditional: v }));

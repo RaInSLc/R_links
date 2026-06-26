@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [2026-06-26 14:15:00 +08:00]
+
+### Added
+- **缓存启用开关与最大保存条目配置支持**：
+  - **后端数据模型与持久化**：
+    - 在 `Settings` / `PublicSettings` 模型层及持久化 `StoredSettings` 层引入了 `use_cache: bool`（控制是否读写本地物理缓存）和 `max_cache_entries: usize`（可配置的最大缓存条数限额，限制 1 - 10000 之间，若越界在 `normalized` 时做幅值截断）属性，对老版本配置实现了平滑兼容。
+    - 使 `load_cache` 和 `save_cache` 在加载与截断缓存实体数量时动态从 `load_existing_settings(app)` 读取，避免硬编码，不改变外部组件调用签名。
+    - 使 `search_packages` 在检索时完全对接此缓存开关（若关闭则不读取缓存也不写缓存文件），并补齐了越界检查单元测试。
+  - **前端 UI 与交互更新**：
+    - 在 `types.ts` 和 `utils.ts` 等类型定义及 sanitize 洗涤管道中，包含了 `useCache` 和 `maxCacheEntries` 的状态接收和保护处理。
+    - 修改 `<SettingsView>` 的 props 协议并增加事件绑定，在“设置”页面的“缓存”面板下增加了**“使用包结果缓存” Toggle 开关**和**“最大缓存条数” Number 类型配置项**。在 App 状态层及 `useSettings` 钩子中实现了完美联动与状态持久化更新。
+    - 补齐了前端 `useSettings.test.ts`、`SettingsView.test.tsx` 及 `App.test.tsx` 里的 Mock 状态属性，并通过全部 47 个 vitest 单元测试校验。
+
 ## [2026-06-26 11:51:00 +08:00]
 
 ### Changed

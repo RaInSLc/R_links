@@ -19,6 +19,8 @@ export interface Settings {
   conditional: boolean;
   installDependencies: boolean;
   showRemoteVersion: boolean;
+  useCache: boolean;
+  maxCacheEntries: number;
 }
 
 export interface InputRules {
@@ -55,6 +57,8 @@ export const defaultSettings: Settings = {
   conditional: true,
   installDependencies: true,
   showRemoteVersion: true,
+  useCache: true,
+  maxCacheEntries: 1000,
 };
 
 export const defaultInputRules: InputRules = {

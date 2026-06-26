@@ -9,7 +9,7 @@ import {
 import type { Settings } from "./types";
 import { defaultSettings } from "./types";
 
-type SettingsBoolField = "fullSearch" | "conditional" | "installDependencies" | "showRemoteVersion";
+type SettingsBoolField = "fullSearch" | "conditional" | "installDependencies" | "showRemoteVersion" | "useCache";
 
 type SetStatus = (s: string) => void;
 
@@ -36,6 +36,8 @@ export function useSettings(setStatus: SetStatus) {
           conditional: clean.conditional,
           installDependencies: clean.installDependencies,
           showRemoteVersion: clean.showRemoteVersion,
+          useCache: clean.useCache,
+          maxCacheEntries: clean.maxCacheEntries,
         });
         setTokenConfigured(clean.githubTokenConfigured);
       })
@@ -108,6 +110,8 @@ export function useSettings(setStatus: SetStatus) {
         conditional: publicSettings.conditional,
         installDependencies: publicSettings.installDependencies,
         showRemoteVersion: publicSettings.showRemoteVersion,
+        useCache: publicSettings.useCache,
+        maxCacheEntries: publicSettings.maxCacheEntries,
       });
       setShowToken(false);
       setStatus("设置已保存并立即生效");
@@ -144,6 +148,8 @@ export function useSettings(setStatus: SetStatus) {
         conditional: publicSettings.conditional,
         installDependencies: publicSettings.installDependencies,
         showRemoteVersion: publicSettings.showRemoteVersion,
+        useCache: publicSettings.useCache,
+        maxCacheEntries: publicSettings.maxCacheEntries,
       }));
       setShowToken(false);
       setStatus("已清除保存的 GitHub Token");

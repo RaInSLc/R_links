@@ -233,12 +233,16 @@ pub async fn search_packages(
     let mut logs = Vec::new();
     let mut cache_update: HashMap<String, PackageCacheEntry> = HashMap::new();
 
-    let cache = match storage::load_cache(app) {
-        Ok(cache) => cache,
-        Err(error) => {
-            log(app, run_id, &mut logs, &format!("缓存加载失败: {error}"));
-            HashMap::new()
+    let cache = if settings.use_cache {
+        match storage::load_cache(app) {
+            Ok(cache) => cache,
+            Err(error) => {
+                log(app, run_id, &mut logs, &format!("缓存加载失败: {error}"));
+                HashMap::new()
+            }
         }
+    } else {
+        HashMap::new()
     };
 
     log(
@@ -423,8 +427,10 @@ pub async fn search_packages(
     };
     log(app, run_id, &mut logs, final_message);
 
-    if let Err(error) = storage::save_cache(app, &cache) {
-        log(app, run_id, &mut logs, &format!("缓存保存失败: {error}"));
+    if settings.use_cache {
+        if let Err(error) = storage::save_cache(app, &cache) {
+            log(app, run_id, &mut logs, &format!("缓存保存失败: {error}"));
+        }
     }
     Ok(SearchResponse {
         run_id,

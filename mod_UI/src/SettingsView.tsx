@@ -20,6 +20,8 @@ interface SettingsViewProps {
   onConditionalChange: (v: boolean) => void;
   onInstallDependenciesChange: (v: boolean) => void;
   onShowRemoteVersionChange: (v: boolean) => void;
+  onUseCacheChange: (v: boolean) => void;
+  onMaxCacheEntriesChange: (value: number) => void;
   onCranMirrorChange: (value: string) => void;
   onMirrorSelect: (value: string) => void;
   onSaveSettings: () => void;
@@ -39,6 +41,7 @@ export function SettingsView({
   currentTheme, currentFont, checkingUpdate, updateMessage,
   onProxyChange, onTokenChange, onTokenToggle, onClearToken,
   onFullSearchChange, onConditionalChange, onInstallDependenciesChange, onShowRemoteVersionChange,
+  onUseCacheChange, onMaxCacheEntriesChange,
   onCranMirrorChange, onMirrorSelect,
   onSaveSettings, onThemeChange, onFontChange,
   onCheckUpdates, onClearCache, onExportDiagnostics,
@@ -230,8 +233,30 @@ export function SettingsView({
 
       <section className="panel settings-panel">
         <PanelHeader step="缓存" title="包结果缓存" meta="避免重复检索" />
-        <div className="field">
-          <span>清除包缓存</span>
+        <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
+          <Toggle
+            checked={settings.useCache}
+            label="使用包结果缓存"
+            description="启用后命中缓存的包跳过在线检索；关闭后每次均在线重新检索"
+            onChange={onUseCacheChange}
+          />
+        </div>
+        <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+          <span>最大缓存条数</span>
+          <small>缓存保留的最大条数限制，允许范围：1 至 10000 条</small>
+          <input
+            type="number"
+            min={1}
+            max={10000}
+            value={settings.maxCacheEntries}
+            onChange={(event) => {
+              const val = parseInt(event.currentTarget.value, 10);
+              onMaxCacheEntriesChange(isNaN(val) ? 1000 : val);
+            }}
+          />
+        </div>
+        <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+          <span>清理缓存数据</span>
           <small>已缓存的包将跳过在线检索直接使用历史结果；清除后所有包都会重新在线检索</small>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '9px' }}>
             <button className="button ghost" onClick={onClearCache} style={{ marginLeft: 0 }}>清除缓存</button>

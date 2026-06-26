@@ -19,6 +19,8 @@ pub struct Settings {
     pub conditional: bool,
     pub install_dependencies: bool,
     pub show_remote_version: bool,
+    pub use_cache: bool,
+    pub max_cache_entries: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -31,6 +33,8 @@ pub struct PublicSettings {
     pub conditional: bool,
     pub install_dependencies: bool,
     pub show_remote_version: bool,
+    pub use_cache: bool,
+    pub max_cache_entries: usize,
 }
 
 impl Default for Settings {
@@ -43,6 +47,8 @@ impl Default for Settings {
             conditional: true,
             install_dependencies: true,
             show_remote_version: true,
+            use_cache: true,
+            max_cache_entries: 1000,
         }
     }
 }
@@ -52,6 +58,13 @@ impl Settings {
         let proxy = normalize_proxy(&self.proxy)?;
         let github_token = normalize_token(&self.github_token)?;
         let cran_mirror = normalize_cran_mirror_url(&self.cran_mirror)?;
+        let max_cache_entries = if self.max_cache_entries < 1 {
+            1
+        } else if self.max_cache_entries > 10000 {
+            10000
+        } else {
+            self.max_cache_entries
+        };
 
         Ok(Self {
             proxy,
@@ -61,6 +74,8 @@ impl Settings {
             conditional: self.conditional,
             install_dependencies: self.install_dependencies,
             show_remote_version: self.show_remote_version,
+            use_cache: self.use_cache,
+            max_cache_entries,
         })
     }
 
@@ -73,6 +88,8 @@ impl Settings {
             conditional: self.conditional,
             install_dependencies: self.install_dependencies,
             show_remote_version: self.show_remote_version,
+            use_cache: self.use_cache,
+            max_cache_entries: self.max_cache_entries,
         }
     }
 
@@ -532,5 +549,20 @@ mod tests {
             };
             assert!(settings.normalized().is_err(), "{token:?}");
         }
+    }
+
+    #[test]
+    fn test_normalizes_cache_entries_limit() {
+        let settings = Settings {
+            max_cache_entries: 0,
+            ..Settings::default()
+        };
+        assert_eq!(settings.normalized().expect("应能规范化").max_cache_entries, 1);
+
+        let settings = Settings {
+            max_cache_entries: 20000,
+            ..Settings::default()
+        };
+        assert_eq!(settings.normalized().expect("应能规范化").max_cache_entries, 10000);
     }
 }
