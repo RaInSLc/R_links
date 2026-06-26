@@ -722,7 +722,6 @@ fn redact_settings_value(value: &mut serde_json::Value) {
     }
 }
 
-const MAX_CACHE_ENTRIES: usize = 1000;
 const CACHE_FILE_NAME: &str = "pkg_cache.json";
 
 pub fn load_cache(app: &AppHandle) -> Result<HashMap<String, PackageCacheEntry>, String> {
