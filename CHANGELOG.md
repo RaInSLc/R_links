@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [2026-06-26 11:51:00 +08:00]
+
+### Changed
+- **已下架 CRAN 包缓存失效与智能重新检索**：
+  - 在 `load_cache` 加载本地缓存时，如果缓存项对应 `oncoPredict` 且 `repository` 为空（旧的、未归档时的缓存状态），则强制忽略并丢弃该缓存项。这强制触发了针对 `oncoPredict` 的重新检索，使其能够在 CRAN Archive 区被重新抓取并更新为正确的 `"archive"` 状态。
+- **已下架 CRAN 包的提示文案优化**：
+  - 在 `logic.rs` 中，优化了当 CRAN 包被移入 Archive 归档区时的脚本提示文案输出，将原先误导性的 `# [CRAN 已验证 | 自动同步]` 变更为准确的 `# [CRAN 已下架并归档: v{版本} | 自动同步]`。
+- **已下架 CRAN 包的安全路由与测试验证**：
+  - 确保下架包在 `auto` 安装路由模式下，能自动使用其提取出的最新版本号通过 `remotes::install_version` 进行安装，而非退化为普通的 `install.packages` 导致失败。
+  - 在 `logic.rs` 底部新增了 `test_generate_script_for_cran_archive` 单元测试，完全验证了此路径的正确性。
+
 ## [2026-06-26 10:00:00 +08:00]
 
 ### Removed

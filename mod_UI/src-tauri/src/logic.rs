@@ -440,8 +440,13 @@ fn generate_script_inner(
                 String::new()
             };
             if version.is_empty() {
+                let status_text = if is_cran_archive {
+                    format!("已下架并归档: v{}", best.latest_version)
+                } else {
+                    format!("已验证{remote_version}")
+                };
                 output.push(format!(
-                    "# [{source_label} 已验证{remote_version} | 自动同步]"
+                    "# [{source_label} {status_text} | 自动同步]"
                 ));
                 if (show_remote_version || is_cran_archive)
                     && is_clean_version(&best.latest_version)
@@ -450,8 +455,13 @@ fn generate_script_inner(
                     version = best.latest_version.clone();
                 }
             } else {
+                let status_text = if is_cran_archive {
+                    format!("已下架并归档: v{}", best.latest_version)
+                } else {
+                    format!("最新版本{remote_version}")
+                };
                 output.push(format!(
-                    "# [{source_label} 最新版本{remote_version} | 保留指定版本]"
+                    "# [{source_label} {status_text} | 保留指定版本]"
                 ));
                 if best.source == "bioc"
                     && !best.latest_version.is_empty()
@@ -1476,6 +1486,36 @@ mod tests {
                 "{method}"
             );
         }
+    }
+
+    #[test]
+    fn test_generate_script_for_cran_archive() {
+        let options = GenerateOptions {
+            method: "auto".to_string(),
+            conditional: false,
+            install_dependencies: false,
+            mirror: "https://mirrors.tuna.tsinghua.edu.cn/CRAN/".to_string(),
+        };
+        let results = vec![SearchResult {
+            package: "oncoPredict".to_string(),
+            requested_version: String::new(),
+            latest_version: "0.2.0".to_string(),
+            repository: "archive".to_string(),
+            real_name: "oncoPredict".to_string(),
+            source: "cran".to_string(),
+            found: true,
+            message: "在 Archive 归档区中找到".to_string(),
+            status: "found".to_string(),
+        }];
+
+        let script = generate_script(
+            "oncoPredict",
+            &options,
+            &results,
+        ).expect("生成脚本成功");
+
+        assert!(script.contains("# [CRAN 已下架并归档: v0.2.0 | 自动同步]"));
+        assert!(script.contains("remotes::install_version(\"oncoPredict\", version = \"0.2.0\", repos = \"https://cloud.r-project.org\", upgrade = \"never\", dependencies = FALSE)"));
     }
 
     #[test]
