@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 
 const MAX_PROTECTED_TOKEN_CHARS: usize = MAX_TOKEN_CHARS * 16;
 const MAX_HISTORY_SAVE_RECORDS: usize = MAX_HISTORY_RECORDS * 4;
-const MAX_HISTORY_SAVE_BYTES: usize = 1024 * 1024;
+const MAX_HISTORY_SAVE_BYTES: usize = 10 * 1024 * 1024;
 const MAX_HISTORY_LOAD_SCAN_RECORDS: usize = MAX_HISTORY_RECORDS * 20;
 const MAX_HISTORY_ID_CHARS: usize = 64;
 const MAX_HISTORY_VERSION_CHARS: usize = 64;

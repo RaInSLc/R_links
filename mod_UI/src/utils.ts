@@ -251,7 +251,7 @@ export const BROWSER_SEARCH_CONFIRM_THRESHOLD = 10;
 export const MAX_SEARCH_TABS = 30;
 export const MAX_SCRIPT_CHARS = 1_000_000;
 export const MAX_TOKEN_CHARS = 512;
-export const MAX_HISTORY_RECORDS = 100;
+export const MAX_HISTORY_RECORDS = 10000;
 export const HISTORY_LOAD_WAIT_TIMEOUT_MS = 5_000;
 
 // -- App.tsx helper functions (extracted) --
