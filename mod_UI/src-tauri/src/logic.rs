@@ -18,7 +18,7 @@ const MAX_RESULT_SOURCE_CHARS: usize = 16;
 const MAX_RESULT_MESSAGE_CHARS: usize = 512;
 const MAX_INSTALL_ARCHIVE_FILE_CHARS: usize = 256;
 const MAX_INPUT_LINE_BYTES: usize = 2_048;
-const MAX_HISTORY_SCAN_LINES: usize = MAX_HISTORY_RECORDS * 20;
+const MAX_HISTORY_SCAN_LINES: usize = MAX_HISTORY_RECORDS;
 const INSTALL_ARCHIVE_EXTENSIONS: &[&str] = &[".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".zip"];
 
 static INPUT_URL_RE: OnceLock<Regex> = OnceLock::new();
@@ -909,6 +909,7 @@ pub fn build_history_records(script: &str) -> Vec<HistoryRecord> {
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .rev()
         .take(MAX_HISTORY_SCAN_LINES)
         .filter_map(|line| {
             supported_history_command(line).and_then(|command| {
@@ -1723,14 +1724,14 @@ mod tests {
     #[test]
     fn bounds_history_scan_lines() {
         let script = format!(
-            "{}\ninstall.packages(\"demo\", repos = \"https://cloud.r-project.org/\", dependencies = TRUE)",
+            "install.packages(\"demo\", repos = \"https://cloud.r-project.org/\", dependencies = TRUE)\n{}",
             "not_a_supported_command()\n".repeat(MAX_HISTORY_SCAN_LINES + 1)
         );
 
         assert!(build_history_records(&script).is_empty());
 
         let script = format!(
-            "{}\ninstall.packages(\"demo\", repos = \"https://cloud.r-project.org/\", dependencies = TRUE)",
+            "install.packages(\"demo\", repos = \"https://cloud.r-project.org/\", dependencies = TRUE)\n{}",
             "# ignored\n\n".repeat(MAX_HISTORY_SCAN_LINES + 10)
         );
 
