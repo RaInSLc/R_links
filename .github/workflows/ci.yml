@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [ main, master ]
+    tags-ignore: ['v*']
   pull_request:
     branches: [ main, master ]
 
@@ -24,21 +25,18 @@ jobs:
       - name: Check Version Consistency
         working-directory: mod_UI
         run: |
-          node -e "
-          const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          const tauri = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
-          const cargo = fs.readFileSync('src-tauri/Cargo.toml', 'utf8');
-          const cargoVersion = cargo.match(/^version\s*=\s*\"([^\"]+)\"/m)[1];
-          console.log('package.json version:', pkg.version);
-          console.log('tauri.conf.json version:', tauri.version);
-          console.log('Cargo.toml version:', cargoVersion);
-          if (pkg.version !== tauri.version || pkg.version !== cargoVersion) {
-            console.error('Error: Version mismatch detected!');
-            process.exit(1);
+          $pkg = (Get-Content 'package.json' -Raw | ConvertFrom-Json).version
+          $tauri = (Get-Content 'src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json).version
+          $cargo = Select-String '^version\s*=\s*"([^"]+)"' 'src-tauri/Cargo.toml'
+          $cargoVersion = $cargo.Matches[0].Groups[1].Value
+          Write-Host "package.json version: $pkg"
+          Write-Host "tauri.conf.json version: $tauri"
+          Write-Host "Cargo.toml version: $cargoVersion"
+          if ($pkg -ne $tauri -or $pkg -ne $cargoVersion) {
+            Write-Error 'Error: Version mismatch detected!'
+            exit 1
           }
-          console.log('Version check passed!');
-          "
+          Write-Host 'Version check passed!'
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
