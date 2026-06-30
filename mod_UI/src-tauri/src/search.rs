@@ -13,8 +13,8 @@ use url::Url;
 
 use crate::logic::{infer_bioc_version, normalize_github_repository, parse_inputs_filtered};
 use crate::models::{
-    InputRules, PackageCacheEntry, PackageInput, SearchResponse, SearchResult, Settings, MAX_FIELD_CHARS,
-    MAX_PACKAGE_LINES,
+    InputRules, PackageCacheEntry, PackageInput, SearchResponse, SearchResult, Settings,
+    MAX_FIELD_CHARS, MAX_PACKAGE_LINES,
 };
 use crate::storage;
 
@@ -709,13 +709,13 @@ async fn search_cran(
             };
 
             context.log(&format!("CRAN Archive 命中归档版本 {target_version}"));
-            return Ok(Some(found_result(
+            Ok(Some(found_result(
                 package,
                 &target_version,
                 "archive",
                 &package.name,
                 "cran",
-            )));
+            )))
         }
         None => Ok(None),
     }

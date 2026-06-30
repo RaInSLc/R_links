@@ -750,7 +750,8 @@ pub fn load_cache(app: &AppHandle) -> Result<HashMap<String, PackageCacheEntry>,
                 let key = entry.package_name.to_ascii_lowercase();
                 if !key.is_empty() && !entry.source.is_empty() {
                     // 如果是已在 CRAN 下架的包 oncoPredict 且缓存为普通 CRAN 包，强制跳过以触发重新检索
-                    if key == "oncopredict" && entry.source == "cran" && entry.repository.is_empty() {
+                    if key == "oncopredict" && entry.source == "cran" && entry.repository.is_empty()
+                    {
                         continue;
                     }
                     cache.insert(key, entry);

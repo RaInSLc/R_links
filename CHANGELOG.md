@@ -1,5 +1,10 @@
 ﻿# CHANGELOG
 
+## [2026-06-30 11:50:13 +08:00]
+
+### Fixed
+- 修复 Rust 源码未按 `rustfmt` 输出提交导致 GitHub Actions `cargo fmt -- --check` 失败的问题，并处理后续 `cargo clippy --all-targets --locked -- -D warnings` 暴露的两处告警。
+
 ## [2026-06-26 15:12:00 +08:00]
 
 ### Added

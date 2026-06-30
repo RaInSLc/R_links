@@ -445,9 +445,7 @@ fn generate_script_inner(
                 } else {
                     format!("已验证{remote_version}")
                 };
-                output.push(format!(
-                    "# [{source_label} {status_text} | 自动同步]"
-                ));
+                output.push(format!("# [{source_label} {status_text} | 自动同步]"));
                 if (show_remote_version || is_cran_archive)
                     && is_clean_version(&best.latest_version)
                     && best.source != "github"
@@ -460,9 +458,7 @@ fn generate_script_inner(
                 } else {
                     format!("最新版本{remote_version}")
                 };
-                output.push(format!(
-                    "# [{source_label} {status_text} | 保留指定版本]"
-                ));
+                output.push(format!("# [{source_label} {status_text} | 保留指定版本]"));
                 if best.source == "bioc"
                     && !best.latest_version.is_empty()
                     && best.latest_version != version
@@ -1509,11 +1505,7 @@ mod tests {
             status: "found".to_string(),
         }];
 
-        let script = generate_script(
-            "oncoPredict",
-            &options,
-            &results,
-        ).expect("生成脚本成功");
+        let script = generate_script("oncoPredict", &options, &results).expect("生成脚本成功");
 
         assert!(script.contains("# [CRAN 已下架并归档: v0.2.0 | 自动同步]"));
         assert!(script.contains("remotes::install_version(\"oncoPredict\", version = \"0.2.0\", repos = \"https://cloud.r-project.org\", upgrade = \"never\", dependencies = FALSE)"));

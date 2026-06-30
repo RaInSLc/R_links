@@ -61,13 +61,7 @@ impl Settings {
         let proxy = normalize_proxy(&self.proxy)?;
         let github_token = normalize_token(&self.github_token)?;
         let cran_mirror = normalize_cran_mirror_url(&self.cran_mirror)?;
-        let max_cache_entries = if self.max_cache_entries < 1 {
-            1
-        } else if self.max_cache_entries > 10000 {
-            10000
-        } else {
-            self.max_cache_entries
-        };
+        let max_cache_entries = self.max_cache_entries.clamp(1, 10000);
 
         Ok(Self {
             proxy,
@@ -562,12 +556,18 @@ mod tests {
             max_cache_entries: 0,
             ..Settings::default()
         };
-        assert_eq!(settings.normalized().expect("应能规范化").max_cache_entries, 1);
+        assert_eq!(
+            settings.normalized().expect("应能规范化").max_cache_entries,
+            1
+        );
 
         let settings = Settings {
             max_cache_entries: 20000,
             ..Settings::default()
         };
-        assert_eq!(settings.normalized().expect("应能规范化").max_cache_entries, 10000);
+        assert_eq!(
+            settings.normalized().expect("应能规范化").max_cache_entries,
+            10000
+        );
     }
 }

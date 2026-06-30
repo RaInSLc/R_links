@@ -21,8 +21,7 @@ pub(crate) fn validate_search_request_url(value: &str) -> Result<(), String> {
     let allowed = match host {
         "cloud.r-project.org" => {
             parsed.query().is_none()
-                && (is_allowed_cran_package_path(&parsed)
-                    || is_allowed_cran_archive_path(&parsed))
+                && (is_allowed_cran_package_path(&parsed) || is_allowed_cran_archive_path(&parsed))
         }
         "bioconductor.org" => parsed.query().is_none() && is_allowed_bioc_package_path(&parsed),
         "r-universe.dev" => path == "/api/search" && is_allowed_r_universe_query(&parsed),
