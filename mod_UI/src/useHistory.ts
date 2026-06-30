@@ -106,8 +106,7 @@ export function useHistory(setStatus: SetStatus) {
   }
 
   return {
-    history, setHistoryState,
-    historySearch, setHistorySearch,
+    history, historySearch, setHistorySearch,
     sanitizeHistoryList,
     enqueueHistorySave,
     copyHistoryRecord,

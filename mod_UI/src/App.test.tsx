@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import App from './App';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as tauriCore from '@tauri-apps/api/core';
@@ -25,12 +25,12 @@ describe('App Component Input Validation', () => {
     const textarea = screen.getByLabelText('R 包输入列表');
     expect(textarea).toBeInTheDocument();
 
-    act(() => {
-      fireEvent.change(textarea, { target: { value: 'ggplot2\u0000' } });
-    });
+    fireEvent.change(textarea, { target: { value: 'ggplot2\u0000' } });
 
-    const statusChip = screen.getByRole('status');
-    expect(statusChip).toHaveTextContent(/超出限制或包含非法字符/);
+    await waitFor(() => {
+      const statusChip = screen.getByRole('status');
+      expect(statusChip).toHaveTextContent(/超出限制或包含非法字符/);
+    });
     expect(textarea).toHaveValue('');
   });
 
@@ -40,12 +40,12 @@ describe('App Component Input Validation', () => {
     const textarea = screen.getByLabelText('R 包输入列表');
     
     const longLine = 'a'.repeat(2049);
-    act(() => {
-      fireEvent.change(textarea, { target: { value: longLine } });
-    });
+    fireEvent.change(textarea, { target: { value: longLine } });
 
-    const statusChip = screen.getByRole('status');
-    expect(statusChip).toHaveTextContent(/超出限制或包含非法字符/);
+    await waitFor(() => {
+      const statusChip = screen.getByRole('status');
+      expect(statusChip).toHaveTextContent(/超出限制或包含非法字符/);
+    });
     expect(textarea).toHaveValue('');
   });
 });

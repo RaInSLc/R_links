@@ -312,7 +312,7 @@ pub async fn search_packages(
                     "search-progress",
                     SearchProgressEvent {
                         run_id,
-                        result: results.last().unwrap().clone(),
+                        result: results.last().expect("刚刚推送的结果应存在").clone(),
                     },
                 );
                 continue;

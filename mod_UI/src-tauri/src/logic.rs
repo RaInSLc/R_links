@@ -31,7 +31,7 @@ static BASE_HISTORY_RE: OnceLock<[Regex; 4]> = OnceLock::new();
 static INSTALL_URL_HISTORY_RE: OnceLock<Regex> = OnceLock::new();
 static CRAN_HISTORY_RE: OnceLock<[Regex; 2]> = OnceLock::new();
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
     parse_inputs_filtered(input, &InputRules::default())
 }
@@ -329,7 +329,7 @@ pub fn extract_package_name(input: &str) -> String {
     value.rsplit('/').next().unwrap_or(value).to_string()
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn generate_script(
     input: &str,
     options: &GenerateOptions,
@@ -357,7 +357,7 @@ pub fn generate_script_with_rules(
     )
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn generate_script_with_remote_versions(
     input: &str,
     options: &GenerateOptions,

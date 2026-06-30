@@ -1,3 +1,5 @@
+import { sourceNames } from "./types";
+
 export interface SearchResult {
   package: string;
   requestedVersion: string;
@@ -62,14 +64,6 @@ export const MAX_SOURCE_CHARS = 16;
 export const MAX_HISTORY_FIELD_CHARS = 8_000;
 
 const utf8Encoder = new TextEncoder();
-
-const sourceNames: Record<string, string> = {
-  cran: "CRAN",
-  bioc: "Bioconductor",
-  biocGit: "Bioc 历史版",
-  github: "GitHub",
-  none: "未找到",
-};
 
 export function utf8Length(value: string): number {
   return utf8Encoder.encode(value).length;
