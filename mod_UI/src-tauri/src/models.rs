@@ -22,6 +22,10 @@ pub struct Settings {
     pub use_cache: bool,
     pub max_cache_entries: usize,
     pub use_filter: bool,
+    pub resolve_dependencies: bool,
+    pub max_dependency_depth: usize,
+    pub include_light_dependencies: bool,
+    pub max_dependency_nodes: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -37,6 +41,10 @@ pub struct PublicSettings {
     pub use_cache: bool,
     pub max_cache_entries: usize,
     pub use_filter: bool,
+    pub resolve_dependencies: bool,
+    pub max_dependency_depth: usize,
+    pub include_light_dependencies: bool,
+    pub max_dependency_nodes: usize,
 }
 
 impl Default for Settings {
@@ -52,6 +60,10 @@ impl Default for Settings {
             use_cache: true,
             max_cache_entries: 1000,
             use_filter: true,
+            resolve_dependencies: true,
+            max_dependency_depth: 2,
+            include_light_dependencies: false,
+            max_dependency_nodes: 100,
         }
     }
 }
@@ -62,6 +74,8 @@ impl Settings {
         let github_token = normalize_token(&self.github_token)?;
         let cran_mirror = normalize_cran_mirror_url(&self.cran_mirror)?;
         let max_cache_entries = self.max_cache_entries.clamp(1, 10000);
+        let max_dependency_depth = self.max_dependency_depth.clamp(1, 5);
+        let max_dependency_nodes = self.max_dependency_nodes.clamp(1, 500);
 
         Ok(Self {
             proxy,
@@ -74,6 +88,10 @@ impl Settings {
             use_cache: self.use_cache,
             max_cache_entries,
             use_filter: self.use_filter,
+            resolve_dependencies: self.resolve_dependencies,
+            max_dependency_depth,
+            include_light_dependencies: self.include_light_dependencies,
+            max_dependency_nodes,
         })
     }
 
@@ -89,6 +107,10 @@ impl Settings {
             use_cache: self.use_cache,
             max_cache_entries: self.max_cache_entries,
             use_filter: self.use_filter,
+            resolve_dependencies: self.resolve_dependencies,
+            max_dependency_depth: self.max_dependency_depth,
+            include_light_dependencies: self.include_light_dependencies,
+            max_dependency_nodes: self.max_dependency_nodes,
         }
     }
 
@@ -125,6 +147,48 @@ pub struct SearchResult {
     pub status: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyGraph {
+    pub roots: Vec<String>,
+    pub nodes: Vec<DependencyNode>,
+    pub edges: Vec<DependencyEdge>,
+    pub summary: DependencySummary,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyNode {
+    pub package: String,
+    pub source: String,
+    pub version: String,
+    pub depth: usize,
+    pub root_packages: Vec<String>,
+    pub direct_dependency_count: usize,
+    pub heavy_dependency_count: usize,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyEdge {
+    pub from: String,
+    pub to: String,
+    pub relation: String,
+    pub strength: String,
+    pub depth: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencySummary {
+    pub total_nodes: usize,
+    pub total_edges: usize,
+    pub heavy_nodes: usize,
+    pub light_nodes: usize,
+    pub shared_nodes: usize,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResponse {
@@ -132,6 +196,8 @@ pub struct SearchResponse {
     pub results: Vec<SearchResult>,
     pub logs: Vec<String>,
     pub stopped: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dependency_graph: Option<DependencyGraph>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -43,8 +43,8 @@ function App() {
   const settingsHook = useSettings(setStatus);
   const historyHook = useHistory(setStatus);
 
-  const { results, setResults, logs, setLogs, searching, openingSearchTabs,
-    searchingRef, hasSearchEvidenceRef,
+  const { results, setResults, logs, setLogs, dependencyGraph,
+    searching, openingSearchTabs, searchingRef, hasSearchEvidenceRef,
     startSearch, stopSearch, openSearchTabs } = search;
   const { settings, showToken, setShowToken,
     tokenConfigured, settingsBusy, updateSettingsFromUser,
@@ -395,7 +395,7 @@ function App() {
           )}
           {view === "report" && (
             <ReportView
-              results={results} logs={logs}
+              results={results} logs={logs} dependencyGraph={dependencyGraph}
               packageCount={packageCount} uniqueFoundCount={uniqueFoundCount}
               searching={searching} onClearLogs={() => setLogs([])}
             />
@@ -440,6 +440,20 @@ function App() {
               }}
               onCranMirrorChange={(v) => acceptSettingValue("cranMirror", v)}
               onMirrorSelect={(v) => updateSettingsFromUser((c) => ({ ...c, cranMirror: v }))}
+              onResolveDependenciesChange={(v) => {
+                updateSettingsFromUser((c) => ({ ...c, resolveDependencies: v }));
+                persistSettings({ resolveDependencies: v });
+              }}
+              onIncludeLightDependenciesChange={(v) => {
+                updateSettingsFromUser((c) => ({ ...c, includeLightDependencies: v }));
+                persistSettings({ includeLightDependencies: v });
+              }}
+              onMaxDependencyDepthChange={(v) => {
+                updateSettingsFromUser((c) => ({ ...c, maxDependencyDepth: v }));
+              }}
+              onMaxDependencyNodesChange={(v) => {
+                updateSettingsFromUser((c) => ({ ...c, maxDependencyNodes: v }));
+              }}
               onSaveSettings={persistSettings}
               onThemeChange={handleThemeChange} onFontChange={handleFontChange}
               onCheckUpdates={checkForUpdates}

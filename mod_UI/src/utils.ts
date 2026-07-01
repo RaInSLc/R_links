@@ -12,11 +12,46 @@ export interface SearchResult {
   status?: string;
 }
 
+export interface DependencyNode {
+  package: string;
+  source: string;
+  version: string;
+  depth: number;
+  rootPackages: string[];
+  directDependencyCount: number;
+  heavyDependencyCount: number;
+  status: string;
+}
+
+export interface DependencyEdge {
+  from: string;
+  to: string;
+  relation: string;
+  strength: string;
+  depth: number;
+}
+
+export interface DependencySummary {
+  totalNodes: number;
+  totalEdges: number;
+  heavyNodes: number;
+  lightNodes: number;
+  sharedNodes: number;
+}
+
+export interface DependencyGraph {
+  roots: string[];
+  nodes: DependencyNode[];
+  edges: DependencyEdge[];
+  summary: DependencySummary;
+}
+
 export interface SearchResponse {
   runId: number;
   results: SearchResult[];
   logs: string[];
   stopped: boolean;
+  dependencyGraph?: DependencyGraph;
 }
 
 export interface PublicSettings {
@@ -30,6 +65,10 @@ export interface PublicSettings {
   useCache: boolean;
   maxCacheEntries: number;
   useFilter: boolean;
+  resolveDependencies: boolean;
+  maxDependencyDepth: number;
+  includeLightDependencies: boolean;
+  maxDependencyNodes: number;
 }
 
 export interface HistoryRecord {
@@ -225,7 +264,7 @@ export function mapBounded<T, U>(
 
 export function sanitizeSearchResponse(value: unknown): SearchResponse {
   const response = asRecord(value);
-  return {
+  const cleanResponse: SearchResponse = {
     runId: safeRunId(response.runId),
     results: dedupeBoundedResults(
       asArray(response.results),
@@ -235,6 +274,48 @@ export function sanitizeSearchResponse(value: unknown): SearchResponse {
     logs: mapBounded(asArray(response.logs), MAX_SEARCH_LOGS, safeStatusText),
     stopped: safeBoolean(response.stopped),
   };
+
+  if (response.dependencyGraph) {
+    const graph = asRecord(response.dependencyGraph);
+    cleanResponse.dependencyGraph = {
+      roots: asArray(graph.roots).map(String),
+      nodes: asArray(graph.nodes).map((n) => {
+        const node = asRecord(n);
+        return {
+          package: String(node.package),
+          source: String(node.source),
+          version: String(node.version),
+          depth: Number(node.depth),
+          rootPackages: asArray(node.rootPackages).map(String),
+          directDependencyCount: Number(node.directDependencyCount),
+          heavyDependencyCount: Number(node.heavyDependencyCount),
+          status: String(node.status),
+        };
+      }),
+      edges: asArray(graph.edges).map((e) => {
+        const edge = asRecord(e);
+        return {
+          from: String(edge.from),
+          to: String(edge.to),
+          relation: String(edge.relation),
+          strength: String(edge.strength),
+          depth: Number(edge.depth),
+        };
+      }),
+      summary: (() => {
+        const s = asRecord(graph.summary);
+        return {
+          totalNodes: Number(s.totalNodes),
+          totalEdges: Number(s.totalEdges),
+          heavyNodes: Number(s.heavyNodes),
+          lightNodes: Number(s.lightNodes),
+          sharedNodes: Number(s.sharedNodes),
+        };
+      })(),
+    };
+  }
+
+  return cleanResponse;
 }
 
 // -- UI-tier constants --
@@ -340,6 +421,10 @@ export function sanitizePublicSettings(value: unknown): PublicSettings {
     useCache: safeBoolean(s.useCache),
     maxCacheEntries: typeof s.maxCacheEntries === "number" && Number.isSafeInteger(s.maxCacheEntries) && s.maxCacheEntries >= 1 && s.maxCacheEntries <= 10000 ? s.maxCacheEntries : 1000,
     useFilter: safeBoolean(s.useFilter),
+    resolveDependencies: safeBoolean(s.resolveDependencies),
+    maxDependencyDepth: typeof s.maxDependencyDepth === "number" && Number.isSafeInteger(s.maxDependencyDepth) && s.maxDependencyDepth >= 1 && s.maxDependencyDepth <= 5 ? s.maxDependencyDepth : 2,
+    includeLightDependencies: safeBoolean(s.includeLightDependencies),
+    maxDependencyNodes: typeof s.maxDependencyNodes === "number" && Number.isSafeInteger(s.maxDependencyNodes) && s.maxDependencyNodes >= 1 && s.maxDependencyNodes <= 500 ? s.maxDependencyNodes : 100,
   };
 }
 

@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## [2026-07-01 11:30:00 +08:00]
+
+### Added
+- **R 包依赖图智能扩展落地实现**：
+  - 后端：在 `models.rs` 中新增 `DependencyGraph`、`DependencyNode` 等 4 个核心依赖图模型；在 `Settings` 与 `PublicSettings` 中新增依赖分析与拓扑控制的 4 个设置字段；在 `storage.rs` 中实现 `DependencyCacheEntry` 本地持久化缓存结构；新建 `dependency.rs` 实现对 DESCRIPTION RFC 822 解析器及带限深与剪枝的 BFS 拓扑图生成算法，并添加了完善的单元测试；在 `search.rs` 中将依赖解析挂接在主检索完成阶段。
+  - 前端：在 `utils.ts` 与 `types.ts` 中引入前端依赖图定义与配置模型，并在 `sanitizeSearchResponse` 与 `sanitizePublicSettings` 洗涤管道中增加数据验证；更新 `useSearch.ts` 与 `useSettings.ts` 数据流以支持依赖图状态和设置的保存与更新；在 `ReportView.tsx` 中编写了独立的 `DependencyGraphView` 与 `DependencyListView`，实现了基于 SVG 层次布局的依赖拓扑图、连线高亮微动画和详情侧边栏交互；在 `SettingsView.tsx` 策略页面追加了依赖分析开关、最大深度与节点数的 UI 配置控制；在 `App.css` 尾部追加了与之对齐的卡片高亮等全局 CSS 样式。
+
 ## [2026-07-01 11:25:00 +08:00]
 
 ### Added

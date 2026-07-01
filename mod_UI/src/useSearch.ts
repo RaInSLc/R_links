@@ -6,7 +6,7 @@ import {
   nextSearchRunId, safeRunId, safeStatusText, sanitizeSearchResponse,
   sanitizeSearchResult, upsertBoundedResult,
   BROWSER_SEARCH_CONFIRM_THRESHOLD, MAX_SEARCH_LOGS, MAX_SEARCH_RESULTS, MAX_SEARCH_TABS,
-  type SearchResponse, type SearchResult,
+  type SearchResponse, type SearchResult, type DependencyGraph,
 } from "./utils";
 import type { Settings, SearchLogBatchEvent, SearchProgressEvent } from "./types";
 
@@ -15,6 +15,7 @@ type SetStatus = (s: string) => void;
 export function useSearch(setStatus: SetStatus) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
+  const [dependencyGraph, setDependencyGraph] = useState<DependencyGraph | null>(null);
   const [searching, setSearching] = useState(false);
   const [openingSearchTabs, setOpeningSearchTabs] = useState(false);
   const activeSearchRunId = useRef(0);
@@ -84,6 +85,7 @@ export function useSearch(setStatus: SetStatus) {
     hasSearchEvidenceRef.current = false;
     setResults([]);
     setLogs([]);
+    setDependencyGraph(null);
     setStatus("正在检索包来源");
     onViewReport();
     try {
@@ -93,6 +95,7 @@ export function useSearch(setStatus: SetStatus) {
       hasSearchEvidenceRef.current = clean.results.length > 0 || clean.logs.length > 0;
       setResults(clean.results);
       setLogs(clean.logs);
+      setDependencyGraph(clean.dependencyGraph || null);
       setStatus(clean.stopped ? "检索任务已停止" : "检索完成，脚本已自动刷新");
       if (!clean.stopped) onSetMethodAuto();
     } catch (error) {
@@ -176,6 +179,7 @@ export function useSearch(setStatus: SetStatus) {
   return {
     results, setResults,
     logs, setLogs,
+    dependencyGraph, setDependencyGraph,
     searching, setSearching,
     openingSearchTabs,
     searchingRef,

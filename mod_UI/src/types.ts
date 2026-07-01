@@ -22,6 +22,10 @@ export interface Settings {
   useCache: boolean;
   maxCacheEntries: number;
   useFilter: boolean;
+  resolveDependencies: boolean;
+  maxDependencyDepth: number;
+  includeLightDependencies: boolean;
+  maxDependencyNodes: number;
 }
 
 export interface InputRules {
@@ -61,6 +65,10 @@ export const defaultSettings: Settings = {
   useCache: true,
   maxCacheEntries: 1000,
   useFilter: true,
+  resolveDependencies: true,
+  maxDependencyDepth: 2,
+  includeLightDependencies: false,
+  maxDependencyNodes: 100,
 };
 
 export const defaultInputRules: InputRules = {

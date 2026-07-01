@@ -9,7 +9,7 @@ import {
 import type { Settings } from "./types";
 import { defaultSettings } from "./types";
 
-type SettingsBoolField = "fullSearch" | "conditional" | "installDependencies" | "showRemoteVersion" | "useCache" | "useFilter";
+type SettingsBoolField = "fullSearch" | "conditional" | "installDependencies" | "showRemoteVersion" | "useCache" | "useFilter" | "resolveDependencies" | "includeLightDependencies";
 
 type SetStatus = (s: string) => void;
 
@@ -39,6 +39,10 @@ export function useSettings(setStatus: SetStatus) {
           useCache: clean.useCache,
           maxCacheEntries: clean.maxCacheEntries,
           useFilter: clean.useFilter,
+          resolveDependencies: clean.resolveDependencies,
+          maxDependencyDepth: clean.maxDependencyDepth,
+          includeLightDependencies: clean.includeLightDependencies,
+          maxDependencyNodes: clean.maxDependencyNodes,
         });
         setTokenConfigured(clean.githubTokenConfigured);
       })
@@ -114,6 +118,10 @@ export function useSettings(setStatus: SetStatus) {
         useCache: publicSettings.useCache,
         maxCacheEntries: publicSettings.maxCacheEntries,
         useFilter: publicSettings.useFilter,
+        resolveDependencies: publicSettings.resolveDependencies,
+        maxDependencyDepth: publicSettings.maxDependencyDepth,
+        includeLightDependencies: publicSettings.includeLightDependencies,
+        maxDependencyNodes: publicSettings.maxDependencyNodes,
       });
       setShowToken(false);
       setStatus("设置已保存并立即生效");

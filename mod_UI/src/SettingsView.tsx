@@ -24,6 +24,10 @@ interface SettingsViewProps {
   onUseFilterChange: (v: boolean) => void;
   onMaxCacheEntriesChange: (value: number) => void;
   onCranMirrorChange: (value: string) => void;
+  onResolveDependenciesChange: (v: boolean) => void;
+  onMaxDependencyDepthChange: (v: number) => void;
+  onIncludeLightDependenciesChange: (v: boolean) => void;
+  onMaxDependencyNodesChange: (v: number) => void;
   onMirrorSelect: (value: string) => void;
   onSaveSettings: () => void;
   onThemeChange: (theme: string) => void;
@@ -44,6 +48,8 @@ export function SettingsView({
   onFullSearchChange, onConditionalChange, onInstallDependenciesChange, onShowRemoteVersionChange,
   onUseCacheChange, onUseFilterChange, onMaxCacheEntriesChange,
   onCranMirrorChange, onMirrorSelect,
+  onResolveDependenciesChange, onMaxDependencyDepthChange,
+  onIncludeLightDependenciesChange, onMaxDependencyNodesChange,
   onSaveSettings, onThemeChange, onFontChange,
   onCheckUpdates, onClearCache, onExportDiagnostics,
   inputRules, onInputRulesChange, onSaveInputRules, inputRulesBusy,
@@ -152,6 +158,56 @@ export function SettingsView({
           <Toggle checked={settings.showRemoteVersion} label="同步远程版本" description="默认开启：显示版本并生成精确版本安装" onChange={onShowRemoteVersionChange} />
           <Toggle checked={settings.useFilter} label="启用输入过滤" description="默认开启：对输入内容应用过滤及排除规则" onChange={onUseFilterChange} />
         </div>
+      </section>
+
+      <section className="panel settings-panel">
+        <PanelHeader step="依赖" title="依赖图扩展设置" meta="级联关系图分析" />
+        <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
+          <Toggle
+            checked={settings.resolveDependencies}
+            label="启用依赖解析"
+            description="分析包的 DESCRIPTION，并生成级联依赖拓扑图"
+            onChange={onResolveDependenciesChange}
+          />
+          <Toggle
+            checked={settings.includeLightDependencies}
+            label="解析轻度依赖"
+            description="解析并展示 Suggests 字段中的测试与可选依赖包"
+            onChange={onIncludeLightDependenciesChange}
+          />
+        </div>
+        {settings.resolveDependencies && (
+          <div style={{ paddingBottom: "16px" }}>
+            <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+              <span>最大依赖深度</span>
+              <small>递归解析依赖的层数深度（允许 1 到 5 层，默认 2）</small>
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={settings.maxDependencyDepth}
+                onChange={(event) => {
+                  let val = Number(event.currentTarget.value);
+                  if (val >= 1 && val <= 5) onMaxDependencyDepthChange(val);
+                }}
+              />
+            </div>
+            <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+              <span>最大依赖包节点数</span>
+              <small>依赖拓扑图中最大允许构建的包节点数量（允许 1 到 500，默认 100）</small>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={settings.maxDependencyNodes}
+                onChange={(event) => {
+                  let val = Number(event.currentTarget.value);
+                  if (val >= 1 && val <= 500) onMaxDependencyNodesChange(val);
+                }}
+              />
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="panel settings-panel">

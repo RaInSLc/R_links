@@ -38,8 +38,20 @@ fn default_true() -> bool {
     true
 }
 
+fn default_false() -> bool {
+    false
+}
+
 fn default_max_cache_entries() -> usize {
     1000
+}
+
+fn default_max_dependency_depth() -> usize {
+    2
+}
+
+fn default_max_dependency_nodes() -> usize {
+    100
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -60,6 +72,14 @@ struct StoredSettings {
     max_cache_entries: usize,
     #[serde(default = "default_true")]
     use_filter: bool,
+    #[serde(default = "default_true")]
+    resolve_dependencies: bool,
+    #[serde(default = "default_max_dependency_depth")]
+    max_dependency_depth: usize,
+    #[serde(default = "default_false")]
+    include_light_dependencies: bool,
+    #[serde(default = "default_max_dependency_nodes")]
+    max_dependency_nodes: usize,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     github_token: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -87,6 +107,10 @@ impl StoredSettings {
             use_cache: self.use_cache,
             max_cache_entries: self.max_cache_entries,
             use_filter: self.use_filter,
+            resolve_dependencies: self.resolve_dependencies,
+            max_dependency_depth: self.max_dependency_depth,
+            include_light_dependencies: self.include_light_dependencies,
+            max_dependency_nodes: self.max_dependency_nodes,
         }
         .normalized()
     }
@@ -105,6 +129,10 @@ impl StoredSettings {
             use_cache: settings.use_cache,
             max_cache_entries: settings.max_cache_entries,
             use_filter: settings.use_filter,
+            resolve_dependencies: settings.resolve_dependencies,
+            max_dependency_depth: settings.max_dependency_depth,
+            include_light_dependencies: settings.include_light_dependencies,
+            max_dependency_nodes: settings.max_dependency_nodes,
         })
     }
 }
@@ -791,7 +819,47 @@ pub fn save_cache(
 
 pub fn clear_cache(app: &AppHandle) -> Result<(), String> {
     let path = data_file(app, CACHE_FILE_NAME)?;
-    atomic_write(&path, "[]")
+    atomic_write(&path, "[]")?;
+    let dep_path = data_file(app, DEP_CACHE_FILE_NAME)?;
+    atomic_write(&dep_path, "{}")
+}
+
+const DEP_CACHE_FILE_NAME: &str = "dep_cache.json";
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyCacheEntry {
+    pub heavy_deps: Vec<String>,
+    pub light_deps: Vec<String>,
+    pub version: String,
+}
+
+pub fn load_dependency_cache(app: &AppHandle) -> Result<HashMap<String, DependencyCacheEntry>, String> {
+    let path = data_file(app, DEP_CACHE_FILE_NAME)?;
+    if !path_entry_exists(&path)? {
+        return Ok(HashMap::new());
+    }
+    let Some(content) =
+        read_storage_file_with_recovery(app, DEP_CACHE_FILE_NAME, 5 * 1024 * 1024, "依赖缓存文件")?
+    else {
+        return Ok(HashMap::new());
+    };
+    match serde_json::from_str::<HashMap<String, DependencyCacheEntry>>(&content) {
+        Ok(cache) => Ok(cache),
+        Err(_) => {
+            backup_corrupt_file(app, DEP_CACHE_FILE_NAME, &content)?;
+            Ok(HashMap::new())
+        }
+    }
+}
+
+pub fn save_dependency_cache(
+    app: &AppHandle,
+    cache: &HashMap<String, DependencyCacheEntry>,
+) -> Result<(), String> {
+    let path = data_file(app, DEP_CACHE_FILE_NAME)?;
+    let content = serde_json::to_string_pretty(cache).map_err(|error| error.to_string())?;
+    atomic_write(&path, &content)
 }
 
 #[cfg(test)]
