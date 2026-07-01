@@ -719,8 +719,64 @@ input:focus-visible,
 
 .report-layout {
   display: grid;
-  grid-template-columns: 1.25fr 0.75fr;
+  grid-template-columns: 1fr;
   gap: 18px;
+}
+
+.report-layout.has-deps {
+  grid-template-columns: 0.85fr 1.15fr; /* 左侧来源验证，右侧依赖分析 */
+}
+
+.report-layout.has-deps .report-panel,
+.report-layout.has-deps .dependency-panel {
+  display: flex;
+  flex-direction: column;
+  height: 580px; /* 固定等高，平整对齐 */
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.report-panel .result-table-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.dependency-panel .dependency-content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.dependency-panel .dep-graph-container,
+.dependency-panel .dep-list-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.dependency-panel .dep-graph-workspace {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.dependency-panel .dep-graph-viewport {
+  flex: 1;
+  height: 100% !important;
+  overflow: auto;
+}
+
+.dependency-panel .result-table {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .metric-row {
@@ -761,9 +817,56 @@ input:focus-visible,
   color: var(--red);
 }
 
-.report-panel,
-.log-panel {
+.report-panel {
   min-height: 500px;
+}
+
+.log-panel {
+  grid-column: 1 / -1; /* 横向铺满底部 */
+  min-height: 200px; /* 适当减小底部日志框的最小高度，使其紧凑 */
+}
+
+/* 每一行包名左侧/右侧的复制样式 */
+.pkg-cell-with-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.row-copy-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--muted, #888888);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.15;
+  transition: all 150ms ease;
+}
+
+.result-row:hover .row-copy-btn {
+  opacity: 0.7; /* 当鼠标悬停在这一行上时，显示复制图标 */
+}
+
+.row-copy-btn:hover {
+  background-color: var(--row-hover, #f0f0f0);
+  color: var(--theme-color, #0066cc) !important;
+  opacity: 1.0 !important;
+}
+
+.row-copy-btn.copied {
+  color: #00cc66 !important;
+  opacity: 1.0 !important;
+}
+
+.row-copy-btn .copy-icon {
+  width: 13px;
+  height: 13px;
 }
 
 .result-table {

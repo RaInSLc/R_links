@@ -388,6 +388,20 @@ function DependencyListView({ graph }: { graph: DependencyGraph }) {
   );
 }
 
+function getInstallCommand(result: SearchResult): string {
+  if (!result.found) return result.package;
+  if (result.source === "cran") {
+    return `install.packages("${result.package}")`;
+  }
+  if (result.source === "bioconductor") {
+    return `BiocManager::install("${result.package}")`;
+  }
+  if (result.source === "github" && result.repository) {
+    return `remotes::install_github("${result.repository}")`;
+  }
+  return `install.packages("${result.package}")`;
+}
+
 export function ReportView({
   results,
   logs,
@@ -398,9 +412,21 @@ export function ReportView({
   onClearLogs,
 }: ReportViewProps) {
   const [activeTab, setActiveTab] = useState<"graph" | "list">("graph");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopy = async (result: SearchResult, key: string) => {
+    const cmd = getInstallCommand(result);
+    try {
+      await navigator.clipboard.writeText(cmd);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1500);
+    } catch (err) {
+      console.error("Failed to copy", err);
+    }
+  };
 
   return (
-    <div className="report-layout">
+    <div className={`report-layout ${dependencyGraph ? "has-deps" : ""}`}>
       <div className="metric-row">
         <Metric label="输入包" value={packageCount} />
         <Metric label="已验证包" value={uniqueFoundCount} tone="success" />
@@ -417,109 +443,137 @@ export function ReportView({
         {results.length === 0 ? (
           <EmptyState text={searching ? "正在等待首条检索结果" : "尚未执行检索"} />
         ) : (
-          <div className="result-table" role="table" aria-label="包来源验证结果">
-            <div className="result-row result-head" role="row">
-              <span role="columnheader">包名</span>
-              <span role="columnheader">来源</span>
-              <span role="columnheader">版本</span>
-              <span role="columnheader">仓库</span>
-              <span role="columnheader">状态</span>
-            </div>
-            {results.map((result, index) => (
-              <div className="result-row" role="row" key={`${result.package}-${result.source}-${index}`}>
-                <strong role="cell">{result.package}</strong>
-                <span role="cell" className={`source-tag ${result.source}`}>
-                  {sourceNames[result.source] ?? result.source}
-                </span>
-                <code role="cell">{result.latestVersion || "—"}</code>
-                <span role="cell" className="repo-cell">{result.repository || "—"}</span>
-                <span
-                  role="cell"
-                  className={
-                    result.found
-                      ? "found"
-                      : result.status === "timeout"
-                      ? "timeout"
-                      : result.status === "rateLimited"
-                      ? "rate-limited"
-                      : result.status === "error"
-                      ? "error"
-                      : "missing"
-                  }
-                >
-                  {result.status === "timeout"
-                    ? "超时"
-                    : result.status === "rateLimited"
-                    ? "频率限制"
-                    : result.status === "error"
-                    ? "检索异常"
-                    : result.found
-                    ? "已验证"
-                    : "未找到"}
-                </span>
+          <div className="result-table-wrapper">
+            <div className="result-table" role="table" aria-label="包来源验证结果">
+              <div className="result-row result-head" role="row">
+                <span role="columnheader">包名</span>
+                <span role="columnheader">来源</span>
+                <span role="columnheader">版本</span>
+                <span role="columnheader">仓库</span>
+                <span role="columnheader">状态</span>
               </div>
-            ))}
+              {results.map((result, index) => {
+                const rowKey = `${result.package}-${result.source}-${index}`;
+                const isCopied = copiedKey === rowKey;
+                const installCmd = getInstallCommand(result);
+                return (
+                  <div className="result-row" role="row" key={rowKey}>
+                    <strong role="cell" className="pkg-cell-with-copy">
+                      <span>{result.package}</span>
+                      <button
+                        type="button"
+                        className={`row-copy-btn ${isCopied ? "copied" : ""}`}
+                        title={result.found ? `复制安装指令: ${installCmd}` : `复制包名: ${result.package}`}
+                        onClick={() => handleCopy(result, rowKey)}
+                      >
+                        {isCopied ? (
+                          <svg className="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        ) : (
+                          <svg className="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                          </svg>
+                        )}
+                      </button>
+                    </strong>
+                    <span role="cell" className={`source-tag ${result.source}`}>
+                      {sourceNames[result.source] ?? result.source}
+                    </span>
+                    <code role="cell">{result.latestVersion || "—"}</code>
+                    <span role="cell" className="repo-cell">{result.repository || "—"}</span>
+                    <span
+                      role="cell"
+                      className={
+                        result.found
+                          ? "found"
+                          : result.status === "timeout"
+                          ? "timeout"
+                          : result.status === "rateLimited"
+                          ? "rate-limited"
+                          : result.status === "error"
+                          ? "error"
+                          : "missing"
+                      }
+                    >
+                      {result.status === "timeout"
+                        ? "超时"
+                        : result.status === "rateLimited"
+                        ? "频率限制"
+                        : result.status === "error"
+                        ? "检索异常"
+                        : result.found
+                        ? "已验证"
+                        : "未找到"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </section>
 
       {dependencyGraph && (
-        <section className="panel dependency-panel" style={{ marginTop: "24px" }}>
+        <section className="panel dependency-panel">
           <PanelHeader
             step="扩展"
             title="依赖关系智能分析"
             meta={`共构建 ${dependencyGraph.summary.totalNodes} 个包节点，${dependencyGraph.summary.totalEdges} 条依赖链路`}
           />
 
-          <div
-            className="tab-header"
-            style={{
-              display: "flex",
-              gap: "16px",
-              marginBottom: "16px",
-              borderBottom: "1px solid var(--border-color)",
-              paddingBottom: "8px",
-            }}
-          >
-            <button
-              className={`tab-btn ${activeTab === "graph" ? "active" : ""}`}
-              onClick={() => setActiveTab("graph")}
+          <div className="dependency-content-wrapper">
+            <div
+              className="tab-header"
               style={{
-                background: "none",
-                border: "none",
-                fontSize: "14px",
-                padding: "6px 12px",
-                cursor: "pointer",
-                borderBottom: activeTab === "graph" ? "2px solid var(--primary-color)" : "none",
-                fontWeight: activeTab === "graph" ? "600" : "normal",
-                color: activeTab === "graph" ? "var(--primary-color)" : "inherit",
+                display: "flex",
+                gap: "16px",
+                marginBottom: "16px",
+                borderBottom: "1px solid var(--border-color)",
+                paddingBottom: "8px",
               }}
             >
-              依赖关系图谱
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "list" ? "active" : ""}`}
-              onClick={() => setActiveTab("list")}
-              style={{
-                background: "none",
-                border: "none",
-                fontSize: "14px",
-                padding: "6px 12px",
-                cursor: "pointer",
-                borderBottom: activeTab === "list" ? "2px solid var(--primary-color)" : "none",
-                fontWeight: activeTab === "list" ? "600" : "normal",
-                color: activeTab === "list" ? "var(--primary-color)" : "inherit",
-              }}
-            >
-              依赖清单列表
-            </button>
-          </div>
+              <button
+                className={`tab-btn ${activeTab === "graph" ? "active" : ""}`}
+                onClick={() => setActiveTab("graph")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "14px",
+                  padding: "6px 12px",
+                  cursor: "pointer",
+                  borderBottom: activeTab === "graph" ? "2px solid var(--primary-color)" : "none",
+                  fontWeight: activeTab === "graph" ? "600" : "normal",
+                  color: activeTab === "graph" ? "var(--primary-color)" : "inherit",
+                }}
+              >
+                依赖关系图谱
+              </button>
+              <button
+                className={`tab-btn ${activeTab === "list" ? "active" : ""}`}
+                onClick={() => setActiveTab("list")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "14px",
+                  padding: "6px 12px",
+                  cursor: "pointer",
+                  borderBottom: activeTab === "list" ? "2px solid var(--primary-color)" : "none",
+                  fontWeight: activeTab === "list" ? "600" : "normal",
+                  color: activeTab === "list" ? "var(--primary-color)" : "inherit",
+                }}
+              >
+                依赖清单列表
+              </button>
+            </div>
 
-          {activeTab === "graph" ? (
-            <DependencyGraphView graph={dependencyGraph} />
-          ) : (
-            <DependencyListView graph={dependencyGraph} />
-          )}
+            {activeTab === "graph" ? (
+              <DependencyGraphView graph={dependencyGraph} />
+            ) : (
+              <DependencyListView graph={dependencyGraph} />
+            )}
+          </div>
         </section>
       )}
 
