@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## [2026-07-01 14:15:00 +08:00]
+
+### Fixed
+- **解决 R 包依赖图功能前端 TypeScript 编译与测试 Mock 报错**：
+  - 修复 `ReportView.tsx` 中 `DependencyEdge` 类型声明导入 but 未使用的警告错误。
+  - 在 `SettingsView.test.tsx`、`useSettings.test.ts` 与 `App.test.tsx` 中补齐 R 包依赖图配置的 4 个 Mock 属性字段及回调事件，修复 Tauri build 打包时 `tsc` 类型编译检查错误。
+
 ## [2026-07-01 11:30:00 +08:00]
 
 ### Added

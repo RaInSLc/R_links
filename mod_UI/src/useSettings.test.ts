@@ -26,7 +26,7 @@ describe('useSettings', () => {
   });
 
   it('should save settings', async () => {
-    const mockSettings = { fullSearch: true, proxy: '127.0.0.1:8080', cranMirror: '', githubTokenConfigured: false, githubToken: '', useCache: true, maxCacheEntries: 1000, useFilter: true };
+    const mockSettings = { fullSearch: true, proxy: '127.0.0.1:8080', cranMirror: '', githubTokenConfigured: false, githubToken: '', useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100 };
     
     vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
       if (cmd === 'save_settings') return { ...mockSettings, githubToken: undefined };

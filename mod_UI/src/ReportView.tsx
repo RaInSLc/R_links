@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { PanelHeader, Metric, EmptyState } from "./components";
 import { sourceNames } from "./types";
-import type { SearchResult, DependencyGraph, DependencyNode, DependencyEdge } from "./utils";
+import type { SearchResult, DependencyGraph, DependencyNode } from "./utils";
 
 interface ReportViewProps {
   results: SearchResult[];
