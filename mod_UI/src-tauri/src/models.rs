@@ -130,6 +130,28 @@ pub struct GenerateOptions {
     pub conditional: bool,
     pub install_dependencies: bool,
     pub mirror: String,
+    #[serde(default)]
+    pub append_verify: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MirrorSpeedResult {
+    pub mirror: String,
+    pub label: String,
+    pub latency_ms: u64,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReverseDependenciesInfo {
+    pub package: String,
+    pub depends: usize,
+    pub imports: usize,
+    pub suggests: usize,
+    pub linking_to: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

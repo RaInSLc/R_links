@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-01 23:45:00 +08:00]
+
+### Fixed
+- **修复一键复制 R 安装命令功能与发布源在视觉/逻辑上不对齐问题**：
+  - 视觉对齐：将原本在“包名”（第一列）最右端的复制按钮，向右移动并绑定至“来源”标签（第二列）的右侧。修改 `App.css` 中的样式，使复制按钮紧贴来源标签，避免两端对齐造成的视觉隔阂与误解。
+  - biocGit 精准转换：完善 `ReportView.tsx` 中对 `biocGit` 来源的安装命令匹配，利用 `latestVersion` 中携带的 biocVersion 解析并拼出精准的 `remotes::install_git("https://git.bioconductor.org/packages/pkg", ref = "RELEASE_X_Y")` 指令。
+  - GitHub 细化生成：对于 GitHub 来源的包，若含有版本号，自动拼成带版本后缀的 `remotes::install_github("user/repo@vversion")` 格式。
+
 ## [2026-07-01 14:35:00 +08:00]
 
 ### Added

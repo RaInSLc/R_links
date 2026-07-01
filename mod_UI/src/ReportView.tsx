@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { PanelHeader, Metric, EmptyState } from "./components";
 import { sourceNames } from "./types";
-import type { SearchResult, DependencyGraph, DependencyNode } from "./utils";
+import type { SearchResult, DependencyGraph, DependencyNode, ReverseDependenciesInfo } from "./utils";
 
 interface ReportViewProps {
   results: SearchResult[];
@@ -17,6 +18,24 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<DependencyNode | null>(null);
   const [filterStrength, setFilterStrength] = useState<"all" | "heavy">("all");
+  const [reverseDeps, setReverseDeps] = useState<ReverseDependenciesInfo | null>(null);
+  const [reverseDepsLoading, setReverseDepsLoading] = useState(false);
+
+  async function fetchReverseDeps(packageName: string) {
+    setReverseDepsLoading(true);
+    setReverseDeps(null);
+    try {
+      const info = await invoke<ReverseDependenciesInfo>("fetch_reverse_dependencies", {
+        packageName,
+        mirror: "",
+      });
+      setReverseDeps(info);
+    } catch {
+      setReverseDeps(null);
+    } finally {
+      setReverseDepsLoading(false);
+    }
+  }
 
   const filteredEdges = useMemo(() => {
     if (filterStrength === "heavy") {
@@ -209,7 +228,7 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
                   style={{ overflow: "visible", cursor: "pointer", transition: "opacity 0.2s" }}
                   onMouseEnter={() => setHoveredNode(node.package)}
                   onMouseLeave={() => setHoveredNode(null)}
-                  onClick={() => setSelectedNode(node)}
+                  onClick={() => { setSelectedNode(node); fetchReverseDeps(node.package); }}
                 >
                   <div className={`dep-node-card ${borderClass} ${isHovered ? "hovered" : ""}`}>
                     <span className="dep-node-title" title={node.package}>
@@ -255,6 +274,31 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
                 <div><strong>子依赖数：</strong><code>{selectedNode.directDependencyCount}</code></div>
                 <div><strong>重子依赖：</strong><code>{selectedNode.heavyDependencyCount}</code></div>
                 <div><strong>解析状态：</strong><span style={{ color: selectedNode.status === "resolved" ? "green" : "red" }}>{selectedNode.status === "resolved" ? "已解析" : "解析失败"}</span></div>
+              </div>
+              <div style={{ marginTop: "12px", borderTop: "1px solid var(--line)", paddingTop: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <strong style={{ fontSize: "12px" }}>反向依赖分析 (CRAN)</strong>
+                  <button
+                    className="button ghost"
+                    style={{ padding: "2px 8px", fontSize: "11px", height: "auto", minHeight: "auto" }}
+                    onClick={() => fetchReverseDeps(selectedNode.package)}
+                    disabled={reverseDepsLoading}
+                  >
+                    {reverseDepsLoading ? "加载中..." : "刷新"}
+                  </button>
+                </div>
+                {reverseDeps ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px" }}>
+                    <div><span style={{ color: "var(--muted)" }}>反向 Depends:</span> <strong>{reverseDeps.depends}</strong></div>
+                    <div><span style={{ color: "var(--muted)" }}>反向 Imports:</span> <strong>{reverseDeps.imports}</strong></div>
+                    <div><span style={{ color: "var(--muted)" }}>反向 Suggests:</span> <strong>{reverseDeps.suggests}</strong></div>
+                    <div><span style={{ color: "var(--muted)" }}>反向 LinkingTo:</span> <strong>{reverseDeps.linkingTo}</strong></div>
+                  </div>
+                ) : reverseDepsLoading ? (
+                  <span style={{ color: "var(--muted)", fontSize: "12px" }}>正在查询 CRAN...</span>
+                ) : (
+                  <span style={{ color: "var(--muted)", fontSize: "12px" }}>非 CRAN 包或查询失败</span>
+                )}
               </div>
             </div>
           ) : (
@@ -393,11 +437,21 @@ function getInstallCommand(result: SearchResult): string {
   if (result.source === "cran") {
     return `install.packages("${result.package}")`;
   }
-  if (result.source === "bioconductor") {
-    return `BiocManager::install("${result.package}")`;
+  if (result.source === "bioc") {
+    return `BiocManager::install("${result.package}", update = FALSE, ask = FALSE)`;
+  }
+  if (result.source === "biocGit") {
+    const version = result.latestVersion || "";
+    const biocVer = version.split("|")[1] || "3.18";
+    const release = `RELEASE_${biocVer.replace(".", "_")}`;
+    return `remotes::install_git("https://git.bioconductor.org/packages/${result.package}", ref = "${release}", upgrade = "never")`;
   }
   if (result.source === "github" && result.repository) {
-    return `remotes::install_github("${result.repository}")`;
+    if (result.latestVersion) {
+      const cleanVer = result.latestVersion.startsWith("v") ? result.latestVersion : `v${result.latestVersion}`;
+      return `remotes::install_github("${result.repository}@${cleanVer}", upgrade = "never")`;
+    }
+    return `remotes::install_github("${result.repository}", upgrade = "never")`;
   }
   return `install.packages("${result.package}")`;
 }
@@ -458,8 +512,11 @@ export function ReportView({
                 const installCmd = getInstallCommand(result);
                 return (
                   <div className="result-row" role="row" key={rowKey}>
-                    <strong role="cell" className="pkg-cell-with-copy">
-                      <span>{result.package}</span>
+                    <strong role="cell">{result.package}</strong>
+                    <span role="cell" className="source-cell-with-copy">
+                      <span className={`source-tag ${result.source}`}>
+                        {sourceNames[result.source] ?? result.source}
+                      </span>
                       <button
                         type="button"
                         className={`row-copy-btn ${isCopied ? "copied" : ""}`}
@@ -477,9 +534,6 @@ export function ReportView({
                           </svg>
                         )}
                       </button>
-                    </strong>
-                    <span role="cell" className={`source-tag ${result.source}`}>
-                      {sourceNames[result.source] ?? result.source}
                     </span>
                     <code role="cell">{result.latestVersion || "—"}</code>
                     <span role="cell" className="repo-cell">{result.repository || "—"}</span>

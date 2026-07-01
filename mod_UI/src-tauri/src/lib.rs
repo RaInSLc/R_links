@@ -8,6 +8,7 @@ mod secrets;
 mod storage;
 
 use regex::Regex;
+use reqwest::Client;
 use std::collections::VecDeque;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -17,8 +18,8 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, State};
 
 use models::{
-    GenerateOptions, HistoryRecord, InputRules, PublicSettings, SearchResponse, SearchResult,
-    Settings,
+    GenerateOptions, HistoryRecord, InputRules, MirrorSpeedResult, PublicSettings,
+    ReverseDependenciesInfo, SearchResponse, SearchResult, Settings,
 };
 
 const MAX_BROWSER_OPEN_REQUESTS: usize = 30;
@@ -422,6 +423,112 @@ fn clear_github_token_settings(mut settings: Settings) -> Result<Settings, Strin
     settings.normalized()
 }
 
+#[tauri::command]
+async fn test_mirror_speed(
+    mirror_urls: Vec<String>,
+) -> Result<Vec<MirrorSpeedResult>, String> {
+    let mirrors: Vec<(String, String)> = mirror_urls
+        .into_iter()
+        .map(|url| {
+            let normalized = crate::models::normalize_cran_mirror_url(&url)
+                .map_err(|e| e.to_string())?;
+            let label = normalized
+                .trim_end_matches('/')
+                .rsplit_once("://")
+                .map(|(_, host)| host.to_string())
+                .unwrap_or_else(|| normalized.clone());
+            Ok((normalized, label))
+        })
+        .collect::<Result<_, String>>()?;
+
+    let client = Client::builder()
+        .user_agent("RLinkModUI/0.1")
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(8))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut results = Vec::new();
+    for (mirror, label) in &mirrors {
+        let test_url = format!("{}src/contrib/PACKAGES.gz", mirror);
+        let start = Instant::now();
+        let result = client.head(&test_url).send().await;
+        let latency_ms = start.elapsed().as_millis() as u64;
+
+        match result {
+            Ok(response) if response.status().is_success() => {
+                results.push(MirrorSpeedResult {
+                    mirror: mirror.clone(),
+                    label: label.clone(),
+                    latency_ms,
+                    success: true,
+                    error: None,
+                });
+            }
+            Ok(response) => {
+                results.push(MirrorSpeedResult {
+                    mirror: mirror.clone(),
+                    label: label.clone(),
+                    latency_ms,
+                    success: false,
+                    error: Some(format!("HTTP {}", response.status().as_u16())),
+                });
+            }
+            Err(error) => {
+                results.push(MirrorSpeedResult {
+                    mirror: mirror.clone(),
+                    label: label.clone(),
+                    latency_ms,
+                    success: false,
+                    error: Some(error.to_string()),
+                });
+            }
+        }
+    }
+
+    results.sort_by_key(|r| if r.success { r.latency_ms } else { u64::MAX });
+    Ok(results)
+}
+
+#[tauri::command]
+async fn fetch_reverse_dependencies(
+    package_name: String,
+    mirror: String,
+) -> Result<ReverseDependenciesInfo, String> {
+    let package_name = package_name.trim().to_string();
+    if !logic::is_valid_package_name(&package_name) || package_name.contains('/') {
+        return Err("无效包名".to_string());
+    }
+
+    let base_url = if mirror.trim().is_empty() {
+        "https://cloud.r-project.org".to_string()
+    } else {
+        crate::models::normalize_cran_mirror_url(&mirror)?
+            .trim_end_matches('/')
+            .to_string()
+    };
+
+    let url = format!("{}/web/packages/{}/index.html", base_url, urlencoding::encode(&package_name));
+    crate::search_urls::validate_search_request_url(&url)?;
+
+    let client = Client::builder()
+        .user_agent("RLinkModUI/0.1")
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("CRAN 页面请求失败: HTTP {}", response.status().as_u16()));
+    }
+
+    let html = response.text().await.map_err(|e| e.to_string())?;
+    logic::parse_reverse_dependencies(&html, &package_name)
+        .ok_or_else(|| format!("无法解析 {} 的反向依赖信息", package_name))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -450,7 +557,9 @@ pub fn run() {
             stop_search,
             export_diagnostics,
             load_input_rules,
-            save_input_rules
+            save_input_rules,
+            test_mirror_speed,
+            fetch_reverse_dependencies
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");

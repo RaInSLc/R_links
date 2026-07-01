@@ -826,13 +826,11 @@ input:focus-visible,
   min-height: 200px; /* 适当减小底部日志框的最小高度，使其紧凑 */
 }
 
-/* 每一行包名左侧/右侧的复制样式 */
-.pkg-cell-with-copy {
+/* 每一行来源右侧的复制样式 */
+.source-cell-with-copy {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
+  gap: 6px;
 }
 
 .row-copy-btn {

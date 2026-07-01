@@ -6,9 +6,9 @@ use url::Url;
 
 use crate::models::{
     normalize_cran_mirror_url, normalize_https_url, url_has_explicit_port, GenerateOptions,
-    HistoryRecord, InputRules, PackageInput, SearchResult, MAX_FIELD_CHARS,
-    MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES,
-    MAX_SCRIPT_CHARS,
+    HistoryRecord, InputRules, PackageInput, ReverseDependenciesInfo, SearchResult,
+    MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS,
+    MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
 };
 
 const MAX_GENERATE_METHOD_CHARS: usize = 32;
@@ -394,6 +394,8 @@ fn generate_script_inner(
         normalize_cran_mirror_url(&options.mirror)?
     };
 
+    let packages_for_verify = if options.append_verify { packages.clone() } else { Vec::new() };
+
     if requested_method == "checkSystem" {
         let names = packages
             .iter()
@@ -529,9 +531,36 @@ fn generate_script_inner(
         )?);
     }
 
-    let script = output.join("\r\n") + "\r\n";
+    let mut script = output.join("\r\n") + "\r\n";
+    if options.append_verify && !packages_for_verify.is_empty() {
+        let verify = generate_verify_script(&packages_for_verify);
+        script.push_str(&verify);
+    }
     validate_script_size(&script)?;
     Ok(script)
+}
+
+fn generate_verify_script(packages: &[PackageInput]) -> String {
+    let names = packages
+        .iter()
+        .map(|item| format!("\"{}\"", escape_r(&local_package_name(&item.name))))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "\r\n# ===== 安装结果验证 =====\r\n\
+         packages <- c({names})\r\n\
+         results <- sapply(packages, function(p) {{\r\n\
+         \x20 ver <- tryCatch(as.character(packageVersion(p)), error = function(e) NA)\r\n\
+         \x20 if (!is.na(ver)) {{\r\n\
+         \x20   cat(sprintf(\"[OK] %s (v%s)\\n\", p, ver))\r\n\
+         \x20   return(TRUE)\r\n\
+         \x20 }} else {{\r\n\
+         \x20   cat(sprintf(\"[FAIL] %s\\n\", p))\r\n\
+         \x20   return(FALSE)\r\n\
+         \x20 }}\r\n\
+         }})\r\n\
+         cat(sprintf(\"\\n=== 验证完成: %d/%d 包安装成功 ===\\n\", sum(results, na.rm=TRUE), length(results)))\r\n"
+    )
 }
 
 fn normalize_generate_method(value: &str) -> Result<&'static str, String> {
@@ -1302,6 +1331,43 @@ fn is_valid_bioc_version(value: &str) -> bool {
         && parts.iter().all(|part| {
             !part.is_empty() && part.chars().all(|character| character.is_ascii_digit())
         })
+}
+
+pub fn parse_reverse_dependencies(html: &str, package: &str) -> Option<ReverseDependenciesInfo> {
+    let mut depends = 0usize;
+    let mut imports = 0usize;
+    let mut suggests = 0usize;
+    let mut linking_to = 0usize;
+    let mut matched = false;
+
+    let field_re =
+        Regex::new(r#"<td>\s*Reverse\s+(depends|imports|suggests|linking\s+to)\s*:</td>\s*<td[^>]*>\s*<a[^>]*>(\d+)</a>"#)
+            .ok()?;
+
+    for capture in field_re.captures_iter(html) {
+        let field = capture.get(1)?.as_str();
+        let count: usize = capture.get(2)?.as_str().parse().ok()?;
+        match field {
+            "depends" => depends = count,
+            "imports" => imports = count,
+            "suggests" => suggests = count,
+            "linking to" => linking_to = count,
+            _ => continue,
+        }
+        matched = true;
+    }
+
+    if !matched {
+        return None;
+    }
+
+    Some(ReverseDependenciesInfo {
+        package: package.to_string(),
+        depends,
+        imports,
+        suggests,
+        linking_to,
+    })
 }
 
 #[cfg(test)]
@@ -2432,5 +2498,82 @@ mod tests {
         assert_eq!(packages.len(), 5);
         assert_eq!(packages[0].name, "ChIPseeker");
         assert_eq!(packages[4].name, "enrichplot");
+    }
+
+    #[test]
+    fn parses_reverse_dependencies_from_cran_html() {
+        let html = r#"<table summary="Reverse depends for dplyr">
+<tr><td>Reverse depends:</td><td><a href="../.../">250</a></td></tr>
+<tr><td>Reverse imports:</td><td><a href="../.../">1856</a></td></tr>
+<tr><td>Reverse suggests:</td><td><a href="../.../">125</a></td></tr>
+<tr><td>Reverse linking to:</td><td><a href="../.../">42</a></td></tr>
+</table>"#;
+
+        let info = parse_reverse_dependencies(html, "dplyr").expect("应可解析反向依赖");
+        assert_eq!(info.depends, 250);
+        assert_eq!(info.imports, 1856);
+        assert_eq!(info.suggests, 125);
+        assert_eq!(info.linking_to, 42);
+    }
+
+    #[test]
+    fn parses_reverse_dependencies_partial_fields() {
+        let html = r##"<table><tr><td>Reverse imports:</td><td><a href="#">3</a></td></tr></table>"##;
+        let info = parse_reverse_dependencies(html, "pkg").expect("部分字段应可解析");
+        assert_eq!(info.imports, 3);
+        assert_eq!(info.depends, 0);
+        assert_eq!(info.suggests, 0);
+        assert_eq!(info.linking_to, 0);
+    }
+
+    #[test]
+    fn reverse_dependencies_returns_none_for_no_match() {
+        assert!(parse_reverse_dependencies("no reverse data here", "pkg").is_none());
+    }
+
+    #[test]
+    fn generates_verify_script_with_correct_package_names() {
+        let packages = vec![
+            PackageInput {
+                raw: "dplyr".to_string(),
+                name: "dplyr".to_string(),
+                version: String::new(),
+                source_hint: None,
+            },
+            PackageInput {
+                raw: "owner/demo".to_string(),
+                name: "owner/demo".to_string(),
+                version: String::new(),
+                source_hint: None,
+            },
+        ];
+        let verify = generate_verify_script(&packages);
+        assert!(verify.contains("\"dplyr\""));
+        assert!(verify.contains("\"demo\""));
+        assert!(!verify.contains("owner/demo"));
+        assert!(verify.contains("packageVersion(p)"));
+        assert!(verify.contains("[OK]"));
+        assert!(verify.contains("[FAIL]"));
+        assert!(verify.contains("验证完成"));
+    }
+
+    #[test]
+    fn append_verify_in_generated_script() {
+        let output = generate_script(
+            "dplyr",
+            &GenerateOptions {
+                method: "base".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+                append_verify: true,
+            },
+            &[],
+        )
+        .expect("应生成带验证的脚本");
+
+        assert!(output.contains("install.packages(\"dplyr\""));
+        assert!(output.contains("# ===== 安装结果验证 ====="));
+        assert!(output.contains("packageVersion(p)"));
     }
 }

@@ -1,7 +1,9 @@
 import { PanelHeader, Toggle } from "./components";
-import { MAX_RESULT_FIELD_CHARS, MAX_TOKEN_CHARS } from "./utils";
+import { MAX_RESULT_FIELD_CHARS, MAX_TOKEN_CHARS, type MirrorSpeedResult } from "./utils";
 import { mirrors } from "./types";
 import type { InputRules, Settings } from "./types";
+import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface SettingsViewProps {
   settings: Settings;
@@ -54,6 +56,27 @@ export function SettingsView({
   onCheckUpdates, onClearCache, onExportDiagnostics,
   inputRules, onInputRulesChange, onSaveInputRules, inputRulesBusy,
 }: SettingsViewProps) {
+  const [speedTesting, setSpeedTesting] = useState(false);
+  const [speedResults, setSpeedResults] = useState<MirrorSpeedResult[]>([]);
+
+  async function handleTestSpeed() {
+    setSpeedTesting(true);
+    setSpeedResults([]);
+    try {
+      const urls = mirrors.map((m) => m.value);
+      urls.push(settings.cranMirror);
+      const results = await invoke<MirrorSpeedResult[]>("test_mirror_speed", { mirrorUrls: urls });
+      setSpeedResults(results);
+    } catch (error: unknown) {
+      setSpeedResults([{
+        mirror: "", label: "测速失败", latencyMs: 0, success: false,
+        error: String(error instanceof Error ? error.message : error),
+      }]);
+    } finally {
+      setSpeedTesting(false);
+    }
+  }
+
   return (
     <div className="settings-layout">
       <section className="panel settings-panel">
@@ -350,6 +373,38 @@ export function SettingsView({
         <button className="button primary save-button" onClick={() => onSaveSettings()} disabled={settingsBusy}>
           {settingsBusy ? "处理中..." : "保存设置"}
         </button>
+        <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+          <span>镜像速度测试</span>
+          <small>并发请求各镜像的 PACKAGES.gz 响应时间</small>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "9px" }}>
+            <button className="button ghost" onClick={handleTestSpeed} disabled={speedTesting}>
+              {speedTesting ? "正在测速..." : "测速"}
+            </button>
+          </div>
+          {speedResults.length > 0 && (
+            <div style={{ marginTop: "10px", fontSize: "13px" }}>
+              {speedResults.map((r, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex", gap: "8px", padding: "6px 0",
+                    borderBottom: "1px solid var(--line)",
+                    color: r.success ? (i === 0 ? "#16a34a" : "inherit") : "#dc2626",
+                  }}
+                >
+                  <span style={{ fontWeight: 600, minWidth: "100px" }}>{r.label}</span>
+                  <span style={{ minWidth: "60px" }}>
+                    {r.success ? `${r.latencyMs}ms` : "失败"}
+                    {i === 0 && r.success && <span style={{ marginLeft: "4px", fontSize: "11px" }}>最快</span>}
+                  </span>
+                  <span style={{ fontSize: "12px", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {r.error ? r.error : r.mirror}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );

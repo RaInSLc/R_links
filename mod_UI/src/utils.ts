@@ -80,6 +80,22 @@ export interface HistoryRecord {
   createdAt: string;
 }
 
+export interface ReverseDependenciesInfo {
+  package: string;
+  depends: number;
+  imports: number;
+  suggests: number;
+  linkingTo: number;
+}
+
+export interface MirrorSpeedResult {
+  mirror: string;
+  label: string;
+  latencyMs: number;
+  success: boolean;
+  error?: string;
+}
+
 export const MAX_PACKAGE_LINES = 500;
 export const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
 export const MAX_SEARCH_RESULT_SCAN = MAX_SEARCH_RESULTS * 2;

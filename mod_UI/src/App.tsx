@@ -28,6 +28,7 @@ function App() {
   const [conditional, setConditional] = useState(true);
   const [installDependencies, setInstallDependencies] = useState(true);
   const [showRemoteVersion, setShowRemoteVersion] = useState(true);
+  const [verifyInstall, setVerifyInstall] = useState(false);
   const [script, setScriptState] = useState("等待输入...");
   const [status, setStatus] = useState("就绪");
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -200,7 +201,7 @@ function App() {
       }
       invoke<string>("generate_script", {
         input,
-        options: { method, conditional, installDependencies, mirror: settings.cranMirror },
+        options: { method, conditional, installDependencies, mirror: settings.cranMirror, appendVerify: verifyInstall },
         results,
         showRemoteVersion,
       })
@@ -372,7 +373,8 @@ function App() {
             <WorkspaceView
               input={input} inputTooLarge={inputTooLarge} inputProfile={inputProfile}
               method={method} conditional={conditional} installDependencies={installDependencies}
-              showRemoteVersion={showRemoteVersion} settings={settings}
+              showRemoteVersion={showRemoteVersion} verifyInstall={verifyInstall}
+              settings={settings}
               script={script} scriptTooLarge={scriptTooLarge}
               searching={searching} openingSearchTabs={openingSearchTabs}
               onInputChange={acceptInputValue} onPaste={pasteInput}
@@ -383,6 +385,7 @@ function App() {
               onConditionalChange={setConditional}
               onInstallDependenciesChange={setInstallDependencies}
               onShowRemoteVersionChange={setShowRemoteVersion}
+              onVerifyInstallChange={setVerifyInstall}
               onFullSearchChange={(v) => updateSettingsFromUser((c) => ({ ...c, fullSearch: v }))}
               onUseCacheChange={(v) => {
                 updateSettingsFromUser((c) => ({ ...c, useCache: v }));

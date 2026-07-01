@@ -12,6 +12,7 @@ interface WorkspaceViewProps {
   conditional: boolean;
   installDependencies: boolean;
   showRemoteVersion: boolean;
+  verifyInstall: boolean;
   settings: Settings;
   script: string;
   scriptTooLarge: boolean;
@@ -27,6 +28,7 @@ interface WorkspaceViewProps {
   onConditionalChange: (v: boolean) => void;
   onInstallDependenciesChange: (v: boolean) => void;
   onShowRemoteVersionChange: (v: boolean) => void;
+  onVerifyInstallChange: (v: boolean) => void;
   onFullSearchChange: (v: boolean) => void;
   onUseCacheChange: (v: boolean) => void;
   onTempFilter: (text: string, mode: "chars" | "lines") => void;
@@ -37,12 +39,12 @@ interface WorkspaceViewProps {
 
 export function WorkspaceView({
   input, inputTooLarge, inputProfile, method,
-  conditional, installDependencies, showRemoteVersion, settings,
+  conditional, installDependencies, showRemoteVersion, verifyInstall, settings,
   script, scriptTooLarge,
   searching, openingSearchTabs,
   onInputChange, onPaste, onClear, onOpenSearchTabs, onStartSearch, onStopSearch,
   onMethodChange, onConditionalChange, onInstallDependenciesChange,
-  onShowRemoteVersionChange, onFullSearchChange,
+  onShowRemoteVersionChange, onVerifyInstallChange, onFullSearchChange,
   onUseCacheChange, onTempFilter,
   onCopyScript, onCleanComments, isMethodDisabled,
 }: WorkspaceViewProps) {
@@ -132,6 +134,7 @@ export function WorkspaceView({
           <Toggle checked={showRemoteVersion} label="同步远程版本" description="显示版本并生成精确版本安装" onChange={onShowRemoteVersionChange} />
           <Toggle checked={settings.fullSearch} label="全量检索" description="命中后仍继续查询 GitHub" onChange={onFullSearchChange} />
           <Toggle checked={settings.useCache} label="使用缓存" description="使用包结果缓存" onChange={onUseCacheChange} />
+          <Toggle checked={verifyInstall} label="安装后验证" description="脚本末尾追加安装结果验证代码" onChange={onVerifyInstallChange} />
         </div>
       </section>
 
