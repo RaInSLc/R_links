@@ -447,9 +447,19 @@ pub async fn search_packages(
 
     let dependency_graph = if settings.resolve_dependencies && !search_stopped(cancelled, &budget) {
         log(app, run_id, &mut logs, "开始解析 R 包依赖关系图...");
-        match crate::dependency::resolve_dependencies(app, &client, &results, settings, cancelled).await {
+        match crate::dependency::resolve_dependencies(app, &client, &results, settings, cancelled)
+            .await
+        {
             Ok(graph) => {
-                log(app, run_id, &mut logs, &format!("依赖关系解析完成，共构建 {} 个包节点，{} 条依赖关系", graph.summary.total_nodes, graph.summary.total_edges));
+                log(
+                    app,
+                    run_id,
+                    &mut logs,
+                    &format!(
+                        "依赖关系解析完成，共构建 {} 个包节点，{} 条依赖关系",
+                        graph.summary.total_nodes, graph.summary.total_edges
+                    ),
+                );
                 Some(graph)
             }
             Err(error) => {

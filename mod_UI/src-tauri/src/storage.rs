@@ -834,7 +834,9 @@ pub struct DependencyCacheEntry {
     pub version: String,
 }
 
-pub fn load_dependency_cache(app: &AppHandle) -> Result<HashMap<String, DependencyCacheEntry>, String> {
+pub fn load_dependency_cache(
+    app: &AppHandle,
+) -> Result<HashMap<String, DependencyCacheEntry>, String> {
     let path = data_file(app, DEP_CACHE_FILE_NAME)?;
     if !path_entry_exists(&path)? {
         return Ok(HashMap::new());

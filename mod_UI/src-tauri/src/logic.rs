@@ -394,7 +394,11 @@ fn generate_script_inner(
         normalize_cran_mirror_url(&options.mirror)?
     };
 
-    let packages_for_verify = if options.append_verify { packages.clone() } else { Vec::new() };
+    let packages_for_verify = if options.append_verify {
+        packages.clone()
+    } else {
+        Vec::new()
+    };
 
     if requested_method == "checkSystem" {
         let names = packages
@@ -1413,6 +1417,7 @@ mod tests {
                 conditional: true,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[],
         )
@@ -1430,6 +1435,7 @@ mod tests {
                 conditional: true,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[],
         )
@@ -1449,6 +1455,7 @@ mod tests {
                 conditional: true,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[],
         )
@@ -1468,6 +1475,7 @@ mod tests {
                     conditional: true,
                     install_dependencies: true,
                     mirror: "https://cloud.r-project.org".to_string(),
+                    ..Default::default()
                 },
                 &[],
             )
@@ -1487,6 +1495,7 @@ mod tests {
                 conditional: true,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[],
         )
@@ -1508,6 +1517,7 @@ mod tests {
                 conditional: true,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[SearchResult {
                 package: "demo".to_string(),
@@ -1542,6 +1552,7 @@ mod tests {
                         conditional: false,
                         install_dependencies: true,
                         mirror: "https://cloud.r-project.org".to_string(),
+                        ..Default::default()
                     },
                     &[],
                 )
@@ -1558,6 +1569,7 @@ mod tests {
             conditional: false,
             install_dependencies: false,
             mirror: "https://mirrors.tuna.tsinghua.edu.cn/CRAN/".to_string(),
+            ..Default::default()
         };
         let results = vec![SearchResult {
             package: "oncoPredict".to_string(),
@@ -1586,6 +1598,7 @@ mod tests {
                 conditional: true,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[],
         )
@@ -1811,6 +1824,7 @@ mod tests {
                 conditional: true,
                 install_dependencies: true,
                 mirror: oversized_mirror,
+                ..Default::default()
             },
             &[],
         );
@@ -1828,6 +1842,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[],
         )
@@ -1861,6 +1876,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &results,
         )
@@ -1904,6 +1920,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &results,
         )
@@ -1932,6 +1949,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[],
         )
@@ -1947,6 +1965,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[],
         )
@@ -1958,6 +1977,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[],
         )
@@ -1969,6 +1989,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[],
         )
@@ -1980,6 +2001,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "http://cran.example.org".to_string(),
+                ..Default::default()
             },
             &[],
         )
@@ -1991,6 +2013,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org?token=secret".to_string(),
+                ..Default::default()
             },
             &[],
         )
@@ -2006,6 +2029,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[SearchResult {
                 package: "demo".to_string(),
@@ -2035,6 +2059,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[
                 SearchResult {
@@ -2091,6 +2116,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[SearchResult {
                 package: "demo".to_string(),
@@ -2120,6 +2146,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[
                 SearchResult {
@@ -2161,6 +2188,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[SearchResult {
                 package: " demo ".to_string(),
@@ -2187,6 +2215,7 @@ mod tests {
             conditional: true,
             install_dependencies: true,
             mirror: "https://cloud.r-project.org".to_string(),
+            ..Default::default()
         };
         let cran_output = generate_script_with_remote_versions(
             "demo",
@@ -2241,6 +2270,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[SearchResult {
                 package: "demo".to_string(),
@@ -2279,6 +2309,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[SearchResult {
                 package: "demo".to_string(),
@@ -2309,6 +2340,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[SearchResult {
                 package: "demo".to_string(),
@@ -2339,6 +2371,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[SearchResult {
                 package: "demo".to_string(),
@@ -2368,6 +2401,7 @@ mod tests {
                 conditional: false,
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
             },
             &[SearchResult {
                 package: "demo".to_string(),
@@ -2518,7 +2552,8 @@ mod tests {
 
     #[test]
     fn parses_reverse_dependencies_partial_fields() {
-        let html = r##"<table><tr><td>Reverse imports:</td><td><a href="#">3</a></td></tr></table>"##;
+        let html =
+            r##"<table><tr><td>Reverse imports:</td><td><a href="#">3</a></td></tr></table>"##;
         let info = parse_reverse_dependencies(html, "pkg").expect("部分字段应可解析");
         assert_eq!(info.imports, 3);
         assert_eq!(info.depends, 0);
@@ -2567,6 +2602,7 @@ mod tests {
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
                 append_verify: true,
+                ..Default::default()
             },
             &[],
         )

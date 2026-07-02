@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [2026-07-02 19:00:00 +08:00]
+
+### Added
+- **CRAN 镜像速度测试功能**：在设置页 CRAN 镜像区域新增"测速"按钮，通过 HEAD 请求 `PACKAGES.gz` 测量多个镜像的延迟并按速度排序，最快镜像高亮显示。
+- **批量安装结果验证脚本**：在生成脚本页面新增"安装后验证"开关，启用后自动在生成的安装脚本末尾追加逐包 `packageVersion()` 检查代码，输出 OK/FAIL 结果。
+- **反向依赖分析（CRAN）**：在报告页依赖关系图中，点击 CRAN 包节点时自动从 CRAN 页面抓取反向 Depends/Imports/Suggests/LinkingTo 计数并在侧边栏展示。
+
+### Fixed
+- **修复 `ReportView.tsx` 中 `getInstallCommand` 的 bioc 拼写 bug**：将 `"bioconductor"` 修正为 `"bioc" || "biocGit"`，修复 Bioconductor 包安装命令生成错误。
+- **修复 Rust 后端编译错误**：修复 `packages` 变量 borrow-after-move、测试原始字符串中 `#` 转义冲突、`GenerateOptions` 缺少 `append_verify` 字段等问题。
+- **clippy 修复**：消除 `dependency.rs` 中冗余闭包警告。
+
+### Changed
+- **`GenerateOptions` 新增 `#[derive(Default)]`**：便于测试中使用 `..Default::default()` 扩展语法，减少未来字段变更时的测试维护成本。
+
 ## [2026-07-01 23:45:00 +08:00]
 
 ### Fixed

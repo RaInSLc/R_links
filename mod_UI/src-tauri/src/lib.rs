@@ -424,14 +424,12 @@ fn clear_github_token_settings(mut settings: Settings) -> Result<Settings, Strin
 }
 
 #[tauri::command]
-async fn test_mirror_speed(
-    mirror_urls: Vec<String>,
-) -> Result<Vec<MirrorSpeedResult>, String> {
+async fn test_mirror_speed(mirror_urls: Vec<String>) -> Result<Vec<MirrorSpeedResult>, String> {
     let mirrors: Vec<(String, String)> = mirror_urls
         .into_iter()
         .map(|url| {
-            let normalized = crate::models::normalize_cran_mirror_url(&url)
-                .map_err(|e| e.to_string())?;
+            let normalized =
+                crate::models::normalize_cran_mirror_url(&url).map_err(|e| e.to_string())?;
             let label = normalized
                 .trim_end_matches('/')
                 .rsplit_once("://")
@@ -509,7 +507,11 @@ async fn fetch_reverse_dependencies(
             .to_string()
     };
 
-    let url = format!("{}/web/packages/{}/index.html", base_url, urlencoding::encode(&package_name));
+    let url = format!(
+        "{}/web/packages/{}/index.html",
+        base_url,
+        urlencoding::encode(&package_name)
+    );
     crate::search_urls::validate_search_request_url(&url)?;
 
     let client = Client::builder()
@@ -521,7 +523,10 @@ async fn fetch_reverse_dependencies(
 
     let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
     if !response.status().is_success() {
-        return Err(format!("CRAN 页面请求失败: HTTP {}", response.status().as_u16()));
+        return Err(format!(
+            "CRAN 页面请求失败: HTTP {}",
+            response.status().as_u16()
+        ));
     }
 
     let html = response.text().await.map_err(|e| e.to_string())?;

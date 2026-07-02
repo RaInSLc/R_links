@@ -1,13 +1,28 @@
-use crate::models::{DependencyEdge, DependencyGraph, DependencyNode, DependencySummary, SearchResult, Settings};
+use crate::models::{
+    DependencyEdge, DependencyGraph, DependencyNode, DependencySummary, SearchResult, Settings,
+};
 use crate::storage;
+use futures_util::future::join_all;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::AppHandle;
-use futures_util::future::join_all;
 
 const CORE_PACKAGES: &[&str] = &[
-    "R", "base", "compiler", "datasets", "grDevices", "graphics", "grid",
-    "methods", "parallel", "splines", "stats", "stats4", "tcltk", "tools", "utils"
+    "R",
+    "base",
+    "compiler",
+    "datasets",
+    "grDevices",
+    "graphics",
+    "grid",
+    "methods",
+    "parallel",
+    "splines",
+    "stats",
+    "stats4",
+    "tcltk",
+    "tools",
+    "utils",
 ];
 
 /// 解析 Debian control (RFC 822) 格式的 DESCRIPTION 文件
@@ -51,7 +66,7 @@ fn clean_package_name(dep: &str) -> String {
 fn parse_dependency_field(field_value: &str) -> Vec<String> {
     field_value
         .split(',')
-        .map(|s| clean_package_name(s))
+        .map(clean_package_name)
         .filter(|name| !name.is_empty() && !CORE_PACKAGES.contains(&name.as_str()))
         .collect()
 }
@@ -67,20 +82,44 @@ async fn fetch_description(
     let mirror_clean = mirror.trim_end_matches('/');
 
     if source.eq_ignore_ascii_case("cran") || source.eq_ignore_ascii_case("none") {
-        urls.push(format!("{}/web/packages/{}/DESCRIPTION", mirror_clean, package));
+        urls.push(format!(
+            "{}/web/packages/{}/DESCRIPTION",
+            mirror_clean, package
+        ));
     } else if source.eq_ignore_ascii_case("bioc") || source.eq_ignore_ascii_case("biocGit") {
-        urls.push(format!("https://raw.githubusercontent.com/bioconductor-packages/{}/master/DESCRIPTION", package));
-        urls.push(format!("https://raw.githubusercontent.com/bioconductor/{}/master/DESCRIPTION", package));
-        urls.push(format!("{}/web/packages/{}/DESCRIPTION", mirror_clean, package));
+        urls.push(format!(
+            "https://raw.githubusercontent.com/bioconductor-packages/{}/master/DESCRIPTION",
+            package
+        ));
+        urls.push(format!(
+            "https://raw.githubusercontent.com/bioconductor/{}/master/DESCRIPTION",
+            package
+        ));
+        urls.push(format!(
+            "{}/web/packages/{}/DESCRIPTION",
+            mirror_clean, package
+        ));
     } else if source.eq_ignore_ascii_case("github") {
         if package.contains('/') {
-            urls.push(format!("https://raw.githubusercontent.com/{}/master/DESCRIPTION", package));
-            urls.push(format!("https://raw.githubusercontent.com/{}/main/DESCRIPTION", package));
+            urls.push(format!(
+                "https://raw.githubusercontent.com/{}/master/DESCRIPTION",
+                package
+            ));
+            urls.push(format!(
+                "https://raw.githubusercontent.com/{}/main/DESCRIPTION",
+                package
+            ));
         } else {
-            urls.push(format!("https://raw.githubusercontent.com/cran/{}/master/DESCRIPTION", package));
+            urls.push(format!(
+                "https://raw.githubusercontent.com/cran/{}/master/DESCRIPTION",
+                package
+            ));
         }
     } else {
-        urls.push(format!("{}/web/packages/{}/DESCRIPTION", mirror_clean, package));
+        urls.push(format!(
+            "{}/web/packages/{}/DESCRIPTION",
+            mirror_clean, package
+        ));
     }
 
     for url in urls {
@@ -178,8 +217,6 @@ pub async fn resolve_dependencies(
         visited.insert(r.clone());
     }
 
-
-
     while !queue.is_empty() && !cancelled.load(Ordering::SeqCst) {
         if nodes_map.len() >= settings.max_dependency_nodes {
             break;
@@ -199,7 +236,10 @@ pub async fn resolve_dependencies(
                     continue;
                 }
 
-                let source = root_sources.get(&pkg).cloned().unwrap_or_else(|| "none".to_string());
+                let source = root_sources
+                    .get(&pkg)
+                    .cloned()
+                    .unwrap_or_else(|| "none".to_string());
                 let version = root_versions.get(&pkg).cloned().unwrap_or_default();
 
                 level_tasks.push((pkg, depth, path_roots, source, version));
@@ -218,10 +258,17 @@ pub async fn resolve_dependencies(
                 let cache_entry = dep_cache.get(&pkg).cloned();
                 async move {
                     if let Some(entry) = cache_entry {
-                        return (pkg, depth, path_roots, source, Ok((entry.heavy_deps, entry.light_deps, entry.version)));
+                        return (
+                            pkg,
+                            depth,
+                            path_roots,
+                            source,
+                            Ok((entry.heavy_deps, entry.light_deps, entry.version)),
+                        );
                     }
 
-                    let fetch_result = fetch_description(&client_clone, &pkg, &source, &mirror).await;
+                    let fetch_result =
+                        fetch_description(&client_clone, &pkg, &source, &mirror).await;
                     let parsed = fetch_result.map(|content| parse_package_dependencies(&content));
                     (pkg, depth, path_roots, source, parsed)
                 }
@@ -255,7 +302,11 @@ pub async fn resolve_dependencies(
                     let node = DependencyNode {
                         package: pkg.clone(),
                         source: source.clone(),
-                        version: if version.is_empty() { "unknown".to_string() } else { version },
+                        version: if version.is_empty() {
+                            "unknown".to_string()
+                        } else {
+                            version
+                        },
                         depth,
                         root_packages: path_roots.clone(),
                         direct_dependency_count: heavy_deps.len() + light_deps.len(),
@@ -263,7 +314,6 @@ pub async fn resolve_dependencies(
                         status: "resolved".to_string(),
                     };
                     nodes_map.insert(pkg.clone(), node);
-
 
                     if depth < settings.max_dependency_depth {
                         for heavy in heavy_deps {
@@ -293,7 +343,11 @@ pub async fn resolve_dependencies(
 
                                 if !visited.contains(&light) {
                                     visited.insert(light.clone());
-                                    queue.push_back((light, settings.max_dependency_depth, path_roots.clone()));
+                                    queue.push_back((
+                                        light,
+                                        settings.max_dependency_depth,
+                                        path_roots.clone(),
+                                    ));
                                 }
                             }
                         }
@@ -400,7 +454,10 @@ Suggests:
     #[test]
     fn test_clean_package_name() {
         assert_eq!(clean_package_name("ggplot2 (>= 3.0.0)"), "ggplot2");
-        assert_eq!(clean_package_name(" SeuratObject   (>= 5.0.1) "), "SeuratObject");
+        assert_eq!(
+            clean_package_name(" SeuratObject   (>= 5.0.1) "),
+            "SeuratObject"
+        );
         assert_eq!(clean_package_name("Matrix"), "Matrix");
     }
 
