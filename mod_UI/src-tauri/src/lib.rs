@@ -423,8 +423,35 @@ fn clear_github_token_settings(mut settings: Settings) -> Result<Settings, Strin
     settings.normalized()
 }
 
+fn build_simple_client(
+    proxy: Option<&str>,
+    connect_timeout: Duration,
+    timeout: Duration,
+    limited_redirects: bool,
+) -> Result<Client, String> {
+    let redirect_policy = if limited_redirects {
+        reqwest::redirect::Policy::limited(3)
+    } else {
+        reqwest::redirect::Policy::none()
+    };
+    let mut builder = Client::builder()
+        .user_agent("RLinkModUI/0.1")
+        .connect_timeout(connect_timeout)
+        .timeout(timeout)
+        .redirect(redirect_policy);
+    if let Some(proxy_url) = proxy.filter(|p| !p.trim().is_empty()) {
+        builder = builder.proxy(
+            reqwest::Proxy::all(proxy_url.trim()).map_err(|_| "网络代理配置无效".to_string())?,
+        );
+    }
+    builder.build().map_err(|e| e.to_string())
+}
+
 #[tauri::command]
-async fn test_mirror_speed(mirror_urls: Vec<String>) -> Result<Vec<MirrorSpeedResult>, String> {
+async fn test_mirror_speed(
+    app: AppHandle,
+    mirror_urls: Vec<String>,
+) -> Result<Vec<MirrorSpeedResult>, String> {
     let mirrors: Vec<(String, String)> = mirror_urls
         .into_iter()
         .map(|url| {
@@ -439,58 +466,62 @@ async fn test_mirror_speed(mirror_urls: Vec<String>) -> Result<Vec<MirrorSpeedRe
         })
         .collect::<Result<_, String>>()?;
 
-    let client = Client::builder()
-        .user_agent("RLinkModUI/0.1")
-        .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_secs(8))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|e| e.to_string())?;
+    let settings = load_existing_settings_for_runtime(&app)?;
+    let client = build_simple_client(
+        Some(&settings.proxy),
+        Duration::from_secs(5),
+        Duration::from_secs(8),
+        true,
+    )?;
 
-    let mut results = Vec::new();
-    for (mirror, label) in &mirrors {
-        let test_url = format!("{}src/contrib/PACKAGES.gz", mirror);
-        let start = Instant::now();
-        let result = client.head(&test_url).send().await;
-        let latency_ms = start.elapsed().as_millis() as u64;
+    let tasks: Vec<_> = mirrors
+        .iter()
+        .map(|(mirror, label)| {
+            let client = client.clone();
+            let mirror = mirror.clone();
+            let label = label.clone();
+            async move {
+                let test_url = format!("{}src/contrib/PACKAGES.gz", mirror);
+                let start = Instant::now();
+                let result = client.head(&test_url).send().await;
+                let latency_ms = start.elapsed().as_millis() as u64;
+                match result {
+                    Ok(response) if response.status().is_success() => MirrorSpeedResult {
+                        mirror,
+                        label,
+                        latency_ms,
+                        success: true,
+                        error: None,
+                    },
+                    Ok(response) => MirrorSpeedResult {
+                        mirror,
+                        label,
+                        latency_ms,
+                        success: false,
+                        error: Some(format!("HTTP {}", response.status().as_u16())),
+                    },
+                    Err(error) => MirrorSpeedResult {
+                        mirror,
+                        label,
+                        latency_ms,
+                        success: false,
+                        error: Some(error.to_string()),
+                    },
+                }
+            }
+        })
+        .collect();
 
-        match result {
-            Ok(response) if response.status().is_success() => {
-                results.push(MirrorSpeedResult {
-                    mirror: mirror.clone(),
-                    label: label.clone(),
-                    latency_ms,
-                    success: true,
-                    error: None,
-                });
-            }
-            Ok(response) => {
-                results.push(MirrorSpeedResult {
-                    mirror: mirror.clone(),
-                    label: label.clone(),
-                    latency_ms,
-                    success: false,
-                    error: Some(format!("HTTP {}", response.status().as_u16())),
-                });
-            }
-            Err(error) => {
-                results.push(MirrorSpeedResult {
-                    mirror: mirror.clone(),
-                    label: label.clone(),
-                    latency_ms,
-                    success: false,
-                    error: Some(error.to_string()),
-                });
-            }
-        }
-    }
-
+    let mut results = futures_util::future::join_all(tasks).await;
     results.sort_by_key(|r| if r.success { r.latency_ms } else { u64::MAX });
     Ok(results)
 }
 
+const MAX_REVERSE_DEPS_HTML_BYTES: u64 = 2 * 1024 * 1024;
+
 #[tauri::command]
 async fn fetch_reverse_dependencies(
+    app: AppHandle,
     package_name: String,
     mirror: String,
 ) -> Result<ReverseDependenciesInfo, String> {
@@ -514,12 +545,13 @@ async fn fetch_reverse_dependencies(
     );
     crate::search_urls::validate_search_request_url(&url)?;
 
-    let client = Client::builder()
-        .user_agent("RLinkModUI/0.1")
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(15))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let settings = load_existing_settings_for_runtime(&app)?;
+    let client = build_simple_client(
+        Some(&settings.proxy),
+        Duration::from_secs(10),
+        Duration::from_secs(15),
+        false,
+    )?;
 
     let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
     if !response.status().is_success() {
@@ -529,7 +561,17 @@ async fn fetch_reverse_dependencies(
         ));
     }
 
+    if response
+        .content_length()
+        .is_some_and(|len| len > MAX_REVERSE_DEPS_HTML_BYTES)
+    {
+        return Err("CRAN 页面响应过大，已拒绝".to_string());
+    }
+
     let html = response.text().await.map_err(|e| e.to_string())?;
+    if html.len() as u64 > MAX_REVERSE_DEPS_HTML_BYTES {
+        return Err("CRAN 页面响应过大，已拒绝".to_string());
+    }
     logic::parse_reverse_dependencies(&html, &package_name)
         .ok_or_else(|| format!("无法解析 {} 的反向依赖信息", package_name))
 }

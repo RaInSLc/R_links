@@ -63,8 +63,8 @@ export function SettingsView({
     setSpeedTesting(true);
     setSpeedResults([]);
     try {
-      const urls = mirrors.map((m) => m.value);
-      urls.push(settings.cranMirror);
+      const allUrls = [...mirrors.map((m) => m.value), settings.cranMirror];
+      const urls = [...new Set(allUrls.filter((u) => u.trim()))];
       const results = await invoke<MirrorSpeedResult[]>("test_mirror_speed", { mirrorUrls: urls });
       setSpeedResults(results);
     } catch (error: unknown) {

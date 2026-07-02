@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## [2026-07-02 20:30:00 +08:00]
+
+### Performance
+- **镜像测速改为并发执行**：`test_mirror_speed` 使用 `futures_util::join_all` 并发测试所有镜像，5 镜像最坏耗时从 40s 降至 8s。
+- **反向依赖正则缓存**：`parse_reverse_dependencies` 使用 `OnceLock<Regex>` 编译一次，消除每次调用的正则编译开销。
+
+### Fixed
+- **新命令支持用户代理配置**：`test_mirror_speed` 和 `fetch_reverse_dependencies` 现读取用户 `settings.proxy` 设置，内网用户可正常使用。
+- **反向依赖请求竞态修复**：前端 `fetchReverseDeps` 引入请求令牌（`useRef`），快速切换节点时丢弃过期响应，避免数据错乱。
+- **镜像测速 URL 去重**：前端测速列表使用 `Set` 去重，自定义镜像与预设重复时不再重复测试。
+- **反向依赖响应大小限制**：`fetch_reverse_dependencies` 限制 HTML 响应体不超过 2MB，防止恶意镜像返回超大响应。
+- **镜像测速允许有限重定向**：测速客户端从 `Policy::none()` 改为 `Policy::limited(3)`，避免 HTTP→HTTPS 跳转镜像误报失败。
+
+### Changed
+- **提取公共 `build_simple_client` 函数**：统一 `Client::builder()` 配置（UA、超时、代理、重定向策略），消除两处重复代码。
+
 ## [2026-07-02 19:00:00 +08:00]
 
 ### Added

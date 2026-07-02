@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { PanelHeader, Metric, EmptyState } from "./components";
 import { sourceNames } from "./types";
@@ -20,8 +20,10 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
   const [filterStrength, setFilterStrength] = useState<"all" | "heavy">("all");
   const [reverseDeps, setReverseDeps] = useState<ReverseDependenciesInfo | null>(null);
   const [reverseDepsLoading, setReverseDepsLoading] = useState(false);
+  const fetchDepsToken = useRef(0);
 
   async function fetchReverseDeps(packageName: string) {
+    const token = ++fetchDepsToken.current;
     setReverseDepsLoading(true);
     setReverseDeps(null);
     try {
@@ -29,11 +31,15 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
         packageName,
         mirror: "",
       });
+      if (token !== fetchDepsToken.current) return;
       setReverseDeps(info);
     } catch {
+      if (token !== fetchDepsToken.current) return;
       setReverseDeps(null);
     } finally {
-      setReverseDepsLoading(false);
+      if (token === fetchDepsToken.current) {
+        setReverseDepsLoading(false);
+      }
     }
   }
 

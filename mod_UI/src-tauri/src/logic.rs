@@ -30,6 +30,7 @@ static HISTORY_VERSION_RE: OnceLock<Regex> = OnceLock::new();
 static BASE_HISTORY_RE: OnceLock<[Regex; 4]> = OnceLock::new();
 static INSTALL_URL_HISTORY_RE: OnceLock<Regex> = OnceLock::new();
 static CRAN_HISTORY_RE: OnceLock<[Regex; 2]> = OnceLock::new();
+static REVERSE_DEPS_RE: OnceLock<Regex> = OnceLock::new();
 
 #[cfg(test)]
 pub(crate) fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
@@ -1344,9 +1345,10 @@ pub fn parse_reverse_dependencies(html: &str, package: &str) -> Option<ReverseDe
     let mut linking_to = 0usize;
     let mut matched = false;
 
-    let field_re =
+    let field_re = REVERSE_DEPS_RE.get_or_init(|| {
         Regex::new(r#"<td>\s*Reverse\s+(depends|imports|suggests|linking\s+to)\s*:</td>\s*<td[^>]*>\s*<a[^>]*>(\d+)</a>"#)
-            .ok()?;
+            .expect("固定反向依赖正则必须有效")
+    });
 
     for capture in field_re.captures_iter(html) {
         let field = capture.get(1)?.as_str();
