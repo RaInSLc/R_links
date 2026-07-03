@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-03 21:34:03 +08:00]
+
+### Fixed
+- **修复 mod_UI 安装后验证开关不生效问题**：补齐脚本生成 effect 对 `verifyInstall` 状态的依赖，点击“安装后验证”后会立即重新生成带 `appendVerify` 的安装脚本。
+
+### Tests
+- **补充安装后验证闭环测试**：新增 App 级测试覆盖开关切换后重新调用 `generate_script` 且传入 `appendVerify: true`，并通过 `npm run test` 与 `npm run build` 验证。
+
 ## [2026-07-03 21:21:33 +08:00]
 
 ### Changed

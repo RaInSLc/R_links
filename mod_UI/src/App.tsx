@@ -224,7 +224,7 @@ function App() {
         .catch((error) => { if (active && seq === scriptRequestSeq.current) setStatus(`生成失败: ${formatError(error)}`); });
     }, 120);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [input, method, conditional, installDependencies, showRemoteVersion, settings.cranMirror, results, inputTooLarge]);
+  }, [input, method, conditional, installDependencies, showRemoteVersion, verifyInstall, settings.cranMirror, results, inputTooLarge]);
 
   useEffect(() => {
     if (inputProfile.total === 0 || methodSupportsInput(method, inputProfile)) return;

@@ -22,6 +22,7 @@ describe('App Component Input Validation', () => {
       if (cmd === 'load_history') return [];
       if (cmd === 'load_input_rules') return { separators: [','], commentChars: ['#'], stripQuotes: true, stripCParens: true, splitSpaces: false };
       if (cmd === 'load_settings') return { proxy: '', githubToken: '', cranMirror: '', fullSearch: false, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100 };
+      if (cmd === 'generate_script') return 'install.packages("ggplot2")';
       return null;
     });
   });
@@ -76,6 +77,32 @@ describe('App Component Input Validation', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('复制安装指令失败: clipboard denied');
+    });
+  });
+
+  it('切换安装后验证时，应当重新生成带验证选项的脚本', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText('R 包输入列表'), { target: { value: 'ggplot2' } });
+
+    await waitFor(() => {
+      expect(vi.mocked(tauriCore.invoke)).toHaveBeenCalledWith(
+        'generate_script',
+        expect.objectContaining({
+          options: expect.objectContaining({ appendVerify: false }),
+        }),
+      );
+    });
+
+    fireEvent.click(screen.getByText('安装后验证'));
+
+    await waitFor(() => {
+      expect(vi.mocked(tauriCore.invoke)).toHaveBeenCalledWith(
+        'generate_script',
+        expect.objectContaining({
+          options: expect.objectContaining({ appendVerify: true }),
+        }),
+      );
     });
   });
 });
