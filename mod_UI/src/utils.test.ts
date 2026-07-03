@@ -17,6 +17,7 @@ import {
   resultIdentityKey,
   buildInputSmartSuggestions,
   buildResultSmartSuggestions,
+  extractCanonicalInput,
   MAX_STATUS_CHARS,
 } from "./utils";
 
@@ -318,6 +319,20 @@ describe("buildInputSmartSuggestions", () => {
       "auto",
     );
     expect(suggestions.map((item) => item.id)).toEqual(["version-hint", "mixed-text"]);
+    expect(suggestions[1]).toMatchObject({ action: "replaceInput", value: "dplyr" });
+  });
+
+  it("suggests extracting canonical input from R commands", () => {
+    const suggestions = buildInputSmartSuggestions(
+      "install.packages(c(\"dplyr\", \"ggplot2\"))\nlibrary('Seurat')",
+      { total: 3, archiveUrls: 0, repositories: 0 },
+      "auto",
+    );
+    expect(suggestions).toContainEqual(expect.objectContaining({
+      id: "mixed-text",
+      action: "replaceInput",
+      value: "dplyr\nggplot2\nSeurat",
+    }));
   });
 
   it("suggests Bioconductor method when input contains Bioc hints", () => {
@@ -349,6 +364,18 @@ describe("buildInputSmartSuggestions", () => {
       { verifyInstall: true },
     );
     expect(suggestions.map((item) => item.id)).not.toContain("large-batch");
+  });
+});
+
+describe("extractCanonicalInput", () => {
+  it("extracts unique packages and repositories from common R commands", () => {
+    expect(extractCanonicalInput([
+      "install.packages(c(\"dplyr\", \"ggplot2\"))",
+      "BiocManager::install('GSVA')",
+      "remotes::install_github(\"tidyverse/dplyr\")",
+      "library(ggplot2)",
+      "Warning: package not available",
+    ].join("\n"))).toBe("dplyr\nggplot2\nGSVA\ntidyverse/dplyr");
   });
 });
 

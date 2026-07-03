@@ -101,8 +101,9 @@ export interface SmartSuggestion {
   title: string;
   detail: string;
   actionLabel?: string;
-  action?: "method" | "enableVerify" | "openSettings" | "enableFullSearch" | "retrySearch";
+  action?: "method" | "enableVerify" | "replaceInput" | "openSettings" | "enableFullSearch" | "retrySearch";
   method?: string;
+  value?: string;
 }
 
 export const MAX_PACKAGE_LINES = 500;
@@ -120,6 +121,47 @@ function splitInputLine(line: string): string[] {
     .split(INPUT_SEPARATORS)
     .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
     .filter((s) => s.length > 0);
+}
+
+function pushUniqueInput(items: string[], value: string) {
+  const trimmed = value.trim().replace(/^["']|["']$/g, "").trim();
+  if (!trimmed || items.some((item) => item.toLowerCase() === trimmed.toLowerCase())) return;
+  items.push(trimmed);
+}
+
+export function extractCanonicalInput(value: string): string {
+  const items: string[] = [];
+  for (const line of value.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    const githubArgs = trimmed.match(/\b(?:remotes|devtools)::install_github\s*\(([^)]*)\)/i);
+    if (githubArgs) {
+      for (const match of githubArgs[1].matchAll(/["']([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)["']/g)) {
+        pushUniqueInput(items, match[1]);
+      }
+      continue;
+    }
+
+    const quotedArgs = trimmed.match(/\b(?:install\.packages|BiocManager::install|library|require)\s*\(([^)]*)\)/i);
+    if (quotedArgs) {
+      let foundQuoted = false;
+      for (const match of quotedArgs[1].matchAll(/["']([^"']+)["']/g)) {
+        pushUniqueInput(items, match[1]);
+        foundQuoted = true;
+      }
+      if (!foundQuoted) {
+        const bareName = quotedArgs[1].trim().match(/^([A-Za-z][A-Za-z0-9_.]*)$/);
+        if (bareName) pushUniqueInput(items, bareName[1]);
+      }
+      continue;
+    }
+
+    if (/^https:\/\//i.test(trimmed)) {
+      pushUniqueInput(items, trimmed);
+    }
+  }
+  return items.join("\n");
 }
 export const MAX_STATUS_CHARS = 512;
 export const MAX_RESULT_FIELD_CHARS = 2_048;
@@ -546,8 +588,9 @@ export function buildInputSmartSuggestions(
   const activeLines = input.split(/\r?\n/).filter(isActiveInputLine);
   const hasVersionHint = activeLines.some((line) => /\b\d+\.\d+(?:[.\-][0-9A-Za-z]+)*\b/.test(line));
   const hasBiocHint = activeLines.some((line) => /\b(?:BiocManager::install|bioconductor|bioc)\b/i.test(line));
-  const hasInstallCall = activeLines.some((line) => /\b(?:install\.packages|BiocManager::install|remotes::install_|devtools::install_|library|require)\s*\(/.test(line));
+  const hasInstallCall = activeLines.some((line) => /\b(?:install\.packages|BiocManager::install|remotes::install_[A-Za-z_]*|devtools::install_[A-Za-z_]*|library|require)\s*\(/.test(line));
   const hasLikelyNoise = activeLines.some((line) => /(?:ERROR|Warning|Traceback|安装失败|报错|not available|there is no package)/i.test(line));
+  const canonicalInput = hasInstallCall ? extractCanonicalInput(input) : "";
 
   if (profile.archiveUrls === profile.total && method !== "remotes" && method !== "devtools") {
     suggestions.push({
@@ -591,6 +634,9 @@ export function buildInputSmartSuggestions(
       id: "mixed-text",
       title: "检测到混合文本",
       detail: "输入中可能包含安装命令、报错或日志，可先用临时过滤剔除无关行。",
+      actionLabel: canonicalInput ? "提取规范输入" : undefined,
+      action: canonicalInput ? "replaceInput" : undefined,
+      value: canonicalInput || undefined,
     });
   }
   if (profile.total > 20 && !options.verifyInstall) {

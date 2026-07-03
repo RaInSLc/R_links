@@ -106,4 +106,18 @@ describe('App Component Input Validation', () => {
       );
     });
   });
+
+  it('点击混合文本建议时，应当提取规范输入', async () => {
+    render(<App />);
+
+    const textarea = screen.getByLabelText('R 包输入列表');
+    fireEvent.change(textarea, { target: { value: 'install.packages(c("dplyr", "ggplot2"))\nlibrary(Seurat)' } });
+
+    fireEvent.click(await screen.findByText('提取规范输入'));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue('dplyr\nggplot2\nSeurat');
+      expect(screen.getByRole('status')).toHaveTextContent('已应用智能建议：检测到混合文本');
+    });
+  });
 });

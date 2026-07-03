@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-04 02:35:40 +08:00]
+
+### Added
+- **增强 mod_UI 混合输入智能提取**：工作台检测到 `install.packages()`、`BiocManager::install()`、`library()`、`require()` 或 `remotes::install_github()` 等 R 命令时，智能建议支持一键提取规范包名或 GitHub 仓库输入，并自动去重后替换输入框。
+
+### Tests
+- **补充混合输入提取测试与执行验证**：新增工具函数和 App 交互测试覆盖规范输入提取；通过 `npm run test`、`npm run build`、`cargo test --manifest-path .\src-tauri\Cargo.toml --locked`、`cargo clippy --manifest-path .\src-tauri\Cargo.toml --all-targets --locked -- -D warnings`、`npm run tauri build -- --no-bundle`，并完成 release 程序启动级执行验证。
+
 ## [2026-07-04 00:30:30 +08:00]
 
 ### Changed

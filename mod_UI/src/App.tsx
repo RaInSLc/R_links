@@ -411,6 +411,9 @@ function App() {
                 if (suggestion.action === "enableVerify") {
                   setVerifyInstall(true);
                   setStatus(`已应用智能建议：${suggestion.title}`);
+                } else if (suggestion.action === "replaceInput" && suggestion.value) {
+                  const result = acceptInputValue(suggestion.value, "manual");
+                  if (result !== "rejected") setStatus(`已应用智能建议：${suggestion.title}`);
                 } else if (suggestion.method && methodSupportsInput(suggestion.method, inputProfile)) {
                   setMethod(suggestion.method as Method);
                   setStatus(`已应用智能建议：${suggestion.title}`);
