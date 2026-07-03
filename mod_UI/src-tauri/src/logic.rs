@@ -402,14 +402,7 @@ fn generate_script_inner(
     };
 
     if requested_method == "checkSystem" {
-        let names = packages
-            .iter()
-            .map(|item| format!("\"{}\"", escape_r(&local_package_name(&item.name))))
-            .collect::<Vec<_>>()
-            .join(", ");
-        return Ok(format!(
-            "# 1. 定义需要检查的包列表\r\npackages_to_check <- c(\r\n  {names}\r\n)\r\n\r\n# 2. 获取系统中已安装的包\r\ninstalled_pkgs <- installed.packages()[, \"Package\"]\r\n\r\n# 3. 计算缺失包\r\nmissing_pkgs <- packages_to_check[!(packages_to_check %in% installed_pkgs)]\r\n\r\n# 4. 输出结果\r\nif (length(missing_pkgs) == 0) {{\r\n  cat(\"所有包均已安装。\\n\")\r\n}} else {{\r\n  cat(\"以下包尚未安装：\\n\")\r\n  print(missing_pkgs)\r\n}}\r\n"
-        ));
+        return generate_check_system_script(&packages);
     }
 
     let mut output = Vec::new();
@@ -541,6 +534,46 @@ fn generate_script_inner(
         let verify = generate_verify_script(&packages_for_verify);
         script.push_str(&verify);
     }
+    validate_script_size(&script)?;
+    Ok(script)
+}
+
+fn generate_check_system_script(packages: &[PackageInput]) -> Result<String, String> {
+    let names = packages
+        .iter()
+        .map(|item| format!("\"{}\"", escape_r(&local_package_name(&item.name))))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let script = format!(
+        "# 1. 定义需要检测的包列表\r\n\
+         packages_to_check <- c({names})\r\n\r\n\
+         # 2. 逐个检测包是否已安装，并尝试加载捕获报错\r\n\
+         check_results <- lapply(packages_to_check, function(p) {{\r\n\
+         \x20 installed <- requireNamespace(p, quietly = TRUE)\r\n\
+         \x20 version <- if (installed) tryCatch(as.character(packageVersion(p)), error = function(e) NA_character_) else NA_character_\r\n\
+         \x20 load_error <- NA_character_\r\n\
+         \x20 loaded <- FALSE\r\n\
+         \x20 if (installed) {{\r\n\
+         \x20   loaded <- tryCatch({{\r\n\
+         \x20     suppressPackageStartupMessages(library(p, character.only = TRUE))\r\n\
+         \x20     TRUE\r\n\
+         \x20   }}, error = function(e) {{\r\n\
+         \x20     load_error <<- conditionMessage(e)\r\n\
+         \x20     FALSE\r\n\
+         \x20   }})\r\n\
+         \x20 }}\r\n\
+         \x20 data.frame(package = p, installed = installed, loaded = loaded, version = version, error = load_error, stringsAsFactors = FALSE)\r\n\
+         }})\r\n\r\n\
+         # 3. 汇总输出检测结果\r\n\
+         check_results <- do.call(rbind, check_results)\r\n\
+         print(check_results, row.names = FALSE)\r\n\r\n\
+         failed <- check_results[!check_results$installed | !check_results$loaded, ]\r\n\
+         cat(sprintf(\"\\n=== 检测完成: %d/%d 包可正常加载 ===\\n\", sum(check_results$installed & check_results$loaded), nrow(check_results)))\r\n\
+         if (nrow(failed) > 0) {{\r\n\
+         \x20 cat(\"以下包未安装或加载报错：\\n\")\r\n\
+         \x20 print(failed, row.names = FALSE)\r\n\
+         }}\r\n"
+    );
     validate_script_size(&script)?;
     Ok(script)
 }
@@ -1464,6 +1497,9 @@ mod tests {
         .expect("系统检查应可处理显式 GitHub 仓库");
 
         assert!(output.contains("\"demo\""));
+        assert!(output.contains("requireNamespace(p, quietly = TRUE)"));
+        assert!(output.contains("library(p, character.only = TRUE)"));
+        assert!(output.contains("未安装或加载报错"));
         assert!(!output.contains("\"owner/demo\""));
     }
 

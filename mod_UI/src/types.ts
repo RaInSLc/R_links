@@ -93,7 +93,7 @@ export const methods: Array<{
   { id: "remotes", title: "远程地址", description: "remotes::install_url" },
   { id: "devtools", title: "devtools", description: "devtools::install_url" },
   { id: "version", title: "版本查询", description: "packageVersion" },
-  { id: "checkSystem", title: "系统检查", description: "批量检查是否已安装" },
+  { id: "checkSystem", title: "包加载检测", description: "批量检测安装与加载报错" },
 ];
 
 export const mirrors = [

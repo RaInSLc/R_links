@@ -52,6 +52,8 @@ export function WorkspaceView({
   onCopyScript, onCleanComments, isMethodDisabled,
 }: WorkspaceViewProps) {
   const [filterText, setFilterText] = useState("");
+  const [strategyExpanded, setStrategyExpanded] = useState(false);
+  const selectedMethod = methods.find((item) => item.id === method);
 
   return (
     <div className="workspace-grid">
@@ -132,31 +134,61 @@ export function WorkspaceView({
         </div>
       </section>
 
-      <section className="panel method-panel">
+      <section className="panel method-panel compact-method-panel">
         <PanelHeader step="02" title="安装策略" meta={settings.fullSearch ? "全量检索" : "快速检索"} />
-        <div className="method-grid">
-          {methods.map((item) => (
-            <button
-              key={item.id}
-              className={`method-card ${method === item.id ? "selected" : ""}`}
-              disabled={isMethodDisabled(item.id)}
-              aria-pressed={method === item.id}
-              onClick={() => onMethodChange(item.id)}
-            >
-              <span>{item.title}</span>
-              <small>{item.description}</small>
-            </button>
-          ))}
+        <div className="strategy-summary">
+          <div>
+            <strong>{selectedMethod?.title || "未选择"}</strong>
+            <span>{selectedMethod?.description || "请选择安装策略"}</span>
+          </div>
+          <button type="button" className="button ghost" onClick={() => setStrategyExpanded(true)}>
+            配置策略
+          </button>
         </div>
-        <div className="toggle-row">
-          <Toggle checked={conditional} label="条件安装" description="已安装时自动跳过" onChange={onConditionalChange} />
-          <Toggle checked={installDependencies} label="安装依赖" description="dependencies = TRUE" onChange={onInstallDependenciesChange} />
-          <Toggle checked={showRemoteVersion} label="同步远程版本" description="显示版本并生成精确版本安装" onChange={onShowRemoteVersionChange} />
-          <Toggle checked={settings.fullSearch} label="全量检索" description="命中后仍继续查询 GitHub" onChange={onFullSearchChange} />
-          <Toggle checked={settings.useCache} label="使用缓存" description="使用包结果缓存" onChange={onUseCacheChange} />
-          <Toggle checked={verifyInstall} label="安装后验证" description="脚本末尾追加安装结果验证代码" onChange={onVerifyInstallChange} />
+        <div className="strategy-chips" aria-label="当前策略选项">
+          {conditional && <span>条件安装</span>}
+          {installDependencies && <span>安装依赖</span>}
+          {showRemoteVersion && <span>同步版本</span>}
+          {settings.fullSearch && <span>全量检索</span>}
+          {settings.useCache && <span>使用缓存</span>}
+          {verifyInstall && <span>安装后验证</span>}
         </div>
       </section>
+
+      {strategyExpanded && (
+        <div className="strategy-overlay" role="presentation" onClick={() => setStrategyExpanded(false)}>
+          <section className="panel strategy-drawer" role="dialog" aria-modal="true" aria-label="安装策略配置" onClick={(event) => event.stopPropagation()}>
+            <PanelHeader step="02" title="安装策略" meta={settings.fullSearch ? "全量检索" : "快速检索"} />
+            <div className="method-grid">
+              {methods.map((item) => (
+                <button
+                  key={item.id}
+                  className={`method-card ${method === item.id ? "selected" : ""}`}
+                  disabled={isMethodDisabled(item.id)}
+                  aria-pressed={method === item.id}
+                  onClick={() => onMethodChange(item.id)}
+                >
+                  <span>{item.title}</span>
+                  <small>{item.description}</small>
+                </button>
+              ))}
+            </div>
+            <div className="toggle-row">
+              <Toggle checked={conditional} label="条件安装" description="已安装时自动跳过" onChange={onConditionalChange} />
+              <Toggle checked={installDependencies} label="安装依赖" description="dependencies = TRUE" onChange={onInstallDependenciesChange} />
+              <Toggle checked={showRemoteVersion} label="同步远程版本" description="显示版本并生成精确版本安装" onChange={onShowRemoteVersionChange} />
+              <Toggle checked={settings.fullSearch} label="全量检索" description="命中后仍继续查询 GitHub" onChange={onFullSearchChange} />
+              <Toggle checked={settings.useCache} label="使用缓存" description="使用包结果缓存" onChange={onUseCacheChange} />
+              <Toggle checked={verifyInstall} label="安装后验证" description="脚本末尾追加安装结果验证代码" onChange={onVerifyInstallChange} />
+            </div>
+            <div className="strategy-drawer-actions">
+              <button type="button" className="button primary" onClick={() => setStrategyExpanded(false)}>
+                完成
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       <section className="panel script-panel">
         <header className="panel-header" style={{ gridTemplateColumns: "auto auto 1fr auto" }}>
