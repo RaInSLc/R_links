@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-03 23:51:51 +08:00]
+
+### Added
+- **新增 mod_UI 检索结果恢复建议**：报告页会根据检索结果自动提示 GitHub 限流、全量检索建议和网络异常恢复动作，并支持一键打开网络设置或启用全量检索。
+
+### Tests
+- **补充检索恢复建议测试与完整编译验证**：新增 GitHub 限流、未找到全量检索建议和检索中隐藏建议测试；通过 npm run test、npm run build、cargo test、cargo clippy 和 npm run tauri build 验证。
+
 ## [2026-07-03 23:25:39 +08:00]
 
 ### Added

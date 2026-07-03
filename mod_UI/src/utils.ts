@@ -101,7 +101,7 @@ export interface SmartSuggestion {
   title: string;
   detail: string;
   actionLabel?: string;
-  action?: "method" | "enableVerify";
+  action?: "method" | "enableVerify" | "openSettings" | "enableFullSearch" | "retrySearch";
   method?: string;
 }
 
@@ -600,6 +600,47 @@ export function buildInputSmartSuggestions(
       detail: "建议先检索来源并保留安装后验证，便于发现失败包。",
       actionLabel: "开启安装后验证",
       action: "enableVerify",
+    });
+  }
+  return suggestions.slice(0, 3);
+}
+
+export function buildResultSmartSuggestions(
+  results: SearchResult[],
+  options: { fullSearch?: boolean; searching?: boolean } = {},
+): SmartSuggestion[] {
+  if (options.searching || results.length === 0) return [];
+  const suggestions: SmartSuggestion[] = [];
+  const rateLimited = results.some((result) => result.status === "rateLimited");
+  const errors = results.filter((result) => result.status === "error" || result.status === "timeout").length;
+  const missing = results.filter((result) => !result.found).length;
+  const found = results.filter((result) => result.found).length;
+
+  if (rateLimited) {
+    suggestions.push({
+      id: "github-rate-limit",
+      title: "检测到 GitHub 限流",
+      detail: "建议在网络设置中配置 GitHub Token，提高检索配额并减少失败。",
+      actionLabel: "打开网络设置",
+      action: "openSettings",
+    });
+  }
+  if (missing > 0 && found === 0 && !options.fullSearch) {
+    suggestions.push({
+      id: "not-found-full-search",
+      title: "未找到可用来源",
+      detail: "建议启用全量检索，命中 CRAN 或 Bioconductor 后继续查询 GitHub。",
+      actionLabel: "启用全量检索",
+      action: "enableFullSearch",
+    });
+  }
+  if (errors > 0) {
+    suggestions.push({
+      id: "search-errors",
+      title: "检索存在超时或异常",
+      detail: "建议检查代理、镜像或网络设置后重试检索。",
+      actionLabel: "打开网络设置",
+      action: "openSettings",
     });
   }
   return suggestions.slice(0, 3);

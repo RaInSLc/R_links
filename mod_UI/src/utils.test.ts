@@ -16,6 +16,7 @@ import {
   dedupeBoundedResults,
   resultIdentityKey,
   buildInputSmartSuggestions,
+  buildResultSmartSuggestions,
   MAX_STATUS_CHARS,
 } from "./utils";
 
@@ -348,5 +349,28 @@ describe("buildInputSmartSuggestions", () => {
       { verifyInstall: true },
     );
     expect(suggestions.map((item) => item.id)).not.toContain("large-batch");
+  });
+});
+
+describe("buildResultSmartSuggestions", () => {
+  it("suggests opening settings for GitHub rate limits", () => {
+    const suggestions = buildResultSmartSuggestions([
+      { package: "pkg", requestedVersion: "", latestVersion: "", repository: "", realName: "pkg", source: "github", found: false, message: "rate limit", status: "rateLimited" },
+    ]);
+    expect(suggestions[0]).toMatchObject({ id: "github-rate-limit", action: "openSettings" });
+  });
+
+  it("suggests full search when all packages are missing", () => {
+    const suggestions = buildResultSmartSuggestions([
+      { package: "pkg", requestedVersion: "", latestVersion: "", repository: "", realName: "pkg", source: "none", found: false, message: "missing", status: "notFound" },
+    ], { fullSearch: false });
+    expect(suggestions[0]).toMatchObject({ id: "not-found-full-search", action: "enableFullSearch" });
+  });
+
+  it("does not show result suggestions while searching", () => {
+    const suggestions = buildResultSmartSuggestions([
+      { package: "pkg", requestedVersion: "", latestVersion: "", repository: "", realName: "pkg", source: "none", found: false, message: "missing", status: "notFound" },
+    ], { searching: true });
+    expect(suggestions).toHaveLength(0);
   });
 });

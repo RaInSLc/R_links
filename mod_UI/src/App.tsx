@@ -13,7 +13,7 @@ import { useSearch } from "./useSearch";
 import {
   formatError, scriptValueTooLarge, activeInputLineCount,
   nonEmptyLineBytesExceeds, methodSupportsInput, classifyInputProfile,
-  buildInputSmartSuggestions,
+  buildInputSmartSuggestions, buildResultSmartSuggestions,
   MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES,
   MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS, utf8Length,
   type HistoryRecord, type SearchResult,
@@ -65,6 +65,10 @@ function App() {
   const smartSuggestions = useMemo(
     () => buildInputSmartSuggestions(input, inputProfile, method, { verifyInstall }),
     [input, inputProfile, method, verifyInstall],
+  );
+  const resultSuggestions = useMemo(
+    () => buildResultSmartSuggestions(results, { fullSearch: settings.fullSearch, searching }),
+    [results, settings.fullSearch, searching],
   );
   const inputBytes = useMemo(() => utf8Length(input), [input]);
   const inputTooLarge =
@@ -430,8 +434,19 @@ function App() {
             <ReportView
               results={results} logs={logs} dependencyGraph={dependencyGraph}
               packageCount={packageCount} uniqueFoundCount={uniqueFoundCount}
+              smartSuggestions={resultSuggestions}
               searching={searching} onClearLogs={() => setLogs([])}
               onStatusChange={setStatus}
+              onApplySmartSuggestion={(suggestion) => {
+                if (suggestion.action === "openSettings") {
+                  setView("settings");
+                  setStatus(`已应用智能建议：${suggestion.title}`);
+                } else if (suggestion.action === "enableFullSearch") {
+                  updateSettingsFromUser((current) => ({ ...current, fullSearch: true }));
+                  persistSettings({ fullSearch: true });
+                  setStatus(`已应用智能建议：${suggestion.title}`);
+                }
+              }}
             />
           )}
           {view === "history" && (

@@ -513,6 +513,10 @@ input:focus-visible,
   line-height: 1.45;
 }
 
+.report-suggestions {
+  border-top: 1px solid var(--line);
+}
+
 .temp-filter-bar {
   display: flex;
   gap: 8px;

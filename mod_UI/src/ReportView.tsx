@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { PanelHeader, Metric, EmptyState } from "./components";
 import { sourceNames } from "./types";
-import type { SearchResult, DependencyGraph, DependencyNode, ReverseDependenciesInfo } from "./utils";
+import type { SearchResult, DependencyGraph, DependencyNode, ReverseDependenciesInfo, SmartSuggestion } from "./utils";
 
 interface ReportViewProps {
   results: SearchResult[];
@@ -10,9 +10,11 @@ interface ReportViewProps {
   dependencyGraph: DependencyGraph | null;
   packageCount: number;
   uniqueFoundCount: number;
+  smartSuggestions: SmartSuggestion[];
   searching: boolean;
   onClearLogs: () => void;
   onStatusChange: (status: string) => void;
+  onApplySmartSuggestion: (suggestion: SmartSuggestion) => void;
 }
 
 function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
@@ -469,9 +471,11 @@ export function ReportView({
   dependencyGraph,
   packageCount,
   uniqueFoundCount,
+  smartSuggestions,
   searching,
   onClearLogs,
   onStatusChange,
+  onApplySmartSuggestion,
 }: ReportViewProps) {
   const [activeTab, setActiveTab] = useState<"graph" | "list">("graph");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -503,6 +507,23 @@ export function ReportView({
 
       <section className="panel report-panel">
         <PanelHeader step="结果" title="来源验证" meta={searching ? "实时更新" : "已完成"} />
+        {smartSuggestions.length > 0 && (
+          <div className="smart-suggestion-list report-suggestions" aria-label="检索智能建议">
+            {smartSuggestions.map((suggestion) => (
+              <div className="smart-suggestion" key={suggestion.id}>
+                <div>
+                  <strong>{suggestion.title}</strong>
+                  <span>{suggestion.detail}</span>
+                </div>
+                {suggestion.actionLabel && (
+                  <button type="button" className="text-button" onClick={() => onApplySmartSuggestion(suggestion)}>
+                    {suggestion.actionLabel}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         {results.length === 0 ? (
           <EmptyState text={searching ? "正在等待首条检索结果" : "尚未执行检索"} />
         ) : (
