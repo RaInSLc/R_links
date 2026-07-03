@@ -11,6 +11,13 @@ vi.mock('@tauri-apps/api/core', () => ({
 describe('App Component Input Validation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      clipboard: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+    });
     vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
       if (cmd === 'load_history') return [];
       if (cmd === 'load_input_rules') return { separators: [','], commentChars: ['#'], stripQuotes: true, stripCParens: true, splitSpaces: false };
@@ -47,5 +54,28 @@ describe('App Component Input Validation', () => {
       expect(statusChip).toHaveTextContent(/超出限制或包含非法字符/);
     });
     expect(textarea).toHaveValue('');
+  });
+
+  it('报告页复制安装指令失败时，应当显示状态提示', async () => {
+    localStorage.setItem('rlinks_input', 'ggplot2');
+    vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
+      if (cmd === 'load_history') return [];
+      if (cmd === 'load_input_rules') return { separators: [','], commentChars: ['#'], stripQuotes: true, stripCParens: true, splitSpaces: false };
+      if (cmd === 'load_settings') return { proxy: '', githubToken: '', cranMirror: '', fullSearch: false, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100 };
+      if (cmd === 'load_cached_results') return [{ package: 'ggplot2', requestedVersion: '', latestVersion: '3.5.0', repository: '', realName: 'ggplot2', source: 'cran', found: true, message: '缓存命中', status: 'found' }];
+      if (cmd === 'generate_script') return 'install.packages("ggplot2")';
+      return null;
+    });
+    vi.mocked(navigator.clipboard.writeText).mockRejectedValueOnce(new Error('clipboard denied'));
+
+    render(<App />);
+    fireEvent.click(screen.getByText('检索报告'));
+
+    const copyButton = await screen.findByTitle(/复制安装指令/);
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('复制安装指令失败: clipboard denied');
+    });
   });
 });

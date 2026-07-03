@@ -9,9 +9,8 @@
 在 Windows PowerShell 中执行：
 
 ```powershell
-Set-Location -LiteralPath "Z:\R_links\mod_UI"
+Set-Location -LiteralPath ".\mod_UI"
 npm ci
-$env:PATH = "C:\Users\rainsc\.cargo\bin;$env:PATH"
 npm run tauri dev
 ```
 
@@ -22,8 +21,7 @@ npm run tauri dev
 依赖已安装后，只需要：
 
 ```powershell
-Set-Location -LiteralPath "Z:\R_links\mod_UI"
-$env:PATH = "C:\Users\rainsc\.cargo\bin;$env:PATH"
+Set-Location -LiteralPath ".\mod_UI"
 npm run tauri dev
 ```
 
@@ -32,8 +30,7 @@ npm run tauri dev
 ## 3. 构建安装包或可执行文件
 
 ```powershell
-Set-Location -LiteralPath "Z:\R_links\mod_UI"
-$env:PATH = "C:\Users\rainsc\.cargo\bin;$env:PATH"
+Set-Location -LiteralPath ".\mod_UI"
 npm run tauri build
 ```
 
@@ -46,7 +43,7 @@ npm run tauri build -- --no-bundle
 构建产物位于：
 
 ```text
-Z:\R_links\mod_UI\src-tauri\target\release\
+.\mod_UI\src-tauri\target\release\
 ```
 
 ## 4. 必要环境
@@ -58,10 +55,10 @@ Z:\R_links\mod_UI\src-tauri\target\release\
 | Rust / Cargo | Tauri 后端编译 | `cargo --version` |
 | WebView2 Runtime | Windows 桌面 WebView | 系统通常已内置 |
 
-当前机器如果 `cargo` 不在 `PATH` 中，先执行：
+当前机器如果 `cargo` 不在 `PATH` 中，请先将 Rust 安装目录加入当前终端的 `PATH`。默认 rustup 安装路径通常为：
 
 ```powershell
-$env:PATH = "C:\Users\rainsc\.cargo\bin;$env:PATH"
+$env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
 ```
 
 ## 5. 验证命令
@@ -69,7 +66,7 @@ $env:PATH = "C:\Users\rainsc\.cargo\bin;$env:PATH"
 提交前建议执行：
 
 ```powershell
-Set-Location -LiteralPath "Z:\R_links\mod_UI"
+Set-Location -LiteralPath ".\mod_UI"
 npm run build
 cargo test --manifest-path .\src-tauri\Cargo.toml --locked
 cargo clippy --manifest-path .\src-tauri\Cargo.toml --all-targets --locked -- -D warnings
@@ -83,7 +80,7 @@ npm run tauri build -- --no-bundle
 Rust 已安装但当前终端没有加载路径。执行：
 
 ```powershell
-$env:PATH = "C:\Users\rainsc\.cargo\bin;$env:PATH"
+$env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
 ```
 
 然后重新运行 `cargo --version`。
@@ -93,10 +90,10 @@ $env:PATH = "C:\Users\rainsc\.cargo\bin;$env:PATH"
 Windows 映射盘与 UNC 路径混用时，Vite/Rollup 可能把同一文件解析成两个绝对路径。优先使用同一种路径启动，例如始终使用：
 
 ```powershell
-Set-Location -LiteralPath "Z:\R_links\mod_UI"
+Set-Location -LiteralPath ".\mod_UI"
 ```
 
-不要在同一个终端中来回切换 `Z:\R_links` 与 `\\10.0.0.163\pythonProject\R_links`。
+不要在同一个终端中来回切换映射盘路径与 UNC 网络路径，例如 `Z:\R_links` 与 `\\10.0.0.163\pythonProject\R_links`。
 
 ### `npm ci` 很慢或失败
 

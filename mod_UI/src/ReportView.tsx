@@ -12,6 +12,7 @@ interface ReportViewProps {
   uniqueFoundCount: number;
   searching: boolean;
   onClearLogs: () => void;
+  onStatusChange: (status: string) => void;
 }
 
 function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
@@ -470,6 +471,7 @@ export function ReportView({
   uniqueFoundCount,
   searching,
   onClearLogs,
+  onStatusChange,
 }: ReportViewProps) {
   const [activeTab, setActiveTab] = useState<"graph" | "list">("graph");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -479,9 +481,10 @@ export function ReportView({
     try {
       await navigator.clipboard.writeText(cmd);
       setCopiedKey(key);
+      onStatusChange(result.found ? `已复制 ${result.package} 的安装指令` : `已复制包名 ${result.package}`);
       setTimeout(() => setCopiedKey(null), 1500);
-    } catch (err) {
-      console.error("Failed to copy", err);
+    } catch (error) {
+      onStatusChange(`复制安装指令失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 

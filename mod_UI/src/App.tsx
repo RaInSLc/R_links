@@ -416,6 +416,7 @@ function App() {
               results={results} logs={logs} dependencyGraph={dependencyGraph}
               packageCount={packageCount} uniqueFoundCount={uniqueFoundCount}
               searching={searching} onClearLogs={() => setLogs([])}
+              onStatusChange={setStatus}
             />
           )}
           {view === "history" && (
