@@ -94,7 +94,8 @@ describe('App Component Input Validation', () => {
       );
     });
 
-    fireEvent.click(screen.getByText('安装后验证'));
+    fireEvent.click(screen.getByText('配置策略'));
+    fireEvent.click(await screen.findByText('安装后验证'));
 
     await waitFor(() => {
       expect(vi.mocked(tauriCore.invoke)).toHaveBeenCalledWith(
