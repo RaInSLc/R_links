@@ -44,7 +44,7 @@ function App() {
   const settingsHook = useSettings(setStatus);
   const historyHook = useHistory(setStatus);
 
-  const { results, setResults, logs, setLogs, dependencyGraph,
+  const { results, logs, setLogs, dependencyGraph,
     searching, openingSearchTabs, searchingRef, hasSearchEvidenceRef,
     startSearch, stopSearch, openSearchTabs } = search;
   const { settings, showToken, setShowToken,
@@ -126,13 +126,12 @@ function App() {
       value !== latestInputRef.current && hasSearchEvidenceRef.current;
     if (clearsSearchEvidence) {
       hasSearchEvidenceRef.current = false;
-      setResults([]);
       setLogs([]);
     }
     latestInputRef.current = value;
     setInput(value);
     if (clearsSearchEvidence && source === "manual") {
-      setStatus("输入已变更，旧检索结果和日志已清除");
+      setStatus("输入已变更，检索日志已清除（已验证的来源信息保留）");
     }
     return clearsSearchEvidence ? "cleared" : "accepted";
   }
@@ -182,7 +181,7 @@ function App() {
       if (value) {
         const result = acceptInputValue(value, "clipboard");
         if (result !== "rejected") {
-          setStatus(result === "cleared" ? "已从剪贴板粘贴，旧检索结果和日志已清除" : "已从剪贴板粘贴");
+          setStatus(result === "cleared" ? "已从剪贴板粘贴，检索日志已清除（来源信息保留）" : "已从剪贴板粘贴");
         }
       }
     } catch (error) {
