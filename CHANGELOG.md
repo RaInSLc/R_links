@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-03 21:01:20 +08:00]
+
+### Fixed
+- **修复 mod_UI Rust clippy 告警**：移除 src-tauri/src/logic.rs 测试用例中无实际效果的 ..Default::default() 结构体更新，恢复 cargo clippy --all-targets --locked -- -D warnings 通过状态。
+
+### Added
+- **新增 mod_UI 项目完整审核文档**：记录前端构建、单元测试、Rust 测试、clippy、npm 生产依赖审计、仓库忽略规则与发布配置检查结果，保存至 报告/ai_docs/审核/2026-07-03_审核_mod_UI项目完整检查.md。
+
 ## [2026-07-02 21:30:00 +08:00]
 
 ### Added

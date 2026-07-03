@@ -2604,7 +2604,6 @@ mod tests {
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
                 append_verify: true,
-                ..Default::default()
             },
             &[],
         )
