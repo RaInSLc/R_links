@@ -15,7 +15,7 @@ import {
   nonEmptyLineBytesExceeds, methodSupportsInput, classifyInputProfile,
   MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES,
   MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS, utf8Length,
-  type HistoryRecord,
+  type HistoryRecord, type SearchResult,
 } from "./utils";
 import { type View, type Method, type InputRules, defaultInputRules, defaultSettings } from "./types";
 
@@ -23,7 +23,7 @@ function App() {
   const [view, setView] = useState<View>("workspace");
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem("theme") || "office");
   const [currentFont, setCurrentFont] = useState(() => localStorage.getItem("fontFamily") || "modern");
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(() => localStorage.getItem("rlinks_input") || "");
   const [method, setMethod] = useState<Method>("auto");
   const [conditional, setConditional] = useState(true);
   const [installDependencies, setInstallDependencies] = useState(true);
@@ -36,7 +36,7 @@ function App() {
   const [inputRules, setInputRules] = useState<InputRules>(defaultInputRules);
   const [inputRulesBusy, setInputRulesBusy] = useState(false);
 
-  const latestInputRef = useRef("");
+  const latestInputRef = useRef(localStorage.getItem("rlinks_input") || "");
   const latestScriptRef = useRef("等待输入...");
   const scriptRequestSeq = useRef(0);
 
@@ -44,7 +44,7 @@ function App() {
   const settingsHook = useSettings(setStatus);
   const historyHook = useHistory(setStatus);
 
-  const { results, logs, setLogs, dependencyGraph,
+  const { results, setResults, logs, setLogs, dependencyGraph,
     searching, openingSearchTabs, searchingRef, hasSearchEvidenceRef,
     startSearch, stopSearch, openSearchTabs } = search;
   const { settings, showToken, setShowToken,
@@ -87,6 +87,22 @@ function App() {
   useEffect(() => {
     invoke<InputRules>("load_input_rules")
       .then((rules) => setInputRules(rules))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("rlinks_input", input);
+  }, [input]);
+
+  useEffect(() => {
+    if (!input.trim()) return;
+    invoke<SearchResult[]>("load_cached_results", { input })
+      .then((cached) => {
+        if (cached.length > 0) {
+          setResults(cached);
+          hasSearchEvidenceRef.current = true;
+        }
+      })
       .catch(() => {});
   }, []);
 

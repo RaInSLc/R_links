@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-02 21:30:00 +08:00]
+
+### Added
+- **关闭重启后恢复输入和来源索引**：输入内容持久化到 localStorage，应用重启时自动恢复。同时新增 `load_cached_results` 后端命令，启动时从缓存文件加载已验证的来源信息（CRAN/GitHub/Bioconductor）并填充报告视图，无需重新检索。
+
+### Changed
+- **重构离线结果逻辑**：将 `generate_script` 中的缓存/历史回退逻辑提取为公共函数 `build_offline_results`，供 `load_cached_results` 复用。
+
 ## [2026-07-02 21:00:00 +08:00]
 
 ### Fixed

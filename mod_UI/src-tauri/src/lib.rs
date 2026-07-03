@@ -181,72 +181,7 @@ fn generate_script(
 ) -> Result<String, String> {
     let rules = storage::load_input_rules(&app);
     if results.is_empty() {
-        let mut offline_results = Vec::new();
-        if let Ok(packages) = logic::parse_inputs_filtered(&input, &rules) {
-            let cache = storage::load_cache(&app).unwrap_or_default();
-            let history = storage::load_history(&app).unwrap_or_default();
-
-            for pkg in packages {
-                let pkg_lower = pkg.name.to_ascii_lowercase();
-
-                if let Some(entry) = cache.get(&pkg_lower) {
-                    offline_results.push(SearchResult {
-                        package: pkg.name.clone(),
-                        requested_version: pkg.version.clone(),
-                        latest_version: entry.version.clone(),
-                        repository: entry.repository.clone(),
-                        real_name: entry.real_name.clone(),
-                        source: entry.source.clone(),
-                        found: true,
-                        message: "离线缓存命中".to_string(),
-                        status: "found".to_string(),
-                    });
-                    continue;
-                }
-
-                if let Some(record) = history
-                    .iter()
-                    .find(|r| r.package_name.eq_ignore_ascii_case(&pkg.name))
-                {
-                    let source = match record.tool_name.as_str() {
-                        "Bioconductor" => "bioc",
-                        "GitHub" => "github",
-                        "CRAN" | "base R" => "cran",
-                        _ => "cran",
-                    };
-
-                    let mut repository = String::new();
-                    if source == "github" {
-                        #[allow(clippy::regex_creation_in_loops)]
-                        let re = HISTORY_EXTRACT_RE.get_or_init(|| {
-                            Regex::new(r#"(?:install_github|install_url)\("([^"]+)""#)
-                                .expect("固定历史提取正则必须有效")
-                        });
-                        if let Some(caps) = re.captures(&record.command) {
-                            if let Some(m) = caps.get(1) {
-                                let val = m.as_str();
-                                if val.contains('/') && !val.starts_with("http") {
-                                    repository = val.to_string();
-                                }
-                            }
-                        }
-                    }
-
-                    offline_results.push(SearchResult {
-                        package: pkg.name.clone(),
-                        requested_version: pkg.version.clone(),
-                        latest_version: record.version.clone(),
-                        repository,
-                        real_name: record.package_name.clone(),
-                        source: source.to_string(),
-                        found: true,
-                        message: "历史记录命中".to_string(),
-                        status: "found".to_string(),
-                    });
-                }
-            }
-        }
-        results = offline_results;
+        results = build_offline_results(&app, &input, &rules);
     }
 
     if show_remote_version == Some(false) {
@@ -254,6 +189,86 @@ fn generate_script(
     } else {
         logic::generate_script_with_rules(&input, &options, &results, true, &rules)
     }
+}
+
+fn build_offline_results(
+    app: &tauri::AppHandle,
+    input: &str,
+    rules: &InputRules,
+) -> Vec<SearchResult> {
+    let mut offline_results = Vec::new();
+    let Ok(packages) = logic::parse_inputs_filtered(input, rules) else {
+        return offline_results;
+    };
+    let cache = storage::load_cache(app).unwrap_or_default();
+    let history = storage::load_history(app).unwrap_or_default();
+
+    for pkg in packages {
+        let pkg_lower = pkg.name.to_ascii_lowercase();
+
+        if let Some(entry) = cache.get(&pkg_lower) {
+            offline_results.push(SearchResult {
+                package: pkg.name.clone(),
+                requested_version: pkg.version.clone(),
+                latest_version: entry.version.clone(),
+                repository: entry.repository.clone(),
+                real_name: entry.real_name.clone(),
+                source: entry.source.clone(),
+                found: true,
+                message: "离线缓存命中".to_string(),
+                status: "found".to_string(),
+            });
+            continue;
+        }
+
+        if let Some(record) = history
+            .iter()
+            .find(|r| r.package_name.eq_ignore_ascii_case(&pkg.name))
+        {
+            let source = match record.tool_name.as_str() {
+                "Bioconductor" => "bioc",
+                "GitHub" => "github",
+                "CRAN" | "base R" => "cran",
+                _ => "cran",
+            };
+
+            let mut repository = String::new();
+            if source == "github" {
+                #[allow(clippy::regex_creation_in_loops)]
+                let re = HISTORY_EXTRACT_RE.get_or_init(|| {
+                    Regex::new(r#"(?:install_github|install_url)\("([^"]+)""#)
+                        .expect("固定历史提取正则必须有效")
+                });
+                if let Some(caps) = re.captures(&record.command) {
+                    if let Some(m) = caps.get(1) {
+                        let val = m.as_str();
+                        if val.contains('/') && !val.starts_with("http") {
+                            repository = val.to_string();
+                        }
+                    }
+                }
+            }
+
+            offline_results.push(SearchResult {
+                package: pkg.name.clone(),
+                requested_version: pkg.version.clone(),
+                latest_version: record.version.clone(),
+                repository,
+                real_name: record.package_name.clone(),
+                source: source.to_string(),
+                found: true,
+                message: "历史记录命中".to_string(),
+                status: "found".to_string(),
+            });
+        }
+    }
+    offline_results
+}
+
+#[tauri::command]
+fn load_cached_results(app: tauri::AppHandle, input: String) -> Vec<SearchResult> {
+    let rules = storage::load_input_rules(&app);
+    build_offline_results(&app, &input, &rules)
 }
 
 #[tauri::command]
@@ -606,7 +621,8 @@ pub fn run() {
             load_input_rules,
             save_input_rules,
             test_mirror_speed,
-            fetch_reverse_dependencies
+            fetch_reverse_dependencies,
+            load_cached_results
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");
