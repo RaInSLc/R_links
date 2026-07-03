@@ -15,6 +15,7 @@ import {
   nonEmptyLineCountExceeds,
   dedupeBoundedResults,
   resultIdentityKey,
+  buildInputSmartSuggestions,
   MAX_STATUS_CHARS,
 } from "./utils";
 
@@ -287,5 +288,34 @@ describe("resultIdentityKey", () => {
       realName: "DPLYR",
     } as never;
     expect(resultIdentityKey(a)).toBe(resultIdentityKey(b));
+  });
+});
+
+describe("buildInputSmartSuggestions", () => {
+  it("suggests GitHub method for repository input", () => {
+    const suggestions = buildInputSmartSuggestions(
+      "satijalab/seurat",
+      { total: 1, archiveUrls: 0, repositories: 1 },
+      "auto",
+    );
+    expect(suggestions[0]).toMatchObject({ id: "github-repo", method: "github" });
+  });
+
+  it("suggests remotes for archive URLs", () => {
+    const suggestions = buildInputSmartSuggestions(
+      "https://example.org/pkg_1.0.tar.gz",
+      { total: 1, archiveUrls: 1, repositories: 0 },
+      "auto",
+    );
+    expect(suggestions[0]).toMatchObject({ id: "archive-url", method: "remotes" });
+  });
+
+  it("detects version hints and mixed text", () => {
+    const suggestions = buildInputSmartSuggestions(
+      "install.packages(\"dplyr\")\nggplot2 3.5.0",
+      { total: 2, archiveUrls: 0, repositories: 0 },
+      "auto",
+    );
+    expect(suggestions.map((item) => item.id)).toEqual(["version-hint", "mixed-text"]);
   });
 });

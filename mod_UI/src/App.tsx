@@ -13,6 +13,7 @@ import { useSearch } from "./useSearch";
 import {
   formatError, scriptValueTooLarge, activeInputLineCount,
   nonEmptyLineBytesExceeds, methodSupportsInput, classifyInputProfile,
+  buildInputSmartSuggestions,
   MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES,
   MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS, utf8Length,
   type HistoryRecord, type SearchResult,
@@ -61,6 +62,7 @@ function App() {
 
   const packageCount = useMemo(() => activeInputLineCount(input), [input]);
   const inputProfile = useMemo(() => classifyInputProfile(input), [input]);
+  const smartSuggestions = useMemo(() => buildInputSmartSuggestions(input, inputProfile, method), [input, inputProfile, method]);
   const inputBytes = useMemo(() => utf8Length(input), [input]);
   const inputTooLarge =
     inputBytes > MAX_INPUT_CHARS ||
@@ -390,6 +392,7 @@ function App() {
               method={method} conditional={conditional} installDependencies={installDependencies}
               showRemoteVersion={showRemoteVersion} verifyInstall={verifyInstall}
               settings={settings}
+              smartSuggestions={smartSuggestions}
               script={script} scriptTooLarge={scriptTooLarge}
               searching={searching} openingSearchTabs={openingSearchTabs}
               onInputChange={acceptInputValue} onPaste={pasteInput}
@@ -397,6 +400,12 @@ function App() {
               onOpenSearchTabs={() => openSearchTabs(input, inputTooLarge)}
               onStartSearch={handleStartSearch} onStopSearch={stopSearch}
               onMethodChange={setMethod}
+              onApplySmartSuggestion={(suggestion) => {
+                if (suggestion.method && methodSupportsInput(suggestion.method, inputProfile)) {
+                  setMethod(suggestion.method as Method);
+                  setStatus(`已应用智能建议：${suggestion.title}`);
+                }
+              }}
               onConditionalChange={setConditional}
               onInstallDependenciesChange={setInstallDependencies}
               onShowRemoteVersionChange={setShowRemoteVersion}

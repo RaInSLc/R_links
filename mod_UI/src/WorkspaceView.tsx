@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { PanelHeader, Toggle } from "./components";
-import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS } from "./utils";
+import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, type SmartSuggestion } from "./utils";
 import type { Method, Settings } from "./types";
 import { methods } from "./types";
 
@@ -14,6 +14,7 @@ interface WorkspaceViewProps {
   showRemoteVersion: boolean;
   verifyInstall: boolean;
   settings: Settings;
+  smartSuggestions: SmartSuggestion[];
   script: string;
   scriptTooLarge: boolean;
   searching: boolean;
@@ -25,6 +26,7 @@ interface WorkspaceViewProps {
   onStartSearch: () => void;
   onStopSearch: () => void;
   onMethodChange: (method: Method) => void;
+  onApplySmartSuggestion: (suggestion: SmartSuggestion) => void;
   onConditionalChange: (v: boolean) => void;
   onInstallDependenciesChange: (v: boolean) => void;
   onShowRemoteVersionChange: (v: boolean) => void;
@@ -40,10 +42,11 @@ interface WorkspaceViewProps {
 export function WorkspaceView({
   input, inputTooLarge, inputProfile, method,
   conditional, installDependencies, showRemoteVersion, verifyInstall, settings,
+  smartSuggestions,
   script, scriptTooLarge,
   searching, openingSearchTabs,
   onInputChange, onPaste, onClear, onOpenSearchTabs, onStartSearch, onStopSearch,
-  onMethodChange, onConditionalChange, onInstallDependenciesChange,
+  onMethodChange, onApplySmartSuggestion, onConditionalChange, onInstallDependenciesChange,
   onShowRemoteVersionChange, onVerifyInstallChange, onFullSearchChange,
   onUseCacheChange, onTempFilter,
   onCopyScript, onCleanComments, isMethodDisabled,
@@ -68,6 +71,23 @@ export function WorkspaceView({
         {inputTooLarge && (
           <div className="inline-warning" id="input-limit-warning" role="alert">
             输入超出限制或包含非法字符：最多 {MAX_PACKAGE_LINES} 行、总计 {MAX_INPUT_CHARS} 字节、单行 {MAX_INPUT_LINE_BYTES} 字节。
+          </div>
+        )}
+        {smartSuggestions.length > 0 && (
+          <div className="smart-suggestion-list" aria-label="智能建议">
+            {smartSuggestions.map((suggestion) => (
+              <div className="smart-suggestion" key={suggestion.id}>
+                <div>
+                  <strong>{suggestion.title}</strong>
+                  <span>{suggestion.detail}</span>
+                </div>
+                {suggestion.actionLabel && (
+                  <button type="button" className="text-button" onClick={() => onApplySmartSuggestion(suggestion)} disabled={searching}>
+                    {suggestion.actionLabel}
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         )}
         <div className="temp-filter-bar">

@@ -96,6 +96,14 @@ export interface MirrorSpeedResult {
   error?: string;
 }
 
+export interface SmartSuggestion {
+  id: string;
+  title: string;
+  detail: string;
+  actionLabel?: string;
+  method?: string;
+}
+
 export const MAX_PACKAGE_LINES = 500;
 export const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
 export const MAX_SEARCH_RESULT_SCAN = MAX_SEARCH_RESULTS * 2;
@@ -524,6 +532,60 @@ export function methodSupportsInput(method: string, profile: { total: number; ar
     return profile.repositories === profile.total;
   }
   return profile.archiveUrls === 0 && profile.repositories === 0;
+}
+
+export function buildInputSmartSuggestions(
+  input: string,
+  profile: { total: number; archiveUrls: number; repositories: number },
+  method: string,
+): SmartSuggestion[] {
+  if (profile.total === 0) return [];
+  const suggestions: SmartSuggestion[] = [];
+  const activeLines = input.split(/\r?\n/).filter(isActiveInputLine);
+  const hasVersionHint = activeLines.some((line) => /\b\d+\.\d+(?:[.\-][0-9A-Za-z]+)*\b/.test(line));
+  const hasInstallCall = activeLines.some((line) => /\b(?:install\.packages|BiocManager::install|remotes::install_|devtools::install_|library|require)\s*\(/.test(line));
+  const hasLikelyNoise = activeLines.some((line) => /(?:ERROR|Warning|Traceback|安装失败|报错|not available|there is no package)/i.test(line));
+
+  if (profile.archiveUrls === profile.total && method !== "remotes" && method !== "devtools") {
+    suggestions.push({
+      id: "archive-url",
+      title: "检测到归档包 URL",
+      detail: "建议使用 remotes 安装 URL，避免按普通 CRAN 包名生成脚本。",
+      actionLabel: "切换到 remotes",
+      method: "remotes",
+    });
+  }
+  if (profile.repositories === profile.total && method !== "github") {
+    suggestions.push({
+      id: "github-repo",
+      title: "检测到 GitHub 仓库格式",
+      detail: "输入包含 owner/repo，建议直接使用 GitHub 安装方式。",
+      actionLabel: "切换到 GitHub",
+      method: "github",
+    });
+  }
+  if (hasVersionHint && method === "auto" && profile.archiveUrls === 0 && profile.repositories === 0) {
+    suggestions.push({
+      id: "version-hint",
+      title: "检测到版本号",
+      detail: "脚本会优先生成指定版本安装；检索后可同步确认远程版本。",
+    });
+  }
+  if (hasInstallCall || hasLikelyNoise) {
+    suggestions.push({
+      id: "mixed-text",
+      title: "检测到混合文本",
+      detail: "输入中可能包含安装命令、报错或日志，可先用临时过滤剔除无关行。",
+    });
+  }
+  if (profile.total > 20) {
+    suggestions.push({
+      id: "large-batch",
+      title: "检测到批量安装任务",
+      detail: "建议先检索来源并保留安装后验证，便于发现失败包。",
+    });
+  }
+  return suggestions.slice(0, 3);
 }
 
 let searchRunCounter = 0;
