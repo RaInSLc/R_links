@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-03 23:25:39 +08:00]
+
+### Added
+- **增强 mod_UI 工作台智能建议动作**：新增 Bioconductor 语义识别，检测到 BiocManager install、bioconductor 或 bioc 线索时推荐切换 Bioconductor；批量任务建议支持一键开启安装后验证。
+
+### Tests
+- **扩展智能建议测试与完整编译验证**：新增 Bioconductor 建议、批量验证建议及已开启验证去重测试；通过 npm run test、npm run build、cargo test、cargo clippy 和 npm run tauri build 验证。
+
 ## [2026-07-03 21:56:32 +08:00]
 
 ### Added

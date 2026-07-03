@@ -62,7 +62,10 @@ function App() {
 
   const packageCount = useMemo(() => activeInputLineCount(input), [input]);
   const inputProfile = useMemo(() => classifyInputProfile(input), [input]);
-  const smartSuggestions = useMemo(() => buildInputSmartSuggestions(input, inputProfile, method), [input, inputProfile, method]);
+  const smartSuggestions = useMemo(
+    () => buildInputSmartSuggestions(input, inputProfile, method, { verifyInstall }),
+    [input, inputProfile, method, verifyInstall],
+  );
   const inputBytes = useMemo(() => utf8Length(input), [input]);
   const inputTooLarge =
     inputBytes > MAX_INPUT_CHARS ||
@@ -401,7 +404,10 @@ function App() {
               onStartSearch={handleStartSearch} onStopSearch={stopSearch}
               onMethodChange={setMethod}
               onApplySmartSuggestion={(suggestion) => {
-                if (suggestion.method && methodSupportsInput(suggestion.method, inputProfile)) {
+                if (suggestion.action === "enableVerify") {
+                  setVerifyInstall(true);
+                  setStatus(`已应用智能建议：${suggestion.title}`);
+                } else if (suggestion.method && methodSupportsInput(suggestion.method, inputProfile)) {
                   setMethod(suggestion.method as Method);
                   setStatus(`已应用智能建议：${suggestion.title}`);
                 }

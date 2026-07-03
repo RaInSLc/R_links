@@ -318,4 +318,35 @@ describe("buildInputSmartSuggestions", () => {
     );
     expect(suggestions.map((item) => item.id)).toEqual(["version-hint", "mixed-text"]);
   });
+
+  it("suggests Bioconductor method when input contains Bioc hints", () => {
+    const suggestions = buildInputSmartSuggestions(
+      "BiocManager::install(\"GSVA\")",
+      { total: 1, archiveUrls: 0, repositories: 0 },
+      "auto",
+    );
+    expect(suggestions[0]).toMatchObject({ id: "bioc-hint", method: "biocManager" });
+  });
+
+  it("suggests enabling verification for large batches", () => {
+    const input = Array.from({ length: 21 }, (_, index) => `pkg${index}`).join("\n");
+    const suggestions = buildInputSmartSuggestions(
+      input,
+      { total: 21, archiveUrls: 0, repositories: 0 },
+      "auto",
+      { verifyInstall: false },
+    );
+    expect(suggestions).toContainEqual(expect.objectContaining({ id: "large-batch", action: "enableVerify" }));
+  });
+
+  it("does not suggest enabling verification when it is already on", () => {
+    const input = Array.from({ length: 21 }, (_, index) => `pkg${index}`).join("\n");
+    const suggestions = buildInputSmartSuggestions(
+      input,
+      { total: 21, archiveUrls: 0, repositories: 0 },
+      "auto",
+      { verifyInstall: true },
+    );
+    expect(suggestions.map((item) => item.id)).not.toContain("large-batch");
+  });
 });
