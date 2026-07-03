@@ -445,6 +445,9 @@ function App() {
                   updateSettingsFromUser((current) => ({ ...current, fullSearch: true }));
                   persistSettings({ fullSearch: true });
                   setStatus(`已应用智能建议：${suggestion.title}`);
+                } else if (suggestion.action === "retrySearch") {
+                  setStatus(`已应用智能建议：${suggestion.title}`);
+                  handleStartSearch();
                 }
               }}
             />

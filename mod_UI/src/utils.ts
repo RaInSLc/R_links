@@ -625,6 +625,15 @@ export function buildResultSmartSuggestions(
       action: "openSettings",
     });
   }
+  if (errors > 0) {
+    suggestions.push({
+      id: "search-errors",
+      title: "检索存在超时或异常",
+      detail: "建议先重试当前检索；如果仍失败，再检查代理、镜像或网络设置。",
+      actionLabel: "重试检索",
+      action: "retrySearch",
+    });
+  }
   if (missing > 0 && found === 0 && !options.fullSearch) {
     suggestions.push({
       id: "not-found-full-search",
@@ -632,15 +641,6 @@ export function buildResultSmartSuggestions(
       detail: "建议启用全量检索，命中 CRAN 或 Bioconductor 后继续查询 GitHub。",
       actionLabel: "启用全量检索",
       action: "enableFullSearch",
-    });
-  }
-  if (errors > 0) {
-    suggestions.push({
-      id: "search-errors",
-      title: "检索存在超时或异常",
-      detail: "建议检查代理、镜像或网络设置后重试检索。",
-      actionLabel: "打开网络设置",
-      action: "openSettings",
     });
   }
   return suggestions.slice(0, 3);

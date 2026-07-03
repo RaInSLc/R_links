@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-04 00:30:30 +08:00]
+
+### Changed
+- **优化 mod_UI 检索异常恢复建议**：检索结果包含超时或异常时，报告页优先提示“一键重试检索”，并直接复用当前输入、设置和检索入口重新发起检索；全量检索建议保留为未找到来源的后续动作。
+
+### Tests
+- **补充重试检索建议测试与完整编译验证**：新增超时/异常结果触发 `retrySearch` 建议测试；通过 npm run test、npm run build、cargo test、cargo clippy 和 npm run tauri build 验证。
+
 ## [2026-07-03 23:51:51 +08:00]
 
 ### Added

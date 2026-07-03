@@ -373,4 +373,11 @@ describe("buildResultSmartSuggestions", () => {
     ], { searching: true });
     expect(suggestions).toHaveLength(0);
   });
+
+  it("suggests retrying when results contain timeouts or errors", () => {
+    const suggestions = buildResultSmartSuggestions([
+      { package: "pkg", requestedVersion: "", latestVersion: "", repository: "", realName: "pkg", source: "none", found: false, message: "timeout", status: "timeout" },
+    ]);
+    expect(suggestions[0]).toMatchObject({ id: "search-errors", action: "retrySearch" });
+  });
 });
