@@ -180,7 +180,7 @@ export function HistoryView({
             return (
               <Fragment key={record.id}>
                 {showDivider && <div className="history-date-divider">{dateStr}</div>}
-                <article className={`history-item ${selectedIds.has(record.id) ? "selected" : ""} ${histNavIndex === idx ? "nav-selected" : ""}`} onMouseEnter={() => setHistNavIndex(idx)}>
+                <article className={`history-item ${selectedIds.has(record.id) ? "selected" : ""} ${histNavIndex === idx ? "nav-selected" : ""}`} onMouseEnter={() => setHistNavIndex(idx)} onDoubleClick={() => onApplyRecord(record)} title="双击应用此记录" style={{ cursor: "pointer" }}>
               <input
                 type="checkbox"
                 className="history-checkbox"

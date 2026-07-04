@@ -248,6 +248,10 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
                   onMouseEnter={() => setHoveredNode(node.package)}
                   onMouseLeave={() => setHoveredNode(null)}
                   onClick={() => { setSelectedNode(node); fetchReverseDeps(node.package); }}
+                  onDoubleClick={async (e) => {
+                    e.preventDefault();
+                    try { await navigator.clipboard.writeText(node.package); } catch { /* ignore */ }
+                  }}
                 >
                   <div className={`dep-node-card ${borderClass} ${isHovered ? "hovered" : ""}`}>
                     <span className="dep-node-title" title={node.package}>
@@ -1096,6 +1100,46 @@ export function ReportView({
                 }}
               >
                 导出CSV
+              </button>
+              <button
+                type="button"
+                className="button ghost compact-btn"
+                onClick={() => {
+                  const now = new Date();
+                  const found = results.filter((r) => r.found);
+                  const missing = results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error");
+                  const errors = results.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error"));
+                  const md: string[] = [
+                    `# R 包检索报告`,
+                    ``,
+                    `> 生成时间: ${now.toLocaleString("zh-CN")}`,
+                    searchDuration != null ? `> 耗时: ${(searchDuration / 1000).toFixed(1)}s` : "",
+                    `> 总计: ${results.length} | 已验证: ${found.length} | 未找到: ${missing.length} | 异常: ${errors.length}`,
+                    ``,
+                    `## 已验证 (${found.length})`,
+                    ``,
+                    `| # | 包名 | 来源 | 版本 | 仓库 |`,
+                    `|---|------|------|------|------|`,
+                    ...found.map((r, i) => `| ${i + 1} | \`${r.package}\` | ${sourceNames[r.source] ?? r.source} | ${r.latestVersion || "-"} | ${r.repository || "-"} |`),
+                    ``,
+                  ];
+                  if (missing.length > 0) {
+                    md.push(`## 未找到 (${missing.length})`, ``, ...missing.map((r) => `- \`${r.package}\``), ``);
+                  }
+                  if (errors.length > 0) {
+                    md.push(`## 异常 (${errors.length})`, ``, ...errors.map((r) => `- \`${r.package}\` (${r.status === "timeout" ? "超时" : r.status === "rateLimited" ? "频率限制" : "异常"})`), ``);
+                  }
+                  const blob = new Blob([md.join("\n")], { type: "text/markdown;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `r-packages-report-${now.toISOString().slice(0, 10)}.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  onStatusChange(`已导出 Markdown 报告`);
+                }}
+              >
+                导出MD
               </button>
               <button
                 type="button"
