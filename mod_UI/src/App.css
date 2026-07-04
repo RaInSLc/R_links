@@ -460,6 +460,12 @@ input:focus-visible,
   line-height: 1.75;
 }
 
+.input-panel textarea.drag-over {
+  border-color: var(--theme-color);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  background: var(--theme-color-soft);
+}
+
 .input-panel textarea:focus {
   box-shadow: inset 3px 0 var(--theme-color);
 }

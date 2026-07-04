@@ -58,6 +58,32 @@ export function WorkspaceView({
 }: WorkspaceViewProps) {
   const [filterText, setFilterText] = useState("");
   const [strategyExpanded, setStrategyExpanded] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  async function handleFileDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    const name = file.name.toLowerCase();
+    if (!name.endsWith(".txt") && !name.endsWith(".csv") && !name.endsWith(".r")) return;
+    const text = await file.text();
+    if (text) onInputChange(text, "clipboard");
+  }
+
+  function sortInputAlphabetical() {
+    const lines = input.split(/\r?\n/);
+    const active: string[] = [];
+    const comments: { idx: number; line: string }[] = [];
+    lines.forEach((line) => {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) comments.push({ idx: active.length, line });
+      else active.push(line);
+    });
+    active.sort((a, b) => a.trim().toLowerCase().localeCompare(b.trim().toLowerCase()));
+    comments.forEach((c) => active.splice(c.idx, 0, c.line));
+    onInputChange(active.join("\n"), "manual");
+  }
 
   return (
     <div className="workspace-grid">
@@ -66,7 +92,11 @@ export function WorkspaceView({
         <textarea
           value={input}
           onChange={(event) => onInputChange(event.currentTarget.value, "manual")}
-          placeholder={"每行一个包，例如：\nSeurat 5.2.1\nGSVA 1.50\nbuenrostrolab/FigR\nhttps://example.org/pkg_1.0.tar.gz"}
+          onDragOver={(e) => { e.preventDefault(); if (!searching) setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleFileDrop}
+          className={dragOver ? "drag-over" : ""}
+          placeholder={"每行一个包，例如：\nSeurat 5.2.1\nGSVA 1.50\nbuenrostrolab/FigR\nhttps://example.org/pkg_1.0.tar.gz\n\n可拖放 .txt / .csv / .r 文件"}
           aria-label="R 包输入列表"
           aria-describedby={inputTooLarge ? "input-limit-warning" : undefined}
           aria-invalid={inputTooLarge}
@@ -125,6 +155,7 @@ export function WorkspaceView({
         <div className="input-actions">
           <button className="button ghost" onClick={onPaste} disabled={searching}>粘贴</button>
           <button className="button ghost" onClick={onClear} disabled={searching}>清空</button>
+          <button className="button ghost" onClick={sortInputAlphabetical} disabled={searching || !input.trim()} title="按字母排序">排序</button>
           <button className="button ghost wide" onClick={onOpenSearchTabs} disabled={searching || openingSearchTabs || inputTooLarge}>
             {openingSearchTabs ? "正在打开..." : "浏览器搜索"}
           </button>
