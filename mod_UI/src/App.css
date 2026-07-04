@@ -631,6 +631,18 @@ input:focus-visible,
   color: var(--red);
 }
 
+.paste-hint-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--theme-color);
+  background: var(--theme-color-soft);
+  border-bottom: 1px solid var(--line);
+}
+
 .input-stat-chip.warn strong {
   color: var(--red);
 }

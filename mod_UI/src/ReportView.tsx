@@ -756,6 +756,32 @@ export function ReportView({
           />
           {results.length > 0 && (
             <div style={{ display: "flex", gap: "6px" }}>
+              {results.some((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error") && (
+                <button
+                  type="button"
+                  className="button ghost compact-btn"
+                  onClick={() => {
+                    const missing = new Set(results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").map((r) => r.package));
+                    setSelectedResults(missing);
+                  }}
+                  title="选中所有未找到的包"
+                >
+                  选未找到
+                </button>
+              )}
+              {results.some((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")) && (
+                <button
+                  type="button"
+                  className="button ghost compact-btn"
+                  onClick={() => {
+                    const errored = new Set(results.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")).map((r) => r.package));
+                    setSelectedResults(errored);
+                  }}
+                  title="选中所有异常的包"
+                >
+                  选异常
+                </button>
+              )}
               {selectedResults.size > 0 && (
                 <button
                   type="button"
@@ -1199,10 +1225,10 @@ export function ReportView({
                   <div
                     className={`result-row${selectedRowIndex === index ? " row-selected" : ""}`}
                     role="row"
-                    onDoubleClick={() => handleCopy(result, rowKey)}
+                    onDoubleClick={() => setExpandedRow(isExpanded ? null : rowKey)}
                     onMouseEnter={() => setSelectedRowIndex(index)}
                     onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, result }); }}
-                    title={result.found ? "双击此行可复制安装命令" : "双击此行可复制包名"}
+                    title={isExpanded ? "双击收起详情" : "双击展开详情"}
                   >
                     <span role="cell" className="result-check-cell">
                       <input

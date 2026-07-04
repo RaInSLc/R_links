@@ -64,6 +64,7 @@ export function WorkspaceView({
   const [strategyExpanded, setStrategyExpanded] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [scriptCollapsed, setScriptCollapsed] = useState(false);
+  const [pasteHint, setPasteHint] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineGutterRef = useRef<HTMLDivElement>(null);
 
@@ -129,6 +130,17 @@ export function WorkspaceView({
             ref={textareaRef}
             value={input}
             onChange={(event) => onInputChange(event.currentTarget.value, "manual")}
+            onPaste={(e) => {
+              const text = e.clipboardData.getData("text");
+              const lines = text.split("\n").filter((l) => l.trim());
+              const hasIssues = lines.length > 1 && (
+                lines.some((l) => l !== l.trim()) ||
+                lines.some((l) => l.includes(",")) ||
+                lines.some((l) => l.includes("\t")) ||
+                text.includes("\n\n")
+              );
+              if (hasIssues) setPasteHint(true);
+            }}
             onScroll={() => {
               if (lineGutterRef.current && textareaRef.current) {
                 lineGutterRef.current.scrollTop = textareaRef.current.scrollTop;
@@ -180,7 +192,28 @@ export function WorkspaceView({
                 <div>
                   <strong>{suggestion.title}</strong>
                   <span>{suggestion.detail}</span>
-                </div>
+        </div>
+        {pasteHint && (
+          <div className="paste-hint-bar">
+            <span>检测到粘贴内容可能含多余空白、空行或逗号分隔，建议清理后检索</span>
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button
+                type="button"
+                className="button ghost compact-btn"
+                onClick={() => { onCleanComments(); setPasteHint(false); }}
+              >
+                清理
+              </button>
+              <button
+                type="button"
+                className="button ghost compact-btn"
+                onClick={() => setPasteHint(false)}
+              >
+                忽略
+              </button>
+            </div>
+          </div>
+        )}
                 {suggestion.actionLabel && (
                   <button type="button" className="text-button" onClick={() => onApplySmartSuggestion(suggestion)} disabled={searching}>
                     {suggestion.actionLabel}
