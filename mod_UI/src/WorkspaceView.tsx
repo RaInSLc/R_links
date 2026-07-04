@@ -65,6 +65,7 @@ export function WorkspaceView({
   const [dragOver, setDragOver] = useState(false);
   const [scriptCollapsed, setScriptCollapsed] = useState(false);
   const [pasteHint, setPasteHint] = useState(false);
+  const [rScriptHint, setRScriptHint] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineGutterRef = useRef<HTMLDivElement>(null);
 
@@ -140,6 +141,27 @@ export function WorkspaceView({
                 text.includes("\n\n")
               );
               if (hasIssues) setPasteHint(true);
+              const installPkgs = text.match(/install\.packages\s*\(\s*["'`]([^"'`]+)["'`]/g);
+              const biocPkgs = text.match(/BiocManager::install\s*\(\s*["'`]([^"'`]+)["'`]/g);
+              const githubPkgs = text.match(/(?:remotes|devtools)::install_github\s*\(\s*["'`]([^"'`]+)["'`]/g);
+              const totalMatches = (installPkgs?.length ?? 0) + (biocPkgs?.length ?? 0) + (githubPkgs?.length ?? 0);
+              if (totalMatches > 0) {
+                e.preventDefault();
+                const extractName = (m: string) => {
+                  const match = m.match(/["'`]([^"'`]+)["'`]/);
+                  return match ? match[1] : "";
+                };
+                const names: string[] = [];
+                installPkgs?.forEach((m) => names.push(extractName(m)));
+                biocPkgs?.forEach((m) => names.push(extractName(m)));
+                githubPkgs?.forEach((m) => names.push(extractName(m)));
+                const unique = [...new Set(names.filter(Boolean))];
+                if (unique.length > 0) {
+                  onInputChange(unique.join("\n"), "clipboard");
+                  setRScriptHint(`已从 R 脚本中提取 ${unique.length} 个包名`);
+                  setTimeout(() => setRScriptHint(null), 5000);
+                }
+              }
             }}
             onScroll={() => {
               if (lineGutterRef.current && textareaRef.current) {
@@ -172,6 +194,11 @@ export function WorkspaceView({
             disabled={searching}
           />
         </div>
+        {rScriptHint && (
+          <div className="r-script-hint-bar">
+            <span>{rScriptHint}</span>
+          </div>
+        )}
         {inputTooLarge && (
           <div className="inline-warning" id="input-limit-warning" role="alert">
             输入超出限制或包含非法字符：最多 {MAX_PACKAGE_LINES} 行、总计 {MAX_INPUT_CHARS} 字节、单行 {MAX_INPUT_LINE_BYTES} 字节。

@@ -1060,6 +1060,31 @@ export function ReportView({
               <button
                 type="button"
                 className="button ghost compact-btn"
+                onClick={() => {
+                  const header = ["包名", "来源", "版本", "仓库", "状态"];
+                  const rows = results.map((r) => [
+                    r.package,
+                    sourceNames[r.source] ?? r.source,
+                    r.latestVersion || "",
+                    r.repository || "",
+                    r.found ? "已验证" : r.status === "timeout" ? "超时" : r.status === "rateLimited" ? "频率限制" : r.status === "error" ? "检索异常" : "未找到",
+                  ].map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","));
+                  const csv = "\uFEFF" + [header.join(","), ...rows].join("\n");
+                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `r-packages-${new Date().toISOString().slice(0, 10)}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  onStatusChange(`已导出 ${results.length} 条结果为 CSV`);
+                }}
+              >
+                导出CSV
+              </button>
+              <button
+                type="button"
+                className="button ghost compact-btn"
                 onClick={async () => {
                   const found = results.filter((r) => r.found);
                   const missing = results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error");
@@ -1323,7 +1348,16 @@ export function ReportView({
                         {result.latestVersion || "—"}
                       </code>
                     )}
-                    {showRepoCol && <span role="cell" className="repo-cell">{result.repository || "—"}</span>}
+                    {showRepoCol && (
+                      <span
+                        role="cell"
+                        className={`repo-cell${result.found && result.repository ? " repo-clickable" : ""}`}
+                        title={result.found && result.repository ? `点击打开仓库: ${result.repository}` : undefined}
+                        onClick={() => { if (result.found && result.repository) handleOpenPage(result); }}
+                      >
+                        {result.repository || "—"}
+                      </span>
+                    )}
                     <span
                       role="cell"
                       className={

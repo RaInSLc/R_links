@@ -643,6 +643,18 @@ input:focus-visible,
   border-bottom: 1px solid var(--line);
 }
 
+.r-script-hint-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.08);
+  border-bottom: 1px solid var(--line);
+}
+
 .input-stat-chip.warn strong {
   color: var(--red);
 }
@@ -1509,6 +1521,16 @@ input:focus-visible,
 }
 
 .version-copyable:hover {
+  color: var(--theme-color);
+  text-decoration: underline;
+}
+
+.repo-clickable {
+  cursor: pointer;
+  transition: color 0.12s;
+}
+
+.repo-clickable:hover {
   color: var(--theme-color);
   text-decoration: underline;
 }

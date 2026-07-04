@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-07-04 23:31:00 +08:00]
+
+### Added
+- **报告页导出 CSV**：一键导出全部结果为 CSV 文件（含 BOM 头兼容 Excel），列：包名/来源/版本/仓库/状态。
+- **工作台 R 脚本智能粘贴**：粘贴 `install.packages("xxx")` / `BiocManager::install("xxx")` / `remotes::install_github("owner/repo")` 格式的 R 代码时，自动拦截并提取包名填充输入框，显示绿色提示条。
+- **报告页仓库地址点击打开**：仓库列单元格可点击打开对应来源网页，hover 显示主题色下划线。
+
+### Tests
+- **通过完整验证**：72 用例全通过、TypeScript 编译零错误、Clippy 零警告、Tauri release 构建成功、exe 启动验证通过。
+
 ## [2026-07-04 23:20:00 +08:00]
 
 ### Added
