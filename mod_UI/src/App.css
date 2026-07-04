@@ -1465,15 +1465,45 @@ input:focus-visible,
 
 .history-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
   padding: 14px 17px;
   border-bottom: 1px solid var(--line);
 }
 
+.history-item.selected {
+  background: var(--theme-color-soft);
+}
+
 .history-item:hover {
   background: var(--row-hover);
+}
+
+.history-checkbox {
+  cursor: pointer;
+  accent-color: var(--theme-color);
+  width: 16px;
+  height: 16px;
+}
+
+.history-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.history-checkbox-label input {
+  accent-color: var(--theme-color);
+}
+
+.history-select-all-row {
+  padding: 6px 17px;
+  border-bottom: 1px solid var(--line);
 }
 
 .history-main {
@@ -1942,4 +1972,29 @@ body {
   color: var(--ink);
   pointer-events: none;
   white-space: nowrap;
+}
+
+.search-progress-bar {
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--tag-default-bg);
+}
+
+.search-progress-bar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--theme-color), transparent);
+  animation: search-progress-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes search-progress-slide {
+  0% { left: -40%; }
+  100% { left: 100%; }
 }

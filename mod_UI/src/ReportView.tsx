@@ -706,6 +706,7 @@ export function ReportView({
       </div>
 
       <section className="panel report-panel">
+        {searching && <div className="search-progress-bar" />}
         <div className="report-panel-header">
           <PanelHeader
             step="结果"

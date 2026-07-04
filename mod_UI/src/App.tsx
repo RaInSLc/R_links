@@ -443,6 +443,20 @@ function App() {
   }, [view, searching, input, inputTooLarge]);
 
   useEffect(() => {
+    function onKeydown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "1") { e.preventDefault(); setView("workspace"); }
+      else if (e.key === "2") { e.preventDefault(); setView("report"); }
+      else if (e.key === "3") { e.preventDefault(); setView("history"); }
+      else if (e.key === "4") { e.preventDefault(); setView("settings"); }
+    }
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
+  }, []);
+
+  useEffect(() => {
     const base = "R Package Center";
     if (searching && packageCount > 0) {
       document.title = `${base} — 检索中 ${foundCount}/${packageCount}`;
@@ -464,10 +478,10 @@ function App() {
           </div>
         </div>
         <nav className="nav-list" aria-label="主导航">
-          <NavButton active={view === "workspace"} label="工作台" code="01" onClick={() => setView("workspace")} />
-          <NavButton active={view === "report"} label="检索报告" code="02" badge={results.length} onClick={() => setView("report")} />
-          <NavButton active={view === "history"} label="命令历史" code="03" badge={history.length} onClick={() => setView("history")} />
-          <NavButton active={view === "settings"} label="网络设置" code="04" onClick={() => setView("settings")} />
+          <NavButton active={view === "workspace"} label="工作台" code="01" onClick={() => setView("workspace")} title="Ctrl+1" />
+          <NavButton active={view === "report"} label="检索报告" code="02" badge={results.length} onClick={() => setView("report")} title="Ctrl+2" />
+          <NavButton active={view === "history"} label="命令历史" code="03" badge={history.length} onClick={() => setView("history")} title="Ctrl+3" />
+          <NavButton active={view === "settings"} label="网络设置" code="04" onClick={() => setView("settings")} title="Ctrl+4" />
         </nav>
         <div className="sidebar-summary">
           <span>当前任务</span>

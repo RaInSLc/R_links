@@ -6,18 +6,21 @@ export function NavButton({
   code,
   badge,
   onClick,
+  title,
 }: {
   active: boolean;
   label: string;
   code: string;
   badge?: number;
   onClick: () => void;
+  title?: string;
 }) {
   return (
     <button
       className={active ? "active" : ""}
       aria-current={active ? "page" : undefined}
       onClick={onClick}
+      title={title}
     >
       <span className="nav-code">{code}</span>
       <strong>{label}</strong>

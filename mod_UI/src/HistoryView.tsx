@@ -17,6 +17,7 @@ export function HistoryView({
   onApplyRecord, onCopyRecord, onDeleteRecord, onClearAll,
 }: HistoryViewProps) {
   const [sortBy, setSortBy] = useState<"time" | "name">("time");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const filtered = history
     .filter(record =>
@@ -28,6 +29,28 @@ export function HistoryView({
   const sorted = sortBy === "name"
     ? [...filtered].sort((a, b) => (a.packageName || "").localeCompare(b.packageName || ""))
     : filtered;
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allSelected = sorted.length > 0 && sorted.every((r) => selectedIds.has(r.id));
+  const toggleSelectAll = () => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(sorted.map((r) => r.id)));
+  };
+
+  const deleteSelected = () => {
+    if (window.confirm(`确定删除选中的 ${selectedIds.size} 条记录？`)) {
+      selectedIds.forEach((id) => onDeleteRecord(id));
+      setSelectedIds(new Set());
+    }
+  };
 
   return (
     <section className="panel history-panel">
@@ -53,18 +76,30 @@ export function HistoryView({
             </button>
           )}
           {history.length > 0 && (
-            <button
-              type="button"
-              className="button ghost"
-              style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto", whiteSpace: "nowrap" }}
-              onClick={() => {
-                if (window.confirm(`确定清空全部 ${history.length} 条历史记录？此操作不可撤销。`)) {
-                  onClearAll();
-                }
-              }}
-            >
-              清空全部
-            </button>
+            <>
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  className="button ghost danger-text"
+                  style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto", whiteSpace: "nowrap" }}
+                  onClick={deleteSelected}
+                >
+                  删除选中({selectedIds.size})
+                </button>
+              )}
+              <button
+                type="button"
+                className="button ghost"
+                style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto", whiteSpace: "nowrap" }}
+                onClick={() => {
+                  if (window.confirm(`确定清空全部 ${history.length} 条历史记录？此操作不可撤销。`)) {
+                    onClearAll();
+                  }
+                }}
+              >
+                清空全部
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -74,8 +109,24 @@ export function HistoryView({
         <EmptyState text="无匹配的历史记录" hint="尝试修改搜索关键词" />
       ) : (
         <div className="history-list">
+          <div className="history-select-all-row">
+            <label className="history-checkbox-label">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleSelectAll}
+              />
+              全选
+            </label>
+          </div>
           {sorted.map((record) => (
-            <article className="history-item" key={record.id}>
+            <article className={`history-item ${selectedIds.has(record.id) ? "selected" : ""}`} key={record.id}>
+              <input
+                type="checkbox"
+                className="history-checkbox"
+                checked={selectedIds.has(record.id)}
+                onChange={() => toggleSelect(record.id)}
+              />
               <div className="history-main">
                 <div>
                   <strong>{record.packageName || "R 命令"}</strong>
