@@ -1058,7 +1058,7 @@ input:focus-visible,
 .metric-row {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px;
 }
 
@@ -1067,6 +1067,26 @@ input:focus-visible,
   background: rgba(251, 252, 249, 0.9);
   border: 1px solid var(--line);
   border-radius: 9px;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.metric.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.metric.clickable:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.15);
+}
+
+.metric.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.25);
+  background: rgba(74, 158, 255, 0.06);
 }
 
 .metric span,
@@ -1091,6 +1111,10 @@ input:focus-visible,
 
 .metric.danger strong {
   color: var(--red);
+}
+
+.metric.warning strong {
+  color: #d97706;
 }
 
 .report-panel {
@@ -1178,6 +1202,35 @@ input:focus-visible,
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.result-head .sortable {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-right: 16px;
+}
+
+.result-head .sortable::after {
+  content: "↕";
+  position: absolute;
+  right: 0;
+  opacity: 0.3;
+  font-size: 12px;
+}
+
+.result-head .sortable.sorted-asc::after {
+  content: "↑";
+  opacity: 1;
+}
+
+.result-head .sortable.sorted-desc::after {
+  content: "↓";
+  opacity: 1;
+}
+
+.result-head .sortable:hover {
+  color: var(--accent);
 }
 
 .source-tag {

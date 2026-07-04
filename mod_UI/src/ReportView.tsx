@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { PanelHeader, Metric, EmptyState } from "./components";
 import { sourceNames } from "./types";
@@ -481,6 +481,8 @@ export function ReportView({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [resultFilter, setResultFilter] = useState<"all" | "found" | "missing" | "error">("all");
   const [resultSearch, setResultSearch] = useState("");
+  const [sortKey, setSortKey] = useState<"package" | "source" | "version" | "status">("package");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const filteredResults = useMemo(() => {
     let list = results;
@@ -491,6 +493,50 @@ export function ReportView({
     if (q) list = list.filter((r) => r.package.toLowerCase().includes(q) || (r.repository && r.repository.toLowerCase().includes(q)));
     return list;
   }, [results, resultFilter, resultSearch]);
+
+  const missingCount = useMemo(
+    () => new Set(results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").map((r) => r.package)).size,
+    [results],
+  );
+  const errorCount = useMemo(
+    () => new Set(results.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")).map((r) => r.package)).size,
+    [results],
+  );
+
+  const toggleFilter = useCallback((filter: "found" | "missing" | "error") => {
+    setResultFilter((prev) => (prev === filter ? "all" : filter));
+  }, []);
+
+  const toggleSort = useCallback((key: "package" | "source" | "version" | "status") => {
+    setSortKey((prevKey) => {
+      if (prevKey === key) {
+        setSortDir((prevDir) => (prevDir === "asc" ? "desc" : "asc"));
+        return prevKey;
+      }
+      setSortDir("asc");
+      return key;
+    });
+  }, []);
+
+  const statusRank = (r: SearchResult): number => {
+    if (r.found) return 0;
+    if (r.status === "timeout") return 1;
+    if (r.status === "rateLimited") return 2;
+    if (r.status === "error") return 3;
+    return 4;
+  };
+
+  const sortedResults = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filteredResults].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === "package") cmp = a.package.localeCompare(b.package);
+      else if (sortKey === "source") cmp = a.source.localeCompare(b.source);
+      else if (sortKey === "version") cmp = (a.latestVersion || "").localeCompare(b.latestVersion || "", undefined, { numeric: true });
+      else if (sortKey === "status") cmp = statusRank(a) - statusRank(b);
+      return cmp * dir;
+    });
+  }, [filteredResults, sortKey, sortDir]);
 
   const handleCopy = async (result: SearchResult, key: string) => {
     const cmd = getInstallCommand(result);
@@ -508,11 +554,26 @@ export function ReportView({
     <div className={`report-layout ${dependencyGraph ? "has-deps" : ""}`}>
       <div className="metric-row">
         <Metric label="输入包" value={packageCount} />
-        <Metric label="已验证包" value={uniqueFoundCount} tone="success" />
+        <Metric
+          label="已验证包"
+          value={uniqueFoundCount}
+          tone="success"
+          active={resultFilter === "found"}
+          onClick={() => toggleFilter("found")}
+        />
         <Metric
           label="未找到"
-          value={new Set(results.filter((item) => !item.found).map((item) => item.package)).size}
+          value={missingCount}
           tone="danger"
+          active={resultFilter === "missing"}
+          onClick={() => toggleFilter("missing")}
+        />
+        <Metric
+          label="异常"
+          value={errorCount}
+          tone="warning"
+          active={resultFilter === "error"}
+          onClick={() => toggleFilter("error")}
         />
         <Metric label="来源记录" value={results.length} />
       </div>
@@ -592,13 +653,13 @@ export function ReportView({
               <div className="result-table-wrapper">
                 <div className="result-table" role="table" aria-label="包来源验证结果">
                   <div className="result-row result-head" role="row">
-                    <span role="columnheader">包名</span>
-                    <span role="columnheader">来源</span>
-                    <span role="columnheader">版本</span>
+                    <span role="columnheader" className={`sortable ${sortKey === "package" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("package")}>包名</span>
+                    <span role="columnheader" className={`sortable ${sortKey === "source" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("source")}>来源</span>
+                    <span role="columnheader" className={`sortable ${sortKey === "version" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("version")}>版本</span>
                     <span role="columnheader">仓库</span>
-                    <span role="columnheader">状态</span>
+                    <span role="columnheader" className={`sortable ${sortKey === "status" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("status")}>状态</span>
                   </div>
-                  {filteredResults.map((result, index) => {
+                  {sortedResults.map((result, index) => {
                 const rowKey = `${result.package}-${result.source}-${index}`;
                 const isCopied = copiedKey === rowKey;
                 const installCmd = getInstallCommand(result);

@@ -68,16 +68,26 @@ export function Metric({
   label,
   value,
   tone = "",
+  active = false,
+  onClick,
 }: {
   label: string;
   value: number;
   tone?: string;
+  active?: boolean;
+  onClick?: () => void;
 }) {
+  const clickable = onClick !== undefined;
+  const Tag = clickable ? "button" : "div";
   return (
-    <div className={`metric ${tone}`}>
+    <Tag
+      type={clickable ? "button" : undefined}
+      className={`metric ${tone} ${active ? "active" : ""} ${clickable ? "clickable" : ""}`}
+      onClick={onClick}
+    >
       <span>{label}</span>
       <strong>{value}</strong>
-    </div>
+    </Tag>
   );
 }
 
