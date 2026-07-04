@@ -479,6 +479,18 @@ export function ReportView({
 }: ReportViewProps) {
   const [activeTab, setActiveTab] = useState<"graph" | "list">("graph");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [resultFilter, setResultFilter] = useState<"all" | "found" | "missing" | "error">("all");
+  const [resultSearch, setResultSearch] = useState("");
+
+  const filteredResults = useMemo(() => {
+    let list = results;
+    if (resultFilter === "found") list = list.filter((r) => r.found);
+    else if (resultFilter === "missing") list = list.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error");
+    else if (resultFilter === "error") list = list.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error"));
+    const q = resultSearch.trim().toLowerCase();
+    if (q) list = list.filter((r) => r.package.toLowerCase().includes(q) || (r.repository && r.repository.toLowerCase().includes(q)));
+    return list;
+  }, [results, resultFilter, resultSearch]);
 
   const handleCopy = async (result: SearchResult, key: string) => {
     const cmd = getInstallCommand(result);
@@ -527,16 +539,46 @@ export function ReportView({
         {results.length === 0 ? (
           <EmptyState text={searching ? "正在等待首条检索结果" : "尚未执行检索"} />
         ) : (
-          <div className="result-table-wrapper">
-            <div className="result-table" role="table" aria-label="包来源验证结果">
-              <div className="result-row result-head" role="row">
-                <span role="columnheader">包名</span>
-                <span role="columnheader">来源</span>
-                <span role="columnheader">版本</span>
-                <span role="columnheader">仓库</span>
-                <span role="columnheader">状态</span>
+          <>
+            <div className="result-filter-bar">
+              <div className="result-filter-tabs">
+                {([
+                  { key: "all", label: `全部 ${results.length}` },
+                  { key: "found", label: `已验证 ${results.filter((r) => r.found).length}` },
+                  { key: "missing", label: `未找到 ${results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").length}` },
+                  { key: "error", label: `异常 ${results.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")).length}` },
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    className={`result-filter-tab ${resultFilter === tab.key ? "active" : ""}`}
+                    onClick={() => setResultFilter(tab.key)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
-              {results.map((result, index) => {
+              <input
+                type="text"
+                className="result-search-input"
+                placeholder="筛选包名或仓库..."
+                value={resultSearch}
+                onChange={(e) => setResultSearch(e.target.value)}
+              />
+            </div>
+            {filteredResults.length === 0 ? (
+              <EmptyState text="当前筛选条件下无匹配结果" />
+            ) : (
+              <div className="result-table-wrapper">
+                <div className="result-table" role="table" aria-label="包来源验证结果">
+                  <div className="result-row result-head" role="row">
+                    <span role="columnheader">包名</span>
+                    <span role="columnheader">来源</span>
+                    <span role="columnheader">版本</span>
+                    <span role="columnheader">仓库</span>
+                    <span role="columnheader">状态</span>
+                  </div>
+                  {filteredResults.map((result, index) => {
                 const rowKey = `${result.package}-${result.source}-${index}`;
                 const isCopied = copiedKey === rowKey;
                 const installCmd = getInstallCommand(result);
@@ -594,9 +636,11 @@ export function ReportView({
                   </div>
                 );
               })}
-            </div>
-          </div>
-        )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
       </section>
 
       {dependencyGraph && (
