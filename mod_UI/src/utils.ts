@@ -577,6 +577,26 @@ export function methodSupportsInput(method: string, profile: { total: number; ar
   return profile.archiveUrls === 0 && profile.repositories === 0;
 }
 
+export function dedupePackageInput(value: string): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of value.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) { if (out.length > 0) out.push(""); continue; }
+    if (trimmed.startsWith("#")) { out.push(line); continue; }
+    if (/^https:\/\//i.test(trimmed)) {
+      const key = trimmed.toLowerCase();
+      if (!seen.has(key)) { seen.add(key); out.push(trimmed); }
+      continue;
+    }
+    for (const seg of splitInputLine(trimmed)) {
+      const key = seg.toLowerCase();
+      if (!seen.has(key)) { seen.add(key); out.push(seg); }
+    }
+  }
+  return out.join("\n");
+}
+
 export function buildInputSmartSuggestions(
   input: string,
   profile: { total: number; archiveUrls: number; repositories: number },
@@ -591,6 +611,15 @@ export function buildInputSmartSuggestions(
   const hasInstallCall = activeLines.some((line) => /\b(?:install\.packages|BiocManager::install|remotes::install_[A-Za-z_]*|devtools::install_[A-Za-z_]*|library|require)\s*\(/.test(line));
   const hasLikelyNoise = activeLines.some((line) => /(?:ERROR|Warning|Traceback|安装失败|报错|not available|there is no package)/i.test(line));
   const canonicalInput = hasInstallCall ? extractCanonicalInput(input) : "";
+  const dedupedInput = (() => {
+    const items: string[] = [];
+    for (const line of activeLines) {
+      if (/^https:\/\//i.test(line)) { items.push(line); continue; }
+      items.push(...splitInputLine(line));
+    }
+    const lower = items.map((s) => s.toLowerCase());
+    return lower.length !== new Set(lower).size ? dedupePackageInput(input) : "";
+  })();
 
   if (profile.archiveUrls === profile.total && method !== "remotes" && method !== "devtools") {
     suggestions.push({
@@ -627,6 +656,16 @@ export function buildInputSmartSuggestions(
       id: "version-hint",
       title: "检测到版本号",
       detail: "脚本会优先生成指定版本安装；检索后可同步确认远程版本。",
+    });
+  }
+  if (dedupedInput) {
+    suggestions.push({
+      id: "duplicate-packages",
+      title: "检测到重复包名",
+      detail: "输入中包含重复的包名，建议去重后再生成脚本。",
+      actionLabel: "一键去重",
+      action: "replaceInput",
+      value: dedupedInput,
     });
   }
   if (hasInstallCall || hasLikelyNoise) {

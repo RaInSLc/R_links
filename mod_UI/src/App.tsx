@@ -25,7 +25,13 @@ function App() {
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem("theme") || "office");
   const [currentFont, setCurrentFont] = useState(() => localStorage.getItem("fontFamily") || "modern");
   const [input, setInput] = useState(() => localStorage.getItem("rlinks_input") || "");
-  const [method, setMethod] = useState<Method>("auto");
+  const [method, setMethod] = useState<Method>(() => {
+    const stored = localStorage.getItem("rlinks_method");
+    if (stored === "auto" || stored === "devtools" || stored === "remotes" ||
+        stored === "github" || stored === "base" || stored === "version" ||
+        stored === "biocManager" || stored === "checkSystem") return stored as Method;
+    return "auto";
+  });
   const [conditional, setConditional] = useState(true);
   const [installDependencies, setInstallDependencies] = useState(true);
   const [showRemoteVersion, setShowRemoteVersion] = useState(true);
@@ -116,6 +122,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("rlinks_pinned_methods", JSON.stringify(pinnedMethods));
   }, [pinnedMethods]);
+
+  useEffect(() => {
+    localStorage.setItem("rlinks_method", method);
+  }, [method]);
 
   useEffect(() => {
     if (!input.trim()) return;
@@ -364,6 +374,21 @@ function App() {
   function handleStartSearch() {
     startSearch(input, settings, inputTooLarge, () => setView("report"), () => setMethod("auto"));
   }
+
+  useEffect(() => {
+    function onKeydown(e: KeyboardEvent) {
+      if (view !== "workspace") return;
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        if (searching) { stopSearch(); } else if (input.trim() && !inputTooLarge) { handleStartSearch(); }
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "C" || e.key === "c")) {
+        e.preventDefault();
+        copyScript();
+      }
+    }
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
+  }, [view, searching, input, inputTooLarge]);
 
   return (
     <div className="app-shell">

@@ -18,6 +18,7 @@ import {
   buildInputSmartSuggestions,
   buildResultSmartSuggestions,
   extractCanonicalInput,
+  dedupePackageInput,
   MAX_STATUS_CHARS,
 } from "./utils";
 
@@ -376,6 +377,45 @@ describe("extractCanonicalInput", () => {
       "library(ggplot2)",
       "Warning: package not available",
     ].join("\n"))).toBe("dplyr\nggplot2\nGSVA\ntidyverse/dplyr");
+  });
+});
+
+describe("dedupePackageInput", () => {
+  it("removes duplicate package names case-insensitively", () => {
+    expect(dedupePackageInput("dplyr\nggplot2\nDPLYR\nggplot2\ntidyr")).toBe("dplyr\nggplot2\ntidyr");
+  });
+
+  it("preserves comments and empty lines", () => {
+    expect(dedupePackageInput("# comment\ndplyr\n\nggplot2\ndplyr")).toBe("# comment\ndplyr\n\nggplot2");
+  });
+
+  it("handles URL lines", () => {
+    const url = "https://example.org/pkg_1.0.tar.gz";
+    expect(dedupePackageInput(`${url}\n${url}`)).toBe(url);
+  });
+});
+
+describe("buildInputSmartSuggestions duplicates", () => {
+  it("suggests deduplication when input has duplicate packages", () => {
+    const suggestions = buildInputSmartSuggestions(
+      "dplyr\nggplot2\ndplyr",
+      { total: 3, archiveUrls: 0, repositories: 0 },
+      "auto",
+    );
+    expect(suggestions).toContainEqual(expect.objectContaining({
+      id: "duplicate-packages",
+      action: "replaceInput",
+      value: "dplyr\nggplot2",
+    }));
+  });
+
+  it("does not suggest deduplication when no duplicates exist", () => {
+    const suggestions = buildInputSmartSuggestions(
+      "dplyr\nggplot2\ntidyr",
+      { total: 3, archiveUrls: 0, repositories: 0 },
+      "auto",
+    );
+    expect(suggestions.map((s) => s.id)).not.toContain("duplicate-packages");
   });
 });
 
