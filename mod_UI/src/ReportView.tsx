@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect, Fragment } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { PanelHeader, Metric, EmptyState } from "./components";
 import { sourceNames } from "./types";
@@ -500,6 +500,7 @@ export function ReportView({
   const [selectedRowIndex, setSelectedRowIndex] = useState<number>(-1);
   const resultTableRef = useRef<HTMLDivElement>(null);
   const [logSearch, setLogSearch] = useState("");
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -1060,11 +1061,12 @@ export function ReportView({
                 const rowKey = `${result.package}-${result.source}-${index}`;
                 const isCopied = copiedKey === rowKey;
                 const installCmd = getInstallCommand(result);
+                const isExpanded = expandedRow === rowKey;
                 return (
+                  <Fragment key={rowKey}>
                   <div
                     className={`result-row${selectedRowIndex === index ? " row-selected" : ""}`}
                     role="row"
-                    key={rowKey}
                     onDoubleClick={() => handleCopy(result, rowKey)}
                     onMouseEnter={() => setSelectedRowIndex(index)}
                     onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, result }); }}
@@ -1124,7 +1126,28 @@ export function ReportView({
                         ? "已验证"
                         : "未找到"}
                     </span>
+                    <button
+                      type="button"
+                      className="row-expand-btn"
+                      title={isExpanded ? "收起详情" : "展开详情"}
+                      onClick={() => setExpandedRow(isExpanded ? null : rowKey)}
+                    >
+                      {isExpanded ? "▴" : "▾"}
+                    </button>
                   </div>
+                  {isExpanded && (
+                    <div className="result-detail">
+                      <div className="result-detail-grid">
+                        <div><span className="detail-label">安装命令</span><code className="detail-code">{installCmd}</code></div>
+                        {result.realName && result.realName !== result.package && (
+                          <div><span className="detail-label">规范名称</span><span>{result.realName}</span></div>
+                        )}
+                        <div><span className="detail-label">仓库地址</span><span>{result.repository || "—"}</span></div>
+                        <div><span className="detail-label">检索状态</span><span>{result.found ? "已验证" : result.status === "timeout" ? "超时" : result.status === "rateLimited" ? "频率限制" : result.status === "error" ? "检索异常" : "未找到"}</span></div>
+                      </div>
+                    </div>
+                  )}
+                  </Fragment>
                 );
               })}
                   </div>

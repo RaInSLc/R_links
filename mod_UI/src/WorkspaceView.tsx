@@ -41,6 +41,8 @@ interface WorkspaceViewProps {
   onCopyScript: () => void;
   onCleanComments: () => void;
   onDownloadScript: () => void;
+  copyWithLineNumbers: boolean;
+  onCopyWithLineNumbersChange: (v: boolean) => void;
   isMethodDisabled: (candidate: Method) => boolean;
 }
 
@@ -55,7 +57,8 @@ export function WorkspaceView({
   onMethodChange, pinnedMethods, onPinnedMethodsChange, onApplySmartSuggestion, onConditionalChange, onInstallDependenciesChange,
   onShowRemoteVersionChange, onVerifyInstallChange, onFullSearchChange,
   onUseCacheChange, onTempFilter,
-  onCopyScript, onCleanComments, onDownloadScript, isMethodDisabled,
+  onCopyScript, onCleanComments, onDownloadScript,
+  copyWithLineNumbers, onCopyWithLineNumbersChange, isMethodDisabled,
 }: WorkspaceViewProps) {
   const [filterText, setFilterText] = useState("");
   const [strategyExpanded, setStrategyExpanded] = useState(false);
@@ -354,7 +357,15 @@ export function WorkspaceView({
         <header className="panel-header" style={{ gridTemplateColumns: "auto auto 1fr auto" }}>
           <span>03</span>
           <h2>脚本预览</h2>
-          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginRight: "10px" }}>
+          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginRight: "10px", alignItems: "center" }}>
+            <label className="line-num-toggle" title="复制时在每行前添加行号">
+              <input
+                type="checkbox"
+                checked={copyWithLineNumbers}
+                onChange={(e) => onCopyWithLineNumbersChange(e.target.checked)}
+              />
+              <span>行号</span>
+            </label>
             <button className="button ghost" style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onCleanComments} disabled={scriptTooLarge}>
               移除注释
             </button>

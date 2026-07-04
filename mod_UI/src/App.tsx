@@ -30,6 +30,7 @@ function App() {
     return (v >= 12 && v <= 20) ? v : 14;
   });
   const [input, setInput] = useState(() => localStorage.getItem("rlinks_input") || "");
+  const [copyWithLineNumbers, setCopyWithLineNumbers] = useState(false);
   const [method, setMethod] = useState<Method>(() => {
     const stored = localStorage.getItem("rlinks_method");
     if (stored === "auto" || stored === "devtools" || stored === "remotes" ||
@@ -77,6 +78,8 @@ function App() {
   const latestInputRef = useRef(localStorage.getItem("rlinks_input") || "");
   const latestScriptRef = useRef("等待输入...");
   const scriptRequestSeq = useRef(0);
+  const copyWithLineNumbersRef = useRef(false);
+  useEffect(() => { copyWithLineNumbersRef.current = copyWithLineNumbers; }, [copyWithLineNumbers]);
 
   const search = useSearch(setStatus);
   const settingsHook = useSettings(setStatus);
@@ -307,7 +310,10 @@ function App() {
     try {
       const records = await invoke<HistoryRecord[]>("build_history_records", { script: snapshot });
       const cleanRecords = sanitizeHistoryList(records);
-      await writeText(snapshot);
+      const textToCopy = copyWithLineNumbersRef.current
+        ? snapshot.split("\n").map((line, i) => `${String(i + 1).padStart(3, " ")}  ${line}`).join("\n")
+        : snapshot;
+      await writeText(textToCopy);
       await enqueueHistorySave((current) => {
         const commands = new Set(cleanRecords.map((r) => r.command));
         return [...cleanRecords, ...current.filter((r) => !commands.has(r.command))].slice(0, MAX_HISTORY_RECORDS);
@@ -489,6 +495,17 @@ function App() {
           <progress className="summary-track" value={summaryProgress} max={100} aria-label="已验证包比例" />
           <small>{results.length ? `${foundCount} 条来源记录` : "等待开始"}</small>
         </div>
+        <details className="sidebar-shortcuts">
+          <summary>快捷键</summary>
+          <div className="shortcut-list">
+            <kbd>Ctrl</kbd>+<kbd>1</kbd>~<kbd>4</kbd> <span>切换视图</span>
+            <kbd>Ctrl</kbd>+<kbd>↵</kbd> <span>开始检索</span>
+            <kbd>Ctrl</kbd>+<kbd>⇧</kbd>+<kbd>C</kbd> <span>复制脚本</span>
+            <kbd>Ctrl</kbd>+<kbd>S</kbd> <span>下载脚本</span>
+            <kbd>Ctrl</kbd>+<kbd>⇧</kbd>+<kbd>K</kbd> <span>清空输入</span>
+            <kbd>Alt</kbd>+<kbd>1</kbd>/<kbd>2</kbd> <span>切换图/列表</span>
+          </div>
+        </details>
       </aside>
 
       <main className="main-area">
@@ -550,6 +567,8 @@ function App() {
               }}
               onTempFilter={handleTempFilter}
               onCopyScript={copyScript} onCleanComments={cleanComments}
+              copyWithLineNumbers={copyWithLineNumbers}
+              onCopyWithLineNumbersChange={setCopyWithLineNumbers}
               onDownloadScript={downloadScript}
               isMethodDisabled={isMethodDisabled}
             />
