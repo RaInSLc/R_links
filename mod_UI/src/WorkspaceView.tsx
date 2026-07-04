@@ -155,16 +155,16 @@ export function WorkspaceView({
             );
           })}
         </div>
-        <div className="strategy-chips" aria-label="当前策略选项">
-          {conditional && <span>条件安装</span>}
-          {installDependencies && <span>安装依赖</span>}
-          {showRemoteVersion && <span>同步版本</span>}
-          {settings.fullSearch && <span>全量检索</span>}
-          {settings.useCache && <span>使用缓存</span>}
-          {verifyInstall && <span>安装后验证</span>}
-        </div>
-        <div className="strategy-panel-actions">
-          <button type="button" className="button ghost" onClick={() => setStrategyExpanded(true)}>
+        <div className="strategy-footer">
+          <div className="strategy-chips" aria-label="当前策略选项">
+            {conditional && <span>条件安装</span>}
+            {installDependencies && <span>安装依赖</span>}
+            {showRemoteVersion && <span>同步版本</span>}
+            {settings.fullSearch && <span>全量检索</span>}
+            {settings.useCache && <span>使用缓存</span>}
+            {verifyInstall && <span>安装后验证</span>}
+          </div>
+          <button type="button" className="button ghost compact-btn" onClick={() => setStrategyExpanded(true)}>
             配置策略
           </button>
         </div>

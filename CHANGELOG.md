@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-04 19:12:00 +08:00]
+
+### Changed
+- **优化 mod_UI 安装策略面板布局**：策略标签与"配置策略"按钮合并为同一行（flex space-between），消除底部大空隙；方法卡片改为 flex 居中布局并减小最小高度，提升视觉一致性；策略标签区自适应宽度。
+
+### Tests
+- **通过完整编译与启动执行验证**：`npm run test`（62 个用例）、`npm run build`、`cargo clippy`（零警告）、`npm run tauri build -- --no-bundle`，并完成 release 程序启动级执行验证。
+
 ## [2026-07-04 11:45:00 +08:00]
 
 ### Changed
