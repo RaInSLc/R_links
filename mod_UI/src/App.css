@@ -1349,7 +1349,7 @@ input:focus-visible,
 
 .result-row {
   display: grid;
-  grid-template-columns: 1.05fr 0.75fr 0.7fr 1.4fr 0.55fr;
+  grid-template-columns: 32px 1.05fr 0.75fr 0.7fr 1.4fr 0.55fr auto;
   align-items: center;
   gap: 10px;
   min-height: 46px;
@@ -1357,6 +1357,22 @@ input:focus-visible,
   border-bottom: 1px solid var(--line);
   font-size: 15px;
   transition: background 0.12s;
+}
+
+.result-table.compact .result-row {
+  min-height: 32px;
+  padding: 2px 5px;
+  font-size: 13px;
+  gap: 6px;
+}
+
+.result-table.compact .result-row strong {
+  font-size: 13px;
+}
+
+.result-table.compact .source-tag {
+  font-size: 10px;
+  padding: 1px 5px;
 }
 
 .result-row:not(.result-head):hover {
@@ -1503,6 +1519,21 @@ input:focus-visible,
 
 .result-head .sortable:hover {
   color: var(--accent);
+}
+
+.result-check-cell {
+  flex-shrink: 0;
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.result-check-cell input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--theme-color);
 }
 
 .source-tag {

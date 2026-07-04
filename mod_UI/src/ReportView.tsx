@@ -501,6 +501,8 @@ export function ReportView({
   const resultTableRef = useRef<HTMLDivElement>(null);
   const [logSearch, setLogSearch] = useState("");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [selectedResults, setSelectedResults] = useState<Set<string>>(new Set());
+  const [compactMode, setCompactMode] = useState(false);
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -600,6 +602,10 @@ export function ReportView({
 
   useEffect(() => {
     setSelectedRowIndex(-1);
+  }, [filteredResults]);
+
+  useEffect(() => {
+    setSelectedResults(new Set());
   }, [filteredResults]);
 
   useEffect(() => {
@@ -722,6 +728,26 @@ export function ReportView({
           />
           {results.length > 0 && (
             <div style={{ display: "flex", gap: "6px" }}>
+              {selectedResults.size > 0 && (
+                <button
+                  type="button"
+                  className="button ghost compact-btn"
+                  onClick={async () => {
+                    const cmds = sortedResults
+                      .filter((r) => selectedResults.has(r.package))
+                      .map((r) => getInstallCommand(r));
+                    const unique = [...new Set(cmds)];
+                    try {
+                      await navigator.clipboard.writeText(unique.join("\n"));
+                      onStatusChange(`已复制 ${unique.length} 条选中命令`);
+                    } catch (err) {
+                      onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                    }
+                  }}
+                >
+                  复制选中({selectedResults.size})
+                </button>
+              )}
               {results.some((r) => r.found) && (
                 <>
                   <button
@@ -1044,13 +1070,34 @@ export function ReportView({
                   显示 {filteredResults.length}/{results.length} 条
                 </small>
               )}
+              <button
+                type="button"
+                className={`button ghost compact-btn${compactMode ? " active" : ""}`}
+                onClick={() => setCompactMode((v) => !v)}
+                title={compactMode ? "当前：紧凑模式，点击切换为标准" : "当前：标准模式，点击切换为紧凑"}
+                style={{ marginLeft: "auto" }}
+              >
+                {compactMode ? "紧凑✓" : "紧凑"}
+              </button>
             </div>
             {filteredResults.length === 0 ? (
               <EmptyState text="当前筛选条件下无匹配结果" hint="尝试切换上方的筛选标签或清空搜索框" />
             ) : (
               <div className="result-table-wrapper" ref={resultTableRef}>
-                <div className="result-table" role="table" aria-label="包来源验证结果">
+                <div className={`result-table${compactMode ? " compact" : ""}`} role="table" aria-label="包来源验证结果">
                   <div className="result-row result-head" role="row">
+                    <span role="columnheader" className="result-check-cell">
+                      <input
+                        type="checkbox"
+                        checked={sortedResults.length > 0 && sortedResults.every((r) => selectedResults.has(r.package))}
+                        onChange={() => {
+                          const allSelected = sortedResults.length > 0 && sortedResults.every((r) => selectedResults.has(r.package));
+                          if (allSelected) setSelectedResults(new Set());
+                          else setSelectedResults(new Set(sortedResults.map((r) => r.package)));
+                        }}
+                        aria-label="全选"
+                      />
+                    </span>
                     <span role="columnheader" className={`sortable ${sortKey === "package" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("package")}>包名</span>
                     <span role="columnheader" className={`sortable ${sortKey === "source" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("source")}>来源</span>
                     <span role="columnheader" className={`sortable ${sortKey === "version" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("version")}>版本</span>
@@ -1072,6 +1119,21 @@ export function ReportView({
                     onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, result }); }}
                     title={result.found ? "双击此行可复制安装命令" : "双击此行可复制包名"}
                   >
+                    <span role="cell" className="result-check-cell">
+                      <input
+                        type="checkbox"
+                        checked={selectedResults.has(result.package)}
+                        onChange={() => {
+                          setSelectedResults((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(result.package)) next.delete(result.package);
+                            else next.add(result.package);
+                            return next;
+                          });
+                        }}
+                        aria-label={`选择 ${result.package}`}
+                      />
+                    </span>
                     <strong
                       role="cell"
                       className={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github") ? "pkg-link" : ""}

@@ -221,6 +221,22 @@ export function WorkspaceView({
           <button className="button ghost" onClick={sortInputAlphabetical} disabled={searching || !input.trim()} title="按字母排序">排序</button>
           <button
             className="button ghost"
+            onClick={() => {
+              const cleaned = input
+                .split(/\r?\n/)
+                .map((l) => l.trim())
+                .filter((l, i, arr) => l !== "" || (i > 0 && i < arr.length - 1 && arr[i - 1] !== "" && arr[i + 1] !== ""))
+                .join("\n")
+                .replace(/[ \t]+/g, " ");
+              onInputChange(cleaned, "manual");
+            }}
+            disabled={searching || !input.trim()}
+            title="去除行首尾空白、合并多余空格、移除连续空行"
+          >
+            清理
+          </button>
+          <button
+            className="button ghost"
             onClick={() => onInputChange(dedupePackageInput(input), "manual")}
             disabled={searching || duplicateCount === 0}
             title="大小写不敏感去重"
