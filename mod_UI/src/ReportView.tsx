@@ -1251,12 +1251,20 @@ export function ReportView({
                 </>
               )}
             </div>
+            <div className="status-legend">
+              <span className="legend-item"><span className="legend-dot found" />已验证</span>
+              <span className="legend-item"><span className="legend-dot missing" />未找到</span>
+              <span className="legend-item"><span className="legend-dot timeout" />超时</span>
+              <span className="legend-item"><span className="legend-dot rate-limited" />频率限制</span>
+              <span className="legend-item"><span className="legend-dot error" />异常</span>
+            </div>
             {filteredResults.length === 0 ? (
               <EmptyState text="当前筛选条件下无匹配结果" hint="尝试切换上方的筛选标签或清空搜索框" />
             ) : (
               <div className="result-table-wrapper" ref={resultTableRef}>
                 <div className={`result-table${compactMode ? " compact" : ""}${showVersionCol ? "" : " hide-version"}${showRepoCol ? "" : " hide-repo"}`} role="table" aria-label="包来源验证结果">
                   <div className="result-row result-head" role="row">
+                    <span role="columnheader" className="result-row-num">#</span>
                     <span role="columnheader" className="result-check-cell">
                       <input
                         type="checkbox"
@@ -1297,6 +1305,7 @@ export function ReportView({
                     onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, result }); }}
                     title={isExpanded ? "双击收起详情" : "双击展开详情"}
                   >
+                    <span role="cell" className="result-row-num">{index + 1}</span>
                     <span role="cell" className="result-check-cell">
                       <input
                         type="checkbox"

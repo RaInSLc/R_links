@@ -17,6 +17,7 @@ import {
   countScriptCommands, countDuplicatePackages,
   MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES,
   MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS, utf8Length,
+  dedupePackageInput,
   type HistoryRecord, type SearchResult,
 } from "./utils";
 import { type View, type Method, type InputRules, defaultInputRules, defaultSettings, defaultPinnedMethods } from "./types";
@@ -442,6 +443,9 @@ function App() {
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "K" || e.key === "k")) {
         e.preventDefault();
         if (!searching && input.trim()) { setInput(""); }
+      } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "d" || e.key === "D")) {
+        e.preventDefault();
+        if (!searching && input.trim()) { setInput(dedupePackageInput(input)); }
       }
     }
     window.addEventListener("keydown", onKeydown);
@@ -503,6 +507,7 @@ function App() {
             <kbd>Ctrl</kbd>+<kbd>⇧</kbd>+<kbd>C</kbd> <span>复制脚本</span>
             <kbd>Ctrl</kbd>+<kbd>S</kbd> <span>下载脚本</span>
             <kbd>Ctrl</kbd>+<kbd>⇧</kbd>+<kbd>K</kbd> <span>清空输入</span>
+            <kbd>Ctrl</kbd>+<kbd>D</kbd> <span>去重</span>
             <kbd>Alt</kbd>+<kbd>1</kbd>/<kbd>2</kbd> <span>切换图/列表</span>
           </div>
         </details>
