@@ -755,6 +755,47 @@ export function ReportView({
               >
                 导出 CSV
               </button>
+              <button
+                type="button"
+                className="button ghost compact-btn"
+                onClick={async () => {
+                  const found = results.filter((r) => r.found);
+                  const missing = results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error");
+                  const errors = results.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error"));
+                  const foundPkgs = [...new Set(found.map((r) => r.package))];
+                  const missingPkgs = [...new Set(missing.map((r) => r.package))];
+                  const errorPkgs = [...new Set(errors.map((r) => r.package))];
+                  const now = new Date();
+                  const lines = [
+                    `R Package Center 检索报告`,
+                    `时间: ${now.toLocaleString("zh-CN")}`,
+                    searchDuration != null ? `耗时: ${(searchDuration / 1000).toFixed(1)}s` : "",
+                    ``,
+                    `输入包: ${packageCount}`,
+                    `已验证: ${foundPkgs.length}`,
+                    `未找到: ${missingPkgs.length}`,
+                    `异常: ${errorPkgs.length}`,
+                    `来源记录: ${results.length}`,
+                  ].filter(Boolean);
+                  if (foundPkgs.length > 0) {
+                    lines.push("", "已验证包:", ...foundPkgs.map((p) => `  - ${p}`));
+                  }
+                  if (missingPkgs.length > 0) {
+                    lines.push("", "未找到包:", ...missingPkgs.map((p) => `  - ${p}`));
+                  }
+                  if (errorPkgs.length > 0) {
+                    lines.push("", "异常包:", ...errorPkgs.map((p) => `  - ${p}`));
+                  }
+                  try {
+                    await navigator.clipboard.writeText(lines.join("\n"));
+                    onStatusChange("已复制检索结果摘要");
+                  } catch (err) {
+                    onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                  }
+                }}
+              >
+                复制摘要
+              </button>
             </div>
           )}
         </div>

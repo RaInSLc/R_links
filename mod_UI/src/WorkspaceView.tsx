@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { PanelHeader, Toggle } from "./components";
 import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, type SmartSuggestion } from "./utils";
 import type { Method, Settings } from "./types";
@@ -60,6 +60,11 @@ export function WorkspaceView({
   const [filterText, setFilterText] = useState("");
   const [strategyExpanded, setStrategyExpanded] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
 
   async function handleFileDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -101,6 +106,7 @@ export function WorkspaceView({
       <section className="panel input-panel">
         <PanelHeader step="01" title="输入包列表" meta={`${inputProfile.total}/${MAX_PACKAGE_LINES} 项${duplicateCount > 0 ? ` · ${duplicateCount} 重复` : ""} · ${new Blob([input]).size}/${MAX_INPUT_CHARS}B`} />
         <textarea
+          ref={textareaRef}
           value={input}
           onChange={(event) => onInputChange(event.currentTarget.value, "manual")}
           onDragOver={(e) => { e.preventDefault(); if (!searching) setDragOver(true); }}
