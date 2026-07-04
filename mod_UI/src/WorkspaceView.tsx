@@ -366,7 +366,7 @@ export function WorkspaceView({
             script.split("\n").map((line, i) => (
               <div className="script-line" key={i}>
                 <span className="line-no" aria-hidden="true">{i + 1}</span>
-                <span className="line-text">{line}</span>
+                <span className="line-text">{highlightRLine(line)}</span>
               </div>
             ))
           )}
@@ -379,4 +379,25 @@ export function WorkspaceView({
       </section>
     </div>
   );
+}
+
+function highlightRLine(line: string) {
+  const trimmed = line.trimStart();
+  if (trimmed.startsWith("#")) {
+    return <span className="r-comment">{line}</span>;
+  }
+  const regex = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(\b(?:if|else|for|while|function|return|TRUE|FALSE|NULL|NA|library|require|cat|message|warning|stop|invisible)\b)|([A-Za-z_][A-Za-z0-9_.]*(?=\s*\())|(\b\d+\.?\d*\b)/g;
+  const tokens: { text: string; cls: string }[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(line)) !== null) {
+    if (m.index > last) tokens.push({ text: line.slice(last, m.index), cls: "" });
+    if (m[1]) tokens.push({ text: m[1], cls: "r-string" });
+    else if (m[2]) tokens.push({ text: m[2], cls: "r-keyword" });
+    else if (m[3]) tokens.push({ text: m[3], cls: "r-func" });
+    else if (m[4]) tokens.push({ text: m[4], cls: "r-number" });
+    last = regex.lastIndex;
+  }
+  if (last < line.length) tokens.push({ text: line.slice(last), cls: "" });
+  return tokens.map((t, i) => t.cls ? <span key={i} className={t.cls}>{t.text}</span> : t.text);
 }

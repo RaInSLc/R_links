@@ -902,6 +902,35 @@ export function ReportView({
                 type="button"
                 className="button ghost compact-btn"
                 onClick={async () => {
+                  const json = JSON.stringify({
+                    generatedAt: new Date().toISOString(),
+                    searchDurationMs: searchDuration,
+                    packageCount,
+                    uniqueFoundCount,
+                    results: results.map((r) => ({
+                      package: r.package,
+                      source: r.source,
+                      version: r.latestVersion || null,
+                      repository: r.repository || null,
+                      found: r.found,
+                      status: r.found ? "found" : r.status,
+                      installCommand: getInstallCommand(r),
+                    })),
+                  }, null, 2);
+                  try {
+                    await navigator.clipboard.writeText(json);
+                    onStatusChange(`已复制 JSON（${results.length} 条结果）`);
+                  } catch (err) {
+                    onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                  }
+                }}
+              >
+                复制 JSON
+              </button>
+              <button
+                type="button"
+                className="button ghost compact-btn"
+                onClick={async () => {
                   const found = results.filter((r) => r.found);
                   const missing = results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error");
                   const errors = results.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error"));

@@ -1,3 +1,7 @@
+body, .panel, .sidebar, .app-topbar, .method-card, .history-item, input, textarea, select, button, .result-row, .dep-node-card {
+  transition: background-color 250ms ease, border-color 250ms ease, color 200ms ease;
+}
+
 :root, [data-theme="office"] {
   font-family: var(--font-base);
   color: #0f172a;
@@ -962,6 +966,29 @@ input:focus-visible,
   flex: 1;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.r-comment {
+  color: #6a9955;
+  font-style: italic;
+}
+
+.r-string {
+  color: #ce9178;
+}
+
+.r-keyword {
+  color: #c586c0;
+  font-weight: 600;
+}
+
+.r-func {
+  color: #569cd6;
+  font-weight: 500;
+}
+
+.r-number {
+  color: #b5cea8;
 }
 
 .script-actions {
