@@ -1234,6 +1234,16 @@ export function ReportView({
                 value={resultSearch}
                 onChange={(e) => setResultSearch(e.target.value)}
               />
+              {resultSearch && (
+                <button
+                  type="button"
+                  className="search-clear-btn"
+                  onClick={() => setResultSearch("")}
+                  title="清除搜索"
+                >
+                  ✕
+                </button>
+              )}
               {(debouncedSearch || resultFilter !== "all" || sourceFilter) && (
                 <small className="result-count-hint">
                   显示 {filteredResults.length}/{results.length} 条
@@ -1626,6 +1636,16 @@ export function ReportView({
               onChange={(e) => setLogSearch(e.target.value)}
               style={{ padding: "4px 8px", fontSize: "12px", width: "120px", borderRadius: "4px", border: "1px solid var(--line)", background: "var(--input-bg, #fff)", color: "var(--ink)" }}
             />
+            {logSearch && (
+              <button
+                type="button"
+                className="search-clear-btn"
+                onClick={() => setLogSearch("")}
+                title="清除日志搜索"
+              >
+                ✕
+              </button>
+            )}
             <button
               className="button ghost"
               style={{

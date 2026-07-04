@@ -2360,6 +2360,28 @@ body {
   white-space: nowrap;
 }
 
+.search-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  border: none;
+  border-radius: 50%;
+  background: var(--tag-default-bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.search-clear-btn:hover {
+  background: var(--theme-color-soft);
+  color: var(--theme-color);
+}
+
 .cache-progress-bar {
   position: relative;
   width: 100%;

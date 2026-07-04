@@ -326,6 +326,14 @@ export function WorkspaceView({
           </button>
           <button
             className="button ghost"
+            onClick={sortInputAlphabetical}
+            disabled={searching || !input.trim()}
+            title="按字母 A-Z 排序（保留注释行位置）"
+          >
+            A-Z
+          </button>
+          <button
+            className="button ghost"
             onClick={() => onInputChange(dedupePackageInput(input), "manual")}
             disabled={searching || duplicateCount === 0}
             title="大小写不敏感去重"

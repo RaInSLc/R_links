@@ -473,7 +473,7 @@ export function SettingsView({
               style={{ width: `${Math.min(100, (settings.maxCacheEntries / 10000) * 100)}%` }}
             />
             <span className="cache-progress-label">
-              {settings.maxCacheEntries >= 5000 ? "高容量" : settings.maxCacheEntries >= 1000 ? "标准容量" : "精简容量"}
+              {settings.maxCacheEntries} / 10000 条 · {settings.maxCacheEntries >= 5000 ? "高容量" : settings.maxCacheEntries >= 1000 ? "标准容量" : "精简容量"}
             </span>
           </div>
         </div>
