@@ -1635,6 +1635,35 @@ input:focus-visible,
   user-select: none;
 }
 
+.log-console.log-wrap > div {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-console.log-wrap > div > span {
+  display: inline-block;
+  width: 26px;
+  vertical-align: top;
+}
+
+.log-wrap-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.log-wrap-toggle input {
+  accent-color: var(--theme-color);
+  width: 14px;
+  height: 14px;
+}
+
 .history-panel {
   min-height: calc(100vh - 150px);
 }

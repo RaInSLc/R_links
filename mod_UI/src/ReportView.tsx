@@ -503,6 +503,7 @@ export function ReportView({
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [selectedResults, setSelectedResults] = useState<Set<string>>(new Set());
   const [compactMode, setCompactMode] = useState(false);
+  const [logWrap, setLogWrap] = useState(false);
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -1319,6 +1320,14 @@ export function ReportView({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <PanelHeader step="日志" title="检索过程" meta={`${logs.length} 行`} />
           <div style={{ display: "flex", gap: "8px", alignItems: "center", marginRight: "16px" }}>
+            <label className="log-wrap-toggle" title="切换日志自动换行">
+              <input
+                type="checkbox"
+                checked={logWrap}
+                onChange={(e) => setLogWrap(e.target.checked)}
+              />
+              <span>换行</span>
+            </label>
             <input
               type="text"
               placeholder="过滤日志..."
@@ -1340,7 +1349,7 @@ export function ReportView({
             </button>
           </div>
         </div>
-        <div className="log-console" ref={logConsoleRef}>
+        <div className={`log-console${logWrap ? " log-wrap" : ""}`} ref={logConsoleRef}>
           {(() => {
             const q = logSearch.trim().toLowerCase();
             const filtered = q ? logs.filter((line) => line.toLowerCase().includes(q)) : logs;

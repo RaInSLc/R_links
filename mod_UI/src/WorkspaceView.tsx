@@ -63,6 +63,7 @@ export function WorkspaceView({
   const [filterText, setFilterText] = useState("");
   const [strategyExpanded, setStrategyExpanded] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [scriptCollapsed, setScriptCollapsed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineGutterRef = useRef<HTMLDivElement>(null);
 
@@ -401,8 +402,20 @@ export function WorkspaceView({
               复制脚本<span className="kbd-hint">Ctrl+⇧C</span>
             </button>
           </div>
-          <small>{scriptCommandCount > 0 ? `${scriptCommandCount} 条命令` : "R Script"}</small>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <small>{scriptCommandCount > 0 ? `${scriptCommandCount} 条命令` : "R Script"}</small>
+            <button
+              type="button"
+              className="button ghost"
+              style={{ padding: "2px 8px", fontSize: "11px", height: "26px", minHeight: "auto", lineHeight: 1 }}
+              onClick={() => setScriptCollapsed((v) => !v)}
+              title={scriptCollapsed ? "展开脚本" : "折叠脚本"}
+            >
+              {scriptCollapsed ? "▴" : "▾"}
+            </button>
+          </div>
         </header>
+        {!scriptCollapsed && (
         <pre aria-label="生成的 R 脚本" tabIndex={0}>
           {script === "等待输入..." || !script ? (
             script
@@ -415,6 +428,7 @@ export function WorkspaceView({
             ))
           )}
         </pre>
+        )}
         {scriptTooLarge && (
           <div className="inline-warning">
             脚本内容超出限制：最多 {MAX_SCRIPT_CHARS} 字节。

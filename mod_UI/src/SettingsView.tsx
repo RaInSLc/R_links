@@ -90,7 +90,11 @@ export function SettingsView({
       const allUrls = [...mirrors.map((m) => m.value), settings.cranMirror];
       const urls = [...new Set(allUrls.filter((u) => u.trim()))];
       const results = await invoke<MirrorSpeedResult[]>("test_mirror_speed", { mirrorUrls: urls });
-      setSpeedResults(results);
+      setSpeedResults(results.sort((a, b) => {
+        if (a.success && !b.success) return -1;
+        if (!a.success && b.success) return 1;
+        return a.latencyMs - b.latencyMs;
+      }));
     } catch (error: unknown) {
       setSpeedResults([{
         mirror: "", label: "测速失败", latencyMs: 0, success: false,
