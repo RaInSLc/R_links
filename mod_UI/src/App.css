@@ -1503,6 +1503,16 @@ input:focus-visible,
   white-space: nowrap;
 }
 
+.version-copyable {
+  cursor: pointer;
+  transition: color 0.12s;
+}
+
+.version-copyable:hover {
+  color: var(--theme-color);
+  text-decoration: underline;
+}
+
 .result-head {
   position: sticky;
   top: 0;
@@ -1883,6 +1893,21 @@ input:focus-visible,
   display: grid;
   gap: 7px;
   padding: 16px 17px 0;
+}
+
+.apply-fastest-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 10px 17px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.08);
+  border: 1px solid rgba(22, 163, 74, 0.25);
+  border-radius: 6px;
 }
 
 .mirror-list button {

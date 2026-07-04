@@ -505,6 +505,22 @@ export function SettingsView({
               {speedTesting ? "正在测速..." : "测速"}
             </button>
           </div>
+          {speedResults.length > 0 && !speedTesting && speedResults[0]?.success && (
+            <div className="apply-fastest-bar">
+              <span>
+                最快镜像：{speedResults[0].label} ({speedResults[0].latencyMs}ms)
+              </span>
+              <button
+                type="button"
+                className="button"
+                style={{ padding: "4px 12px", fontSize: "12px", height: "auto", minHeight: "auto" }}
+                onClick={() => onMirrorSelect(speedResults[0].mirror)}
+                disabled={settings.cranMirror === speedResults[0].mirror}
+              >
+                {settings.cranMirror === speedResults[0].mirror ? "已应用 ✓" : "应用最快镜像"}
+              </button>
+            </div>
+          )}
           {speedResults.length > 0 && (
             <div style={{ marginTop: "10px", fontSize: "13px" }}>
               {speedResults.map((r, i) => {

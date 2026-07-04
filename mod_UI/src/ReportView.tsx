@@ -500,7 +500,7 @@ export function ReportView({
   const [selectedRowIndex, setSelectedRowIndex] = useState<number>(-1);
   const resultTableRef = useRef<HTMLDivElement>(null);
   const [logSearch, setLogSearch] = useState("");
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [selectedResults, setSelectedResults] = useState<Set<string>>(new Set());
   const [compactMode, setCompactMode] = useState(false);
   const [logWrap, setLogWrap] = useState(false);
@@ -1190,6 +1190,26 @@ export function ReportView({
               >
                 仓库{showRepoCol ? "✓" : "✕"}
               </button>
+              {sortedResults.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="button ghost compact-btn"
+                    onClick={() => setExpandedRows(new Set(sortedResults.map((_, i) => `${sortedResults[i].package}-${sortedResults[i].source}-${i}`)))}
+                    title="展开所有结果详情"
+                  >
+                    全部展开
+                  </button>
+                  <button
+                    type="button"
+                    className="button ghost compact-btn"
+                    onClick={() => setExpandedRows(new Set())}
+                    title="收起所有结果详情"
+                  >
+                    全部收起
+                  </button>
+                </>
+              )}
             </div>
             {filteredResults.length === 0 ? (
               <EmptyState text="当前筛选条件下无匹配结果" hint="尝试切换上方的筛选标签或清空搜索框" />
@@ -1219,13 +1239,20 @@ export function ReportView({
                 const rowKey = `${result.package}-${result.source}-${index}`;
                 const isCopied = copiedKey === rowKey;
                 const installCmd = getInstallCommand(result);
-                const isExpanded = expandedRow === rowKey;
+                const isExpanded = expandedRows.has(rowKey);
                 return (
                   <Fragment key={rowKey}>
                   <div
                     className={`result-row${selectedRowIndex === index ? " row-selected" : ""}`}
                     role="row"
-                    onDoubleClick={() => setExpandedRow(isExpanded ? null : rowKey)}
+                    onDoubleClick={() => {
+                      setExpandedRows((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(rowKey)) next.delete(rowKey);
+                        else next.add(rowKey);
+                        return next;
+                      });
+                    }}
                     onMouseEnter={() => setSelectedRowIndex(index)}
                     onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, result }); }}
                     title={isExpanded ? "双击收起详情" : "双击展开详情"}
@@ -1278,7 +1305,24 @@ export function ReportView({
                         )}
                       </button>
                     </span>
-                    {showVersionCol && <code role="cell">{result.latestVersion || "—"}</code>}
+                    {showVersionCol && (
+                      <code
+                        role="cell"
+                        className={result.latestVersion ? "version-copyable" : ""}
+                        title={result.latestVersion ? `点击复制版本号: ${result.latestVersion}` : undefined}
+                        onClick={async () => {
+                          if (!result.latestVersion) return;
+                          try {
+                            await navigator.clipboard.writeText(result.latestVersion);
+                            onStatusChange(`已复制版本号: ${result.latestVersion}`);
+                          } catch (err) {
+                            onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                          }
+                        }}
+                      >
+                        {result.latestVersion || "—"}
+                      </code>
+                    )}
                     {showRepoCol && <span role="cell" className="repo-cell">{result.repository || "—"}</span>}
                     <span
                       role="cell"
@@ -1308,7 +1352,14 @@ export function ReportView({
                       type="button"
                       className="row-expand-btn"
                       title={isExpanded ? "收起详情" : "展开详情"}
-                      onClick={() => setExpandedRow(isExpanded ? null : rowKey)}
+                      onClick={() => {
+                        setExpandedRows((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(rowKey)) next.delete(rowKey);
+                          else next.add(rowKey);
+                          return next;
+                        });
+                      }}
                     >
                       {isExpanded ? "▴" : "▾"}
                     </button>
