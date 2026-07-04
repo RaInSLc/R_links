@@ -1711,6 +1711,17 @@ input:focus-visible,
   user-select: none;
 }
 
+.font-preview-box {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--tag-default-bg);
+  color: var(--ink);
+  transition: font-size 0.15s;
+  line-height: 1.6;
+}
+
 .status-legend {
   display: flex;
   gap: 14px;
@@ -1746,6 +1757,18 @@ input:focus-visible,
 
 .log-line-copyable:hover {
   background: var(--theme-color-soft);
+}
+
+.log-line-copyable.log-err {
+  color: #dc2626;
+}
+
+.log-line-copyable.log-warn {
+  color: #d97706;
+}
+
+.log-line-copyable.log-ok {
+  color: #16a34a;
 }
 
 .log-console.log-wrap > div {

@@ -1428,8 +1428,11 @@ export function ReportView({
                     <strong
                       role="cell"
                       className={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github") ? "pkg-link" : ""}
-                      onClick={() => handleOpenPage(result)}
-                      title={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github") ? `点击打开 ${result.package} 来源网页` : undefined}
+                      onClick={(e) => {
+                        if (e.altKey) { e.preventDefault(); setResultSearch(result.package); return; }
+                        handleOpenPage(result);
+                      }}
+                      title={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github") ? `点击打开网页 · Alt+点击搜索此包` : `Alt+点击搜索此包`}
                     >{result.package}</strong>
                     <span role="cell" className="source-cell-with-copy">
                       <span
@@ -1721,10 +1724,19 @@ export function ReportView({
             const q = logSearch.trim().toLowerCase();
             const filtered = q ? logs.filter((line) => line.toLowerCase().includes(q)) : logs;
             return filtered.length ? (
-              filtered.map((line, index) => (
+              filtered.map((line, index) => {
+                const lower = line.toLowerCase();
+                const logClass = lower.includes("error") || lower.includes("失败") || lower.includes("异常")
+                  ? "log-err"
+                  : lower.includes("warn") || lower.includes("警告") || lower.includes("超时") || lower.includes("timeout")
+                  ? "log-warn"
+                  : lower.includes("found") || lower.includes("已验证") || lower.includes("success")
+                  ? "log-ok"
+                  : "";
+                return (
                 <div
                   key={`${line}-${index}`}
-                  className="log-line-copyable"
+                  className={`log-line-copyable${logClass ? ` ${logClass}` : ""}`}
                   title="点击复制此行"
                   onClick={async () => {
                     try {
@@ -1736,7 +1748,8 @@ export function ReportView({
                   <span>{String(index + 1).padStart(2, "0")}</span>
                   {line}
                 </div>
-              ))
+                );
+              })
             ) : (
               <EmptyState text={q ? "无匹配日志" : "日志将在检索开始后显示"} />
             );

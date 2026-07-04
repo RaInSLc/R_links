@@ -215,6 +215,9 @@ export function SettingsView({
               <span style={{ fontSize: "20px", color: "var(--muted)" }}>A</span>
               <span style={{ fontSize: "13px", color: "var(--muted)", minWidth: "32px", textAlign: "right" }}>{currentFontSize}px</span>
             </div>
+            <div className="font-preview-box" style={{ fontSize: `${currentFontSize}px` }}>
+              安装包 Seurat · 版本 5.2.1 · 来源 CRAN — 字号预览
+            </div>
           </div>
         </div>
       </section>
