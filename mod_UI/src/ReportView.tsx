@@ -485,8 +485,14 @@ export function ReportView({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [resultFilter, setResultFilter] = useState<"all" | "found" | "missing" | "error">("all");
   const [resultSearch, setResultSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortKey, setSortKey] = useState<"package" | "source" | "version" | "status">("package");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(resultSearch), 200);
+    return () => window.clearTimeout(timer);
+  }, [resultSearch]);
 
   const logConsoleRef = useRef<HTMLDivElement>(null);
 
@@ -501,6 +507,7 @@ export function ReportView({
       if (e.key === "Escape" && (resultFilter !== "all" || resultSearch)) {
         setResultFilter("all");
         setResultSearch("");
+        setDebouncedSearch("");
       }
     }
     window.addEventListener("keydown", onKeydown);
@@ -512,10 +519,10 @@ export function ReportView({
     if (resultFilter === "found") list = list.filter((r) => r.found);
     else if (resultFilter === "missing") list = list.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error");
     else if (resultFilter === "error") list = list.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error"));
-    const q = resultSearch.trim().toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
     if (q) list = list.filter((r) => r.package.toLowerCase().includes(q) || (r.repository && r.repository.toLowerCase().includes(q)));
     return list;
-  }, [results, resultFilter, resultSearch]);
+  }, [results, resultFilter, debouncedSearch]);
 
   const missingCount = useMemo(
     () => new Set(results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").map((r) => r.package)).size,

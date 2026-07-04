@@ -1230,6 +1230,14 @@ input:focus-visible,
   background: rgba(74, 158, 255, 0.04);
 }
 
+.result-row:not(.result-head):nth-child(even) {
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.result-row:not(.result-head):nth-child(even):hover {
+  background: rgba(74, 158, 255, 0.04);
+}
+
 .result-row strong {
   font-size: 15px;
 }
