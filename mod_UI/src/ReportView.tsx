@@ -23,6 +23,7 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<DependencyNode | null>(null);
   const [filterStrength, setFilterStrength] = useState<"all" | "heavy">("all");
+  const [depSearch, setDepSearch] = useState("");
   const [reverseDeps, setReverseDeps] = useState<ReverseDependenciesInfo | null>(null);
   const [reverseDepsLoading, setReverseDepsLoading] = useState(false);
   const fetchDepsToken = useRef(0);
@@ -133,6 +134,13 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
         >
           仅重度依赖 ({graph.summary.heavyNodes})
         </button>
+        <input
+          type="text"
+          value={depSearch}
+          onChange={(e) => setDepSearch(e.target.value)}
+          placeholder="搜索节点..."
+          style={{ marginLeft: "auto", padding: "4px 8px", fontSize: "12px", width: "140px", borderRadius: "4px", border: "1px solid var(--line)", background: "var(--input-bg, #fff)", color: "var(--ink)" }}
+        />
       </div>
 
       <div className="dep-graph-workspace" style={{ display: "flex", gap: "16px" }}>
@@ -219,6 +227,7 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
               const isHighlighted = highlightedNodes ? highlightedNodes.has(node.package) : true;
               const isHovered = hoveredNode === node.package;
               const opacity = hoveredNode ? (isHighlighted ? 1.0 : 0.3) : 1.0;
+              const matchesSearch = !depSearch.trim() || node.package.toLowerCase().includes(depSearch.trim().toLowerCase());
 
               const isRoot = graph.roots.includes(node.package);
               const isShared = node.rootPackages.length > 1;
@@ -235,8 +244,7 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
                   y={pos.y - 18}
                   width="150"
                   height="36"
-                  opacity={opacity}
-                  style={{ overflow: "visible", cursor: "pointer", transition: "opacity 0.2s" }}
+                  style={{ overflow: "visible", cursor: "pointer", transition: "opacity 0.2s", opacity: matchesSearch ? opacity : 0.15 }}
                   onMouseEnter={() => setHoveredNode(node.package)}
                   onMouseLeave={() => setHoveredNode(null)}
                   onClick={() => { setSelectedNode(node); fetchReverseDeps(node.package); }}
@@ -489,6 +497,8 @@ export function ReportView({
   const [sortKey, setSortKey] = useState<"package" | "source" | "version" | "status">("package");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; result: SearchResult } | null>(null);
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number>(-1);
+  const resultTableRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -585,6 +595,31 @@ export function ReportView({
       return cmp * dir;
     });
   }, [filteredResults, sortKey, sortDir]);
+
+  useEffect(() => {
+    setSelectedRowIndex(-1);
+  }, [filteredResults]);
+
+  useEffect(() => {
+    function onKeydown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (sortedResults.length === 0) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedRowIndex((prev) => Math.min(prev + 1, sortedResults.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedRowIndex((prev) => Math.max(prev - 1, 0));
+      } else if (e.key === "Enter" && selectedRowIndex >= 0) {
+        e.preventDefault();
+        const row = sortedResults[selectedRowIndex];
+        if (row) handleCopy(row, `${row.package}-kbd`);
+      }
+    }
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
+  }, [sortedResults, selectedRowIndex]);
 
   const handleCopy = async (result: SearchResult, key: string) => {
     const cmd = getInstallCommand(result);
@@ -936,7 +971,7 @@ export function ReportView({
             {filteredResults.length === 0 ? (
               <EmptyState text="当前筛选条件下无匹配结果" hint="尝试切换上方的筛选标签或清空搜索框" />
             ) : (
-              <div className="result-table-wrapper">
+              <div className="result-table-wrapper" ref={resultTableRef}>
                 <div className="result-table" role="table" aria-label="包来源验证结果">
                   <div className="result-row result-head" role="row">
                     <span role="columnheader" className={`sortable ${sortKey === "package" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("package")}>包名</span>
@@ -951,10 +986,11 @@ export function ReportView({
                 const installCmd = getInstallCommand(result);
                 return (
                   <div
-                    className="result-row"
+                    className={`result-row${selectedRowIndex === index ? " row-selected" : ""}`}
                     role="row"
                     key={rowKey}
                     onDoubleClick={() => handleCopy(result, rowKey)}
+                    onMouseEnter={() => setSelectedRowIndex(index)}
                     onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, result }); }}
                     title={result.found ? "双击此行可复制安装命令" : "双击此行可复制包名"}
                   >

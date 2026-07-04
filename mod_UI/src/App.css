@@ -1245,6 +1245,12 @@ input:focus-visible,
   background: rgba(74, 158, 255, 0.04);
 }
 
+.result-row.row-selected {
+  background: var(--theme-color-soft) !important;
+  outline: 2px solid var(--theme-color);
+  outline-offset: -2px;
+}
+
 .result-row strong {
   font-size: 15px;
 }

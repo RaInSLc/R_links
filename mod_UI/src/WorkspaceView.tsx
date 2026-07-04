@@ -109,6 +109,19 @@ export function WorkspaceView({
           ref={textareaRef}
           value={input}
           onChange={(event) => onInputChange(event.currentTarget.value, "manual")}
+          onKeyDown={(e) => {
+            if (e.key === "Tab") {
+              e.preventDefault();
+              const el = e.currentTarget;
+              const s = el.selectionStart;
+              const en = el.selectionEnd;
+              const newVal = input.slice(0, s) + "  " + input.slice(en);
+              const accepted = onInputChange(newVal, "manual");
+              if (accepted !== "rejected") {
+                requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = s + 2; });
+              }
+            }
+          }}
           onDragOver={(e) => { e.preventDefault(); if (!searching) setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleFileDrop}
