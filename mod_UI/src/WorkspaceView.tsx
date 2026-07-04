@@ -317,7 +317,18 @@ export function WorkspaceView({
           </div>
           <small>{scriptCommandCount > 0 ? `${scriptCommandCount} 条命令` : "R Script"}</small>
         </header>
-        <pre aria-label="生成的 R 脚本" tabIndex={0}>{script}</pre>
+        <pre aria-label="生成的 R 脚本" tabIndex={0}>
+          {script === "等待输入..." || !script ? (
+            script
+          ) : (
+            script.split("\n").map((line, i) => (
+              <div className="script-line" key={i}>
+                <span className="line-no" aria-hidden="true">{i + 1}</span>
+                <span className="line-text">{line}</span>
+              </div>
+            ))
+          )}
+        </pre>
         {scriptTooLarge && (
           <div className="inline-warning">
             脚本内容超出限制：最多 {MAX_SCRIPT_CHARS} 字节。

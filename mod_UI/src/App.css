@@ -918,6 +918,29 @@ input:focus-visible,
   white-space: pre-wrap;
 }
 
+.script-line {
+  display: flex;
+  align-items: baseline;
+}
+
+.line-no {
+  flex-shrink: 0;
+  width: 2.5em;
+  margin-right: 12px;
+  text-align: right;
+  color: var(--muted);
+  opacity: 0.4;
+  user-select: none;
+  -webkit-user-select: none;
+  font-size: 13px;
+}
+
+.line-text {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .script-actions {
   justify-content: flex-end;
 }

@@ -428,6 +428,17 @@ function App() {
     return () => window.removeEventListener("keydown", onKeydown);
   }, [view, searching, input, inputTooLarge]);
 
+  useEffect(() => {
+    const base = "R Package Center";
+    if (searching && packageCount > 0) {
+      document.title = `${base} — 检索中 ${foundCount}/${packageCount}`;
+    } else if (results.length > 0) {
+      document.title = `${base} — ${uniqueFoundCount}/${packageCount} 已验证`;
+    } else {
+      document.title = base;
+    }
+  }, [searching, foundCount, packageCount, results.length, uniqueFoundCount]);
+
   return (
     <div className="app-shell">
       <aside className="sidebar">

@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-07-04 20:57:00 +08:00]
+
+### Added
+- **窗口标题动态更新**：标题栏实时显示检索状态（如"R Package Center — 检索中 3/10"或"— 5/10 已验证"），多窗口切换时一目了然。
+- **脚本面板行号显示**：每行脚本左侧显示行号，行号不参与选中复制。
+
+### Tests
+- **通过完整编译与启动执行验证**：`npm run test`（72 用例）、`npm run build`、`cargo clippy`（零警告）、`npm run tauri build -- --no-bundle`，release exe 启动验证通过。
+
 ## [2026-07-04 20:52:00 +08:00]
 
 ### Added
