@@ -418,6 +418,9 @@ function App() {
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "C" || e.key === "c")) {
         e.preventDefault();
         copyScript();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        downloadScript();
       }
     }
     window.addEventListener("keydown", onKeydown);

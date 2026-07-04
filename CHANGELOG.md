@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-07-04 20:18:00 +08:00]
+
+### Added
+- **结果行包名可点击打开来源网页**：已验证的 CRAN/Bioconductor/GitHub 包名可点击直接打开来源页面。
+- **Ctrl+S 快捷键下载脚本**：在工作台页面按 Ctrl+S 即可下载 R 脚本文件，按钮显示快捷键提示。
+
+### Tests
+- **通过完整编译与启动执行验证**：`npm run test`（72 用例）、`npm run build`、`cargo clippy`（零警告）、`npm run tauri build -- --no-bundle`，release exe 启动验证通过。
+
 ## [2026-07-04 20:14:00 +08:00]
 
 ### Added

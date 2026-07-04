@@ -1147,6 +1147,19 @@ input:focus-visible,
   transition: all 150ms ease;
 }
 
+.pkg-link {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  transition: color 0.12s, text-decoration-color 0.12s;
+}
+
+.pkg-link:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
 .result-row:hover .row-copy-btn {
   opacity: 0.7; /* 当鼠标悬停在这一行上时，显示复制图标 */
 }

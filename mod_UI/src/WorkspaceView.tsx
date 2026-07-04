@@ -302,8 +302,8 @@ export function WorkspaceView({
             <button className="button ghost" style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onCleanComments} disabled={scriptTooLarge}>
               移除注释
             </button>
-            <button className="button ghost" style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onDownloadScript} disabled={!script || script === "等待输入..." || scriptTooLarge}>
-              下载 .R
+            <button className="button ghost" style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onDownloadScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+S">
+              下载 .R<span className="kbd-hint">Ctrl+S</span>
             </button>
             <button className="button primary" style={{ padding: "4px 12px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onCopyScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+Shift+C">
               复制脚本<span className="kbd-hint">Ctrl+⇧C</span>

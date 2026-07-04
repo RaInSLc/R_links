@@ -550,6 +550,21 @@ export function ReportView({
     }
   };
 
+  const handleOpenPage = async (result: SearchResult) => {
+    if (!result.found) return;
+    if (result.source !== "cran" && result.source !== "bioc" && result.source !== "github") return;
+    try {
+      await invoke("open_package_page", {
+        package: result.realName || result.package,
+        source: result.source,
+        repository: result.repository || "",
+      });
+      onStatusChange(`已打开 ${result.package} 的来源网页`);
+    } catch (error) {
+      onStatusChange(`打开来源网页失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   return (
     <div className={`report-layout ${dependencyGraph ? "has-deps" : ""}`}>
       <div className="metric-row">
@@ -705,7 +720,12 @@ export function ReportView({
                 const installCmd = getInstallCommand(result);
                 return (
                   <div className="result-row" role="row" key={rowKey}>
-                    <strong role="cell">{result.package}</strong>
+                    <strong
+                      role="cell"
+                      className={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github") ? "pkg-link" : ""}
+                      onClick={() => handleOpenPage(result)}
+                      title={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github") ? `点击打开 ${result.package} 来源网页` : undefined}
+                    >{result.package}</strong>
                     <span role="cell" className="source-cell-with-copy">
                       <span className={`source-tag ${result.source}`}>
                         {sourceNames[result.source] ?? result.source}
