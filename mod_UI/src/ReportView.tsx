@@ -496,6 +496,17 @@ export function ReportView({
     }
   }, [logs]);
 
+  useEffect(() => {
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === "Escape" && (resultFilter !== "all" || resultSearch)) {
+        setResultFilter("all");
+        setResultSearch("");
+      }
+    }
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
+  }, [resultFilter, resultSearch]);
+
   const filteredResults = useMemo(() => {
     let list = results;
     if (resultFilter === "found") list = list.filter((r) => r.found);

@@ -181,6 +181,14 @@ export function WorkspaceView({
             onChange={handleFilePick}
             style={{ display: "none" }}
           />
+          <button
+            className="button ghost"
+            onClick={() => onInputChange(`Seurat\nggplot2\ndplyr\nDESeq2\nClusterProfiler\nbuenrostrolab/FigR\nGSVA\nSingleCellExperiment\nlimma\ntidyverse`, "manual")}
+            disabled={searching}
+            title="填充常用生物信息学 R 包示例"
+          >
+            示例
+          </button>
           <button className="button ghost wide" onClick={onOpenSearchTabs} disabled={searching || openingSearchTabs || inputTooLarge}>
             {openingSearchTabs ? "正在打开..." : "浏览器搜索"}
           </button>

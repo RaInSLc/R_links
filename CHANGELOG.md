@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-07-04 21:02:00 +08:00]
+
+### Added
+- **输入面板"示例"按钮**：一键填充 10 个常用生物信息学 R 包（含 GitHub 仓库），新用户快速体验。
+- **报告页 Escape 键清除筛选**：在报告页按 Escape 一键重置筛选标签和搜索框。
+
+### Tests
+- **通过完整编译与启动执行验证**：`npm run test`（72 用例）、`npm run build`、`cargo clippy`（零警告）、`npm run tauri build -- --no-bundle`，release exe 启动验证通过。
+
 ## [2026-07-04 20:57:00 +08:00]
 
 ### Added
