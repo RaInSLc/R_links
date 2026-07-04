@@ -2,7 +2,7 @@ import { PanelHeader, Toggle } from "./components";
 import { MAX_RESULT_FIELD_CHARS, MAX_TOKEN_CHARS, type MirrorSpeedResult } from "./utils";
 import { mirrors } from "./types";
 import type { InputRules, Settings } from "./types";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 interface SettingsViewProps {
@@ -61,6 +61,27 @@ export function SettingsView({
 }: SettingsViewProps) {
   const [speedTesting, setSpeedTesting] = useState(false);
   const [speedResults, setSpeedResults] = useState<MirrorSpeedResult[]>([]);
+  const fileConfigRef = useRef<HTMLInputElement>(null);
+
+  const updateSetting = (key: string, val: unknown) => {
+    const m: Record<string, (v: never) => void> = {
+      proxy: onProxyChange as never,
+      githubToken: onTokenChange as never,
+      cranMirror: onCranMirrorChange as never,
+      fullSearch: onFullSearchChange as never,
+      conditional: onConditionalChange as never,
+      installDependencies: onInstallDependenciesChange as never,
+      showRemoteVersion: onShowRemoteVersionChange as never,
+      useCache: onUseCacheChange as never,
+      maxCacheEntries: onMaxCacheEntriesChange as never,
+      useFilter: onUseFilterChange as never,
+      resolveDependencies: onResolveDependenciesChange as never,
+      maxDependencyDepth: onMaxDependencyDepthChange as never,
+      includeLightDependencies: onIncludeLightDependenciesChange as never,
+      maxDependencyNodes: onMaxDependencyNodesChange as never,
+    };
+    if (key in m) m[key](val as never);
+  };
 
   async function handleTestSpeed() {
     setSpeedTesting(true);
@@ -329,6 +350,75 @@ export function SettingsView({
               {checkingUpdate ? '正在处理...' : '检查更新'}
             </button>
             {updateMessage && <span style={{fontSize: '14px', color: 'var(--muted)'}}>{updateMessage}</span>}
+          </div>
+        </div>
+      </section>
+
+      <section className="panel settings-panel">
+        <PanelHeader step="备份" title="配置备份" meta="导出/导入" />
+        <div className="field" style={{ margin: "0 17px" }}>
+          <span>导出当前配置</span>
+          <small>将所有设置（策略、缓存、主题、字号、过滤规则等）导出为 JSON 文件，方便备份或迁移</small>
+          <div style={{ display: "flex", gap: "8px", marginTop: "9px" }}>
+            <button
+              className="button ghost"
+              style={{ marginLeft: 0 }}
+              onClick={() => {
+                const config = {
+                  exportedAt: new Date().toISOString(),
+                  settings,
+                  inputRules,
+                  theme: localStorage.getItem("theme") || "office",
+                  fontFamily: localStorage.getItem("fontFamily") || "modern",
+                  fontSize: localStorage.getItem("fontSize") || "14",
+                };
+                const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `rlinks_config_${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }}
+            >
+              导出配置
+            </button>
+            <button
+              className="button ghost"
+              onClick={() => fileConfigRef.current?.click()}
+            >
+              导入配置
+            </button>
+            <input
+              ref={fileConfigRef}
+              type="file"
+              accept=".json"
+              style={{ display: "none" }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const config = JSON.parse(text);
+                  if (config.settings) {
+                    Object.entries(config.settings).forEach(([key, val]) => {
+                      updateSetting(key, val);
+                    });
+                  }
+                  if (config.theme) { onThemeChange(config.theme); }
+                  if (config.fontFamily) { onFontChange(config.fontFamily); }
+                  if (config.fontSize) { onFontSizeChange(Number(config.fontSize)); }
+                  if (config.inputRules) { onInputRulesChange(config.inputRules); }
+                  onSaveSettings();
+                  onSaveInputRules();
+                } catch {
+                  /* invalid file */
+                }
+              }}
+            />
           </div>
         </div>
       </section>

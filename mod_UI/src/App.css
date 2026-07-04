@@ -559,6 +559,39 @@ input:focus-visible,
   align-items: center;
 }
 
+.input-stats-bar {
+  display: flex;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.input-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--tag-default-bg);
+}
+
+.input-stat-chip strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.input-stat-chip.warn {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--red);
+}
+
+.input-stat-chip.warn strong {
+  color: var(--red);
+}
+
 .temp-filter-input {
   flex: 1;
   height: 34px;

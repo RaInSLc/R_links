@@ -851,6 +851,23 @@ export function ReportView({
                   >
                     重试未找到
                   </button>
+                  {results.some((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")) && (
+                    <button
+                      type="button"
+                      className="button ghost compact-btn"
+                      disabled={searching}
+                      onClick={() => {
+                        const errorPkgs = [...new Set(
+                          results
+                            .filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error"))
+                            .map((r) => r.package),
+                        )];
+                        onRetryMissing(errorPkgs);
+                      }}
+                    >
+                      重试异常
+                    </button>
+                  )}
                 </>
               )}
               <button
