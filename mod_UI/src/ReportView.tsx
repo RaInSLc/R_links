@@ -508,6 +508,12 @@ export function ReportView({
         setResultFilter("all");
         setResultSearch("");
         setDebouncedSearch("");
+      } else if (e.altKey && e.key === "1") {
+        e.preventDefault();
+        setActiveTab("graph");
+      } else if (e.altKey && e.key === "2") {
+        e.preventDefault();
+        setActiveTab("list");
       }
     }
     window.addEventListener("keydown", onKeydown);
@@ -993,7 +999,7 @@ export function ReportView({
                   color: activeTab === "graph" ? "var(--primary-color)" : "inherit",
                 }}
               >
-                依赖关系图谱
+                依赖关系图谱<span className="kbd-hint">Alt+1</span>
               </button>
               <button
                 className={`tab-btn ${activeTab === "list" ? "active" : ""}`}
@@ -1009,7 +1015,7 @@ export function ReportView({
                   color: activeTab === "list" ? "var(--primary-color)" : "inherit",
                 }}
               >
-                依赖清单列表
+                依赖清单列表<span className="kbd-hint">Alt+2</span>
               </button>
             </div>
 

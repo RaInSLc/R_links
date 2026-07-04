@@ -383,25 +383,43 @@ export function SettingsView({
           </div>
           {speedResults.length > 0 && (
             <div style={{ marginTop: "10px", fontSize: "13px" }}>
-              {speedResults.map((r, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: "flex", gap: "8px", padding: "6px 0",
-                    borderBottom: "1px solid var(--line)",
-                    color: r.success ? (i === 0 ? "#16a34a" : "inherit") : "#dc2626",
-                  }}
-                >
-                  <span style={{ fontWeight: 600, minWidth: "100px" }}>{r.label}</span>
-                  <span style={{ minWidth: "60px" }}>
-                    {r.success ? `${r.latencyMs}ms` : "失败"}
-                    {i === 0 && r.success && <span style={{ marginLeft: "4px", fontSize: "11px" }}>最快</span>}
-                  </span>
-                  <span style={{ fontSize: "12px", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.error ? r.error : r.mirror}
-                  </span>
-                </div>
-              ))}
+              {speedResults.map((r, i) => {
+                const latencyColor = !r.success ? "#dc2626" : r.latencyMs < 500 ? "#16a34a" : r.latencyMs < 1500 ? "#d97706" : "#dc2626";
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex", gap: "8px", padding: "6px 0", alignItems: "center",
+                      borderBottom: "1px solid var(--line)",
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, minWidth: "100px" }}>{r.label}</span>
+                    <span
+                      style={{
+                        minWidth: "70px", fontWeight: 600, color: latencyColor,
+                        padding: "2px 6px", borderRadius: "4px",
+                        background: `${latencyColor}15`,
+                      }}
+                    >
+                      {r.success ? `${r.latencyMs}ms` : "失败"}
+                      {i === 0 && r.success && <span style={{ marginLeft: "4px", fontSize: "11px" }}>最快</span>}
+                    </span>
+                    <span style={{ fontSize: "12px", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                      {r.error ? r.error : r.mirror}
+                    </span>
+                    {i === 0 && r.success && r.mirror && (
+                      <button
+                        type="button"
+                        className="button ghost"
+                        style={{ padding: "2px 8px", fontSize: "11px", height: "auto", minHeight: "auto", whiteSpace: "nowrap" }}
+                        onClick={() => onMirrorSelect(r.mirror)}
+                      >
+                        使用此镜像
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
