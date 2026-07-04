@@ -204,9 +204,11 @@ export function WorkspaceView({
             输入超出限制或包含非法字符：最多 {MAX_PACKAGE_LINES} 行、总计 {MAX_INPUT_CHARS} 字节、单行 {MAX_INPUT_LINE_BYTES} 字节。
           </div>
         )}
-        {inputProfile.total > 0 && (
+        {input.length > 0 && (
           <div className="input-stats-bar">
-            <span className="input-stat-chip">CRAN/Bioc <strong>{inputProfile.total - inputProfile.archiveUrls - inputProfile.repositories}</strong></span>
+            <span className="input-stat-chip">行数 <strong>{input.split("\n").filter((l) => l.trim()).length}</strong></span>
+            <span className="input-stat-chip">字符 <strong>{input.length}</strong></span>
+            {inputProfile.total > 0 && <span className="input-stat-chip">CRAN/Bioc <strong>{inputProfile.total - inputProfile.archiveUrls - inputProfile.repositories}</strong></span>}
             {inputProfile.repositories > 0 && <span className="input-stat-chip">GitHub <strong>{inputProfile.repositories}</strong></span>}
             {inputProfile.archiveUrls > 0 && <span className="input-stat-chip">URL <strong>{inputProfile.archiveUrls}</strong></span>}
             {duplicateCount > 0 && <span className="input-stat-chip warn">重复 <strong>{duplicateCount}</strong></span>}

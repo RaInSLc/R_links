@@ -1,6 +1,6 @@
 import { PanelHeader, Toggle } from "./components";
 import { MAX_RESULT_FIELD_CHARS, MAX_TOKEN_CHARS, type MirrorSpeedResult } from "./utils";
-import { mirrors } from "./types";
+import { mirrors, defaultSettings, defaultInputRules } from "./types";
 import type { InputRules, Settings } from "./types";
 import { useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -394,6 +394,23 @@ export function SettingsView({
               onClick={() => fileConfigRef.current?.click()}
             >
               导入配置
+            </button>
+            <button
+              className="button ghost"
+              onClick={() => {
+                if (!window.confirm("确定恢复全部设置为默认值？此操作不可撤销。")) return;
+                Object.entries(defaultSettings).forEach(([key, val]) => {
+                  if (key !== "githubToken") updateSetting(key, val);
+                });
+                onThemeChange("light");
+                onFontChange("system-ui");
+                onFontSizeChange(14);
+                onInputRulesChange({ ...defaultInputRules });
+                onSaveSettings();
+                onSaveInputRules();
+              }}
+            >
+              恢复默认
             </button>
             <input
               ref={fileConfigRef}

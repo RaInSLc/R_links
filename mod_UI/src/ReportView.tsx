@@ -511,11 +511,14 @@ export function ReportView({
   useEffect(() => {
     if (!ctxMenu) return;
     function closeCtxMenu() { setCtxMenu(null); }
+    function onEsc(e: KeyboardEvent) { if (e.key === "Escape") setCtxMenu(null); }
     window.addEventListener("click", closeCtxMenu);
     window.addEventListener("scroll", closeCtxMenu, true);
+    window.addEventListener("keydown", onEsc);
     return () => {
       window.removeEventListener("click", closeCtxMenu);
       window.removeEventListener("scroll", closeCtxMenu, true);
+      window.removeEventListener("keydown", onEsc);
     };
   }, [ctxMenu]);
 
