@@ -499,7 +499,14 @@ export function WorkspaceView({
             </button>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <small>{scriptCommandCount > 0 ? `${scriptCommandCount} 条命令` : "R Script"}</small>
+            <small>
+              {scriptCommandCount > 0 ? (() => {
+                const cranCount = (script.match(/install\.packages/g) || []).length;
+                const biocCount = (script.match(/BiocManager::install/g) || []).length;
+                const githubCount = (script.match(/(?:remotes|devtools)::install_github/g) || []).length;
+                return `${scriptCommandCount} 条 · CRAN ${cranCount} · Bioc ${biocCount} · GitHub ${githubCount}`;
+              })() : "R Script"}
+            </small>
             <button
               type="button"
               className="button ghost"

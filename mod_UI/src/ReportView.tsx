@@ -1554,6 +1554,7 @@ export function ReportView({
                 </div>
                 <div className="result-table-footer">
                   共 {filteredResults.length} 条 · 已验证 {filteredResults.filter((r) => r.found).length} · 未找到 {filteredResults.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").length} · 异常 {filteredResults.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")).length}
+                  {selectedResults.size > 0 && <span className="footer-selected"> · 已选中 {selectedResults.size}</span>}
                 </div>
               </div>
             )}
@@ -1621,6 +1622,21 @@ export function ReportView({
               return expandedRows.has(k) ? "收起详情" : "展开详情";
             })()}
           </button>
+          {ctxMenu.result.latestVersion && (
+            <button
+              type="button"
+              className="ctx-menu-item"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(ctxMenu.result.latestVersion || "");
+                  onStatusChange(`已复制版本号: ${ctxMenu.result.latestVersion}`);
+                } catch { /* ignore */ }
+                setCtxMenu(null);
+              }}
+            >
+              复制版本号: {ctxMenu.result.latestVersion}
+            </button>
+          )}
         </div>
       )}
 

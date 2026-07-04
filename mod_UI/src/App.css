@@ -1739,6 +1739,11 @@ input:focus-visible,
   text-align: center;
 }
 
+.result-table-footer .footer-selected {
+  color: var(--theme-color);
+  font-weight: 600;
+}
+
 .status-legend {
   display: flex;
   gap: 14px;
