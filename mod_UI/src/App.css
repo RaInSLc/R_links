@@ -1685,6 +1685,12 @@ input:focus-visible,
   background: var(--theme-color-soft);
 }
 
+.history-item.nav-selected {
+  background: var(--theme-color-soft);
+  outline: 2px solid var(--theme-color);
+  outline-offset: -2px;
+}
+
 .history-item:hover {
   background: var(--row-hover);
 }
@@ -2149,6 +2155,53 @@ body {
   font-weight: 700;
   color: var(--ink);
   pointer-events: none;
+}
+
+.source-bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-left: 8px;
+  min-width: 120px;
+}
+
+.source-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.source-bar-label {
+  font-size: 10px;
+  color: var(--muted);
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-bar-track {
+  flex: 1;
+  height: 8px;
+  background: var(--tag-default-bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.source-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 400ms ease;
+}
+
+.source-bar-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 16px;
+  text-align: left;
 }
 
 .cache-progress-bar {

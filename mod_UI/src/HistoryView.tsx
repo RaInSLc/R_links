@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { PanelHeader, EmptyState } from "./components";
 import type { HistoryRecord } from "./utils";
 
@@ -18,6 +18,7 @@ export function HistoryView({
 }: HistoryViewProps) {
   const [sortBy, setSortBy] = useState<"time" | "name">("time");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [histNavIndex, setHistNavIndex] = useState(-1);
 
   const filtered = history
     .filter(record =>
@@ -29,6 +30,22 @@ export function HistoryView({
   const sorted = sortBy === "name"
     ? [...filtered].sort((a, b) => (a.packageName || "").localeCompare(b.packageName || ""))
     : filtered;
+
+  useEffect(() => { setHistNavIndex(-1); }, [filtered]);
+
+  const onHistKeydown = useCallback((e: KeyboardEvent) => {
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (sorted.length === 0) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setHistNavIndex((p) => Math.min(p + 1, sorted.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHistNavIndex((p) => Math.max(p - 1, 0)); }
+    else if (e.key === "Enter" && histNavIndex >= 0 && sorted[histNavIndex]) { e.preventDefault(); onApplyRecord(sorted[histNavIndex]); }
+  }, [sorted, histNavIndex]);
+
+  useEffect(() => {
+    window.addEventListener("keydown", onHistKeydown);
+    return () => window.removeEventListener("keydown", onHistKeydown);
+  }, [onHistKeydown]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -135,7 +152,7 @@ export function HistoryView({
             </label>
           </div>
           {sorted.map((record) => (
-            <article className={`history-item ${selectedIds.has(record.id) ? "selected" : ""}`} key={record.id}>
+            <article className={`history-item ${selectedIds.has(record.id) ? "selected" : ""} ${histNavIndex === sorted.indexOf(record) ? "nav-selected" : ""}`} key={record.id} onMouseEnter={() => setHistNavIndex(sorted.indexOf(record))}>
               <input
                 type="checkbox"
                 className="history-checkbox"

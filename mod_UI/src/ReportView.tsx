@@ -711,6 +711,29 @@ export function ReportView({
             </div>
           );
         })()}
+        {(() => {
+          const sourceCounts = results.reduce<Record<string, number>>((acc, r) => {
+            if (r.found) { acc[r.source] = (acc[r.source] || 0) + 1; }
+            return acc;
+          }, {});
+          const entries = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+          if (entries.length === 0) return null;
+          const max = Math.max(...entries.map(([, c]) => c));
+          const colors: Record<string, string> = { cran: "#176b4d", bioc: "#ca8a04", biocGit: "#ca8a04", github: "#4865aa", unknown: "#64748b" };
+          return (
+            <div className="source-bar-chart" title="已验证包来源分布">
+              {entries.map(([src, count]) => (
+                <div key={src} className="source-bar-item" title={`${sourceNames[src] ?? src}: ${count}`}>
+                  <span className="source-bar-label">{sourceNames[src] ?? src}</span>
+                  <div className="source-bar-track">
+                    <div className="source-bar-fill" style={{ width: `${(count / max) * 100}%`, background: colors[src] || "#64748b" }} />
+                  </div>
+                  <span className="source-bar-count">{count}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       <section className="panel report-panel">
