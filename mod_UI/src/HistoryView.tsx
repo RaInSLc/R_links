@@ -80,6 +80,9 @@ export function HistoryView({
                 <div>
                   <strong>{record.packageName || "R 命令"}</strong>
                   <span>{record.toolName}{record.version ? ` · v${record.version}` : ""}</span>
+                  {record.createdAt && (
+                    <span className="history-time">{new Date(record.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                  )}
                 </div>
                 <code>{record.command}</code>
               </div>

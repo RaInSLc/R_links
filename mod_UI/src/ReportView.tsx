@@ -674,6 +674,34 @@ export function ReportView({
           onClick={() => toggleFilter("error")}
         />
         <Metric label="来源记录" value={results.length} />
+        {(() => {
+          const total = uniqueFoundCount + missingCount + errorCount;
+          if (total === 0) return null;
+          const foundPct = uniqueFoundCount / total;
+          const missingPct = missingCount / total;
+          const errorPct = errorCount / total;
+          const r = 28;
+          const C = 2 * Math.PI * r;
+          const seg = (pct: number, offset: number) => {
+            const len = C * pct;
+            const gap = C - len;
+            return `${len} ${gap} ${offset}`;
+          };
+          return (
+            <div className="mini-pie-wrapper" title={`已验证 ${uniqueFoundCount} · 未找到 ${missingCount} · 异常 ${errorCount}`}>
+              <svg width="72" height="72" viewBox="0 0 72 72" style={{ transform: "rotate(-90deg)" }}>
+                <circle cx="36" cy="36" r={r} fill="none" stroke="var(--tag-default-bg)" strokeWidth="8" />
+                <circle cx="36" cy="36" r={r} fill="none" stroke="var(--success-color)" strokeWidth="8"
+                  strokeDasharray={seg(foundPct, 0)} strokeLinecap="butt" />
+                <circle cx="36" cy="36" r={r} fill="none" stroke="var(--red)" strokeWidth="8"
+                  strokeDasharray={seg(missingPct, C * foundPct)} strokeLinecap="butt" />
+                <circle cx="36" cy="36" r={r} fill="none" stroke="#e67e22" strokeWidth="8"
+                  strokeDasharray={seg(errorPct, C * (foundPct + missingPct))} strokeLinecap="butt" />
+              </svg>
+              <span className="mini-pie-center">{Math.round(foundPct * 100)}%</span>
+            </div>
+          );
+        })()}
       </div>
 
       <section className="panel report-panel">

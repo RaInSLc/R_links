@@ -356,6 +356,15 @@ export function SettingsView({
               onMaxCacheEntriesChange(isNaN(val) ? 1000 : val);
             }}
           />
+          <div className="cache-progress-bar">
+            <div
+              className="cache-progress-fill"
+              style={{ width: `${Math.min(100, (settings.maxCacheEntries / 10000) * 100)}%` }}
+            />
+            <span className="cache-progress-label">
+              {settings.maxCacheEntries >= 5000 ? "高容量" : settings.maxCacheEntries >= 1000 ? "标准容量" : "精简容量"}
+            </span>
+          </div>
         </div>
         <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
           <span>清理缓存数据</span>
