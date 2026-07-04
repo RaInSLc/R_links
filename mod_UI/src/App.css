@@ -1301,28 +1301,32 @@ input:focus-visible,
 }
 
 .source-tag {
+  display: inline-block;
   width: fit-content;
-  padding: 3px 7px;
+  padding: 2px 8px;
   color: var(--tag-default-text);
   background: var(--tag-default-bg);
   border-radius: 4px;
-  font-size: 15px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .source-tag.cran {
   color: #176b4d;
-  background: #dcece4;
+  background: rgba(22, 163, 74, 0.1);
 }
 
 .source-tag.bioc,
 .source-tag.biocGit {
-  color: #75521f;
-  background: #f2e8d6;
+  color: #8a5a14;
+  background: rgba(202, 138, 4, 0.1);
 }
 
 .source-tag.github {
   color: #38485d;
-  background: #e1e7ee;
+  background: rgba(72, 101, 170, 0.1);
 }
 
 .found {

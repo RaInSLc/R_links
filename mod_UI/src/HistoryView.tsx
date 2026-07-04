@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PanelHeader, EmptyState } from "./components";
 import type { HistoryRecord } from "./utils";
 
@@ -15,6 +16,19 @@ export function HistoryView({
   history, historySearch, onHistorySearchChange,
   onApplyRecord, onCopyRecord, onDeleteRecord, onClearAll,
 }: HistoryViewProps) {
+  const [sortBy, setSortBy] = useState<"time" | "name">("time");
+
+  const filtered = history
+    .filter(record =>
+      (record.packageName && record.packageName.toLowerCase().includes(historySearch.toLowerCase())) ||
+      (record.toolName && record.toolName.toLowerCase().includes(historySearch.toLowerCase())) ||
+      (record.command && record.command.toLowerCase().includes(historySearch.toLowerCase()))
+    );
+
+  const sorted = sortBy === "name"
+    ? [...filtered].sort((a, b) => (a.packageName || "").localeCompare(b.packageName || ""))
+    : filtered;
+
   return (
     <section className="panel history-panel">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -27,6 +41,17 @@ export function HistoryView({
             onChange={(e) => onHistorySearchChange(e.target.value)}
             style={{ padding: "4px 8px", fontSize: "12px", width: "200px" }}
           />
+          {filtered.length > 0 && (
+            <button
+              type="button"
+              className="button ghost"
+              style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto", whiteSpace: "nowrap" }}
+              onClick={() => setSortBy(sortBy === "time" ? "name" : "time")}
+              title={sortBy === "time" ? "当前：按时间排序，点击切换为按名称" : "当前：按名称排序，点击切换为按时间"}
+            >
+              {sortBy === "time" ? "时间↓" : "名称A-Z"}
+            </button>
+          )}
           {history.length > 0 && (
             <button
               type="button"
@@ -45,15 +70,11 @@ export function HistoryView({
       </div>
       {history.length === 0 ? (
         <EmptyState text="复制脚本后，命令会记录在这里" />
+      ) : sorted.length === 0 ? (
+        <EmptyState text="无匹配的历史记录" hint="尝试修改搜索关键词" />
       ) : (
         <div className="history-list">
-          {history
-            .filter(record =>
-              (record.packageName && record.packageName.toLowerCase().includes(historySearch.toLowerCase())) ||
-              (record.toolName && record.toolName.toLowerCase().includes(historySearch.toLowerCase())) ||
-              (record.command && record.command.toLowerCase().includes(historySearch.toLowerCase()))
-            )
-            .map((record) => (
+          {sorted.map((record) => (
             <article className="history-item" key={record.id}>
               <div className="history-main">
                 <div>
