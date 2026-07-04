@@ -488,6 +488,18 @@ export function ReportView({
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortKey, setSortKey] = useState<"package" | "source" | "version" | "status">("package");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; result: SearchResult } | null>(null);
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    function closeCtxMenu() { setCtxMenu(null); }
+    window.addEventListener("click", closeCtxMenu);
+    window.addEventListener("scroll", closeCtxMenu, true);
+    return () => {
+      window.removeEventListener("click", closeCtxMenu);
+      window.removeEventListener("scroll", closeCtxMenu, true);
+    };
+  }, [ctxMenu]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(resultSearch), 200);
@@ -943,6 +955,7 @@ export function ReportView({
                     role="row"
                     key={rowKey}
                     onDoubleClick={() => handleCopy(result, rowKey)}
+                    onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, result }); }}
                     title={result.found ? "双击此行可复制安装命令" : "双击此行可复制包名"}
                   >
                     <strong
@@ -1008,6 +1021,40 @@ export function ReportView({
             </>
           )}
       </section>
+
+      {ctxMenu && (
+        <div
+          className="ctx-menu"
+          style={{ position: "fixed", left: ctxMenu.x, top: ctxMenu.y, zIndex: 1000 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="ctx-menu-item"
+            onClick={() => { handleCopy(ctxMenu.result, `${ctxMenu.result.package}-ctx`); setCtxMenu(null); }}
+          >
+            {ctxMenu.result.found ? "复制安装命令" : "复制包名"}
+          </button>
+          {ctxMenu.result.found && (ctxMenu.result.source === "cran" || ctxMenu.result.source === "bioc" || ctxMenu.result.source === "github") && (
+            <button
+              type="button"
+              className="ctx-menu-item"
+              onClick={() => { handleOpenPage(ctxMenu.result); setCtxMenu(null); }}
+            >
+              打开来源网页
+            </button>
+          )}
+          {!ctxMenu.result.found && (
+            <button
+              type="button"
+              className="ctx-menu-item"
+              onClick={() => { onRetryMissing([ctxMenu.result.package]); setCtxMenu(null); }}
+            >
+              重试此包
+            </button>
+          )}
+        </div>
+      )}
 
       {dependencyGraph && (
         <section className="panel dependency-panel">

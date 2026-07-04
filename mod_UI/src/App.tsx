@@ -25,6 +25,10 @@ function App() {
   const [view, setView] = useState<View>("workspace");
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem("theme") || "office");
   const [currentFont, setCurrentFont] = useState(() => localStorage.getItem("fontFamily") || "modern");
+  const [currentFontSize, setCurrentFontSize] = useState(() => {
+    const v = Number(localStorage.getItem("fontSize"));
+    return (v >= 12 && v <= 20) ? v : 14;
+  });
   const [input, setInput] = useState(() => localStorage.getItem("rlinks_input") || "");
   const [method, setMethod] = useState<Method>(() => {
     const stored = localStorage.getItem("rlinks_method");
@@ -165,6 +169,10 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute("data-font", currentFont);
   }, [currentFont]);
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${currentFontSize}px`;
+    localStorage.setItem("fontSize", String(currentFontSize));
+  }, [currentFontSize]);
 
   const handleThemeChange = (theme: string) => {
     setCurrentTheme(theme);
@@ -173,6 +181,9 @@ function App() {
   const handleFontChange = (font: string) => {
     setCurrentFont(font);
     localStorage.setItem("fontFamily", font);
+  };
+  const handleFontSizeChange = (size: number) => {
+    setCurrentFontSize(size);
   };
 
   function acceptInputValue(value: string, source: "manual" | "clipboard") {
@@ -422,6 +433,9 @@ function App() {
       } else if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         downloadScript();
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "K" || e.key === "k")) {
+        e.preventDefault();
+        if (!searching && input.trim()) { setInput(""); }
       }
     }
     window.addEventListener("keydown", onKeydown);
@@ -611,6 +625,7 @@ function App() {
               }}
               onSaveSettings={persistSettings}
               onThemeChange={handleThemeChange} onFontChange={handleFontChange}
+              currentFontSize={currentFontSize} onFontSizeChange={handleFontSizeChange}
               onCheckUpdates={checkForUpdates}
               onClearCache={async () => {
                 try { await invoke("clear_package_cache"); setStatus("包缓存已清除"); }

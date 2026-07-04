@@ -1805,3 +1805,30 @@ body {
 .dependency-panel .tab-btn.active {
   border-bottom: 2px solid var(--theme-color) !important;
 }
+
+.ctx-menu {
+  min-width: 160px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px 0;
+}
+
+.ctx-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+
+.ctx-menu-item:hover {
+  background: var(--theme-color-soft);
+  color: var(--theme-color);
+}

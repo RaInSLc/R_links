@@ -34,6 +34,8 @@ interface SettingsViewProps {
   onSaveSettings: () => void;
   onThemeChange: (theme: string) => void;
   onFontChange: (font: string) => void;
+  currentFontSize: number;
+  onFontSizeChange: (size: number) => void;
   onCheckUpdates: () => void;
   onClearCache: () => Promise<void>;
   onExportDiagnostics: () => Promise<void>;
@@ -53,6 +55,7 @@ export function SettingsView({
   onResolveDependenciesChange, onMaxDependencyDepthChange,
   onIncludeLightDependenciesChange, onMaxDependencyNodesChange,
   onSaveSettings, onThemeChange, onFontChange,
+  currentFontSize, onFontSizeChange,
   onCheckUpdates, onClearCache, onExportDiagnostics,
   inputRules, onInputRulesChange, onSaveInputRules, inputRulesBusy,
 }: SettingsViewProps) {
@@ -168,6 +171,24 @@ export function SettingsView({
                   <span>{font === "modern" ? "现代 (推荐)" : font === "system" ? "系统默认" : "传统宋体"}</span>
                 </button>
               ))}
+            </div>
+          </div>
+          <div className="field" style={{ margin: "0 17px", marginTop: "24px" }}>
+            <span>界面字号</span>
+            <small>拖动滑块实时调整界面字体大小（{currentFontSize}px）</small>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "8px" }}>
+              <span style={{ fontSize: "12px", color: "var(--muted)" }}>A</span>
+              <input
+                type="range"
+                min={12}
+                max={20}
+                step={1}
+                value={currentFontSize}
+                onChange={(e) => onFontSizeChange(Number(e.currentTarget.value))}
+                style={{ flex: 1, accentColor: "var(--theme-color)" }}
+              />
+              <span style={{ fontSize: "20px", color: "var(--muted)" }}>A</span>
+              <span style={{ fontSize: "13px", color: "var(--muted)", minWidth: "32px", textAlign: "right" }}>{currentFontSize}px</span>
             </div>
           </div>
         </div>

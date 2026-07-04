@@ -48,6 +48,8 @@ describe('SettingsView Component', () => {
     onSaveSettings: vi.fn(),
     onThemeChange: vi.fn(),
     onFontChange: vi.fn(),
+    currentFontSize: 14,
+    onFontSizeChange: vi.fn(),
     onCheckUpdates: vi.fn(),
     onClearCache: vi.fn(),
     onExportDiagnostics: vi.fn(),
