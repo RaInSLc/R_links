@@ -461,10 +461,23 @@ function App() {
       else if (e.key === "2") { e.preventDefault(); setView("report"); }
       else if (e.key === "3") { e.preventDefault(); setView("history"); }
       else if (e.key === "4") { e.preventDefault(); setView("settings"); }
+      else if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        const selectors: Record<string, string> = {
+          report: ".result-search-input",
+          history: '.history-panel input[type="text"]',
+        };
+        const sel = selectors[view];
+        if (sel) {
+          const el = document.querySelector<HTMLInputElement>(sel);
+          el?.focus();
+          el?.select();
+        }
+      }
     }
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
-  }, []);
+  }, [view]);
 
   useEffect(() => {
     const base = "R Package Center";
@@ -508,6 +521,7 @@ function App() {
             <kbd>Ctrl</kbd>+<kbd>S</kbd> <span>下载脚本</span>
             <kbd>Ctrl</kbd>+<kbd>⇧</kbd>+<kbd>K</kbd> <span>清空输入</span>
             <kbd>Ctrl</kbd>+<kbd>D</kbd> <span>去重</span>
+            <kbd>Ctrl</kbd>+<kbd>F</kbd> <span>搜索</span>
             <kbd>Alt</kbd>+<kbd>1</kbd>/<kbd>2</kbd> <span>切换图/列表</span>
           </div>
         </details>

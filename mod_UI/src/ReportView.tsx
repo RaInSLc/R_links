@@ -769,7 +769,9 @@ export function ReportView({
               searching
                 ? "实时更新"
                 : searchDuration != null
-                ? `已完成 · ${(searchDuration / 1000).toFixed(1)}s`
+                ? `已完成 · ${(searchDuration / 1000).toFixed(1)}s · 验证率 ${results.length > 0 ? Math.round(results.filter((r) => r.found).length / results.length * 100) : 0}%`
+                : results.length > 0
+                ? `已完成 · 验证率 ${Math.round(results.filter((r) => r.found).length / results.length * 100)}%`
                 : "已完成"
             }
           />
@@ -801,6 +803,20 @@ export function ReportView({
                   选异常
                 </button>
               )}
+              <button
+                type="button"
+                className="button ghost compact-btn"
+                onClick={() => {
+                  const inverted = new Set<string>();
+                  sortedResults.forEach((r) => {
+                    if (!selectedResults.has(r.package)) inverted.add(r.package);
+                  });
+                  setSelectedResults(inverted);
+                }}
+                title="反选当前可见结果"
+              >
+                反选
+              </button>
               {selectedResults.size > 0 && (
                 <button
                   type="button"
