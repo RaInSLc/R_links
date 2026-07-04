@@ -504,6 +504,7 @@ export function ReportView({
   const [selectedResults, setSelectedResults] = useState<Set<string>>(new Set());
   const [compactMode, setCompactMode] = useState(false);
   const [logWrap, setLogWrap] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -552,10 +553,11 @@ export function ReportView({
     if (resultFilter === "found") list = list.filter((r) => r.found);
     else if (resultFilter === "missing") list = list.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error");
     else if (resultFilter === "error") list = list.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error"));
+    if (sourceFilter) list = list.filter((r) => r.source === sourceFilter);
     const q = debouncedSearch.trim().toLowerCase();
     if (q) list = list.filter((r) => r.package.toLowerCase().includes(q) || (r.repository && r.repository.toLowerCase().includes(q)));
     return list;
-  }, [results, resultFilter, debouncedSearch]);
+  }, [results, resultFilter, debouncedSearch, sourceFilter]);
 
   const missingCount = useMemo(
     () => new Set(results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").map((r) => r.package)).size,
@@ -789,6 +791,21 @@ export function ReportView({
                     }}
                   >
                     复制全部指令
+                  </button>
+                  <button
+                    type="button"
+                    className="button ghost compact-btn"
+                    onClick={async () => {
+                      const names = [...new Set(results.filter((r) => r.found).map((r) => r.package))];
+                      try {
+                        await navigator.clipboard.writeText(names.join("\n"));
+                        onStatusChange(`已复制 ${names.length} 个包名`);
+                      } catch (err) {
+                        onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                      }
+                    }}
+                  >
+                    复制包名
                   </button>
                   <button
                     type="button"
@@ -1089,9 +1106,19 @@ export function ReportView({
                 value={resultSearch}
                 onChange={(e) => setResultSearch(e.target.value)}
               />
-              {(debouncedSearch || resultFilter !== "all") && (
+              {(debouncedSearch || resultFilter !== "all" || sourceFilter) && (
                 <small className="result-count-hint">
                   显示 {filteredResults.length}/{results.length} 条
+                  {sourceFilter && (
+                    <button
+                      type="button"
+                      className="source-filter-clear"
+                      onClick={() => setSourceFilter(null)}
+                      title="取消来源筛选"
+                    >
+                      {sourceNames[sourceFilter] ?? sourceFilter} ✕
+                    </button>
+                  )}
                 </small>
               )}
               <button
@@ -1165,7 +1192,12 @@ export function ReportView({
                       title={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github") ? `点击打开 ${result.package} 来源网页` : undefined}
                     >{result.package}</strong>
                     <span role="cell" className="source-cell-with-copy">
-                      <span className={`source-tag ${result.source}`}>
+                      <span
+                        className={`source-tag ${result.source}${sourceFilter === result.source ? " tag-active" : ""}`}
+                        style={{ cursor: "pointer" }}
+                        onClick={() => setSourceFilter(sourceFilter === result.source ? null : result.source)}
+                        title={sourceFilter === result.source ? `点击取消 ${sourceNames[result.source] ?? result.source} 筛选` : `点击筛选 ${sourceNames[result.source] ?? result.source} 来源`}
+                      >
                         {sourceNames[result.source] ?? result.source}
                       </span>
                       <button
