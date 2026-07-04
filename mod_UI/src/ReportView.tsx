@@ -506,6 +506,7 @@ export function ReportView({
   const [logSearch, setLogSearch] = useState("");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [selectedResults, setSelectedResults] = useState<Set<string>>(new Set());
+  const lastCheckedRef = useRef<number>(-1);
   const [compactMode, setCompactMode] = useState(false);
   const [logWrap, setLogWrap] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
@@ -818,6 +819,7 @@ export function ReportView({
                 反选
               </button>
               {selectedResults.size > 0 && (
+                <>
                 <button
                   type="button"
                   className="button ghost compact-btn"
@@ -836,6 +838,23 @@ export function ReportView({
                 >
                   复制选中({selectedResults.size})
                 </button>
+                <button
+                  type="button"
+                  className="button ghost compact-btn"
+                  onClick={async () => {
+                    const names = [...new Set(sortedResults.filter((r) => selectedResults.has(r.package)).map((r) => r.package))];
+                    const rVector = `c(${names.map((n) => `"${n}"`).join(", ")})`;
+                    try {
+                      await navigator.clipboard.writeText(rVector);
+                      onStatusChange(`已复制 ${names.length} 个选中包名为 R 向量`);
+                    } catch (err) {
+                      onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                    }
+                  }}
+                >
+                  选中→R向量
+                </button>
+                </>
               )}
               {results.some((r) => r.found) && (
                 <>
@@ -1380,13 +1399,28 @@ export function ReportView({
                       <input
                         type="checkbox"
                         checked={selectedResults.has(result.package)}
-                        onChange={() => {
-                          setSelectedResults((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(result.package)) next.delete(result.package);
-                            else next.add(result.package);
-                            return next;
-                          });
+                        onChange={() => {}}
+                        onClick={(e) => {
+                          if (e.shiftKey && lastCheckedRef.current >= 0) {
+                            const start = Math.min(lastCheckedRef.current, index);
+                            const end = Math.max(lastCheckedRef.current, index);
+                            setSelectedResults((prev) => {
+                              const next = new Set(prev);
+                              for (let i = start; i <= end; i++) {
+                                const r = sortedResults[i];
+                                if (r) next.add(r.package);
+                              }
+                              return next;
+                            });
+                          } else {
+                            setSelectedResults((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(result.package)) next.delete(result.package);
+                              else next.add(result.package);
+                              return next;
+                            });
+                          }
+                          lastCheckedRef.current = index;
                         }}
                         aria-label={`选择 ${result.package}`}
                       />

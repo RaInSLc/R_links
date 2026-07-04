@@ -402,7 +402,7 @@ export function SettingsView({
                 Object.entries(defaultSettings).forEach(([key, val]) => {
                   if (key !== "githubToken") updateSetting(key, val);
                 });
-                onThemeChange("light");
+                onThemeChange("office");
                 onFontChange("system-ui");
                 onFontSizeChange(14);
                 onInputRulesChange({ ...defaultInputRules });
