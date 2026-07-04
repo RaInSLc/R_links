@@ -781,7 +781,13 @@ export function ReportView({
                 const isCopied = copiedKey === rowKey;
                 const installCmd = getInstallCommand(result);
                 return (
-                  <div className="result-row" role="row" key={rowKey}>
+                  <div
+                    className="result-row"
+                    role="row"
+                    key={rowKey}
+                    onDoubleClick={() => handleCopy(result, rowKey)}
+                    title={result.found ? "双击此行可复制安装命令" : "双击此行可复制包名"}
+                  >
                     <strong
                       role="cell"
                       className={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github") ? "pkg-link" : ""}

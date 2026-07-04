@@ -446,7 +446,7 @@ function App() {
         </nav>
         <div className="sidebar-summary">
           <span>当前任务</span>
-          <strong>{searching ? `检索中 ${foundCount}/${packageCount}` : `${packageCount} 个输入`}</strong>
+          <strong>{searching ? `检索中 ${foundCount}/${packageCount}（${packageCount > 0 ? Math.round((foundCount / packageCount) * 100) : 0}%）` : `${packageCount} 个输入`}</strong>
           <progress className="summary-track" value={summaryProgress} max={100} aria-label="已验证包比例" />
           <small>{results.length ? `${foundCount} 条来源记录` : "等待开始"}</small>
         </div>
