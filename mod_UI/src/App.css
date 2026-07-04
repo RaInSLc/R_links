@@ -1359,6 +1359,18 @@ input:focus-visible,
   transition: background 0.12s;
 }
 
+.result-table.hide-version .result-row {
+  grid-template-columns: 32px 1.05fr 0.75fr 1.4fr 0.55fr auto;
+}
+
+.result-table.hide-repo .result-row {
+  grid-template-columns: 32px 1.05fr 0.75fr 0.7fr 0.55fr auto;
+}
+
+.result-table.hide-version.hide-repo .result-row {
+  grid-template-columns: 32px 1.05fr 0.75fr 0.55fr auto;
+}
+
 .result-table.compact .result-row {
   min-height: 32px;
   padding: 2px 5px;

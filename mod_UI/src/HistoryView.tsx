@@ -124,6 +124,28 @@ export function HistoryView({
                 className="button ghost"
                 style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto", whiteSpace: "nowrap" }}
                 onClick={() => {
+                  const exportData = sorted.map((r) => ({
+                    packageName: r.packageName || "",
+                    toolName: r.toolName || "",
+                    command: r.command || "",
+                    createdAt: r.createdAt || "",
+                  }));
+                  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `r-links-history-${new Date().toISOString().slice(0, 10)}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                导出JSON
+              </button>
+              <button
+                type="button"
+                className="button ghost"
+                style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto", whiteSpace: "nowrap" }}
+                onClick={() => {
                   if (window.confirm(`确定清空全部 ${history.length} 条历史记录？此操作不可撤销。`)) {
                     onClearAll();
                   }

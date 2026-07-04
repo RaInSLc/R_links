@@ -505,6 +505,8 @@ export function ReportView({
   const [compactMode, setCompactMode] = useState(false);
   const [logWrap, setLogWrap] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [showVersionCol, setShowVersionCol] = useState(true);
+  const [showRepoCol, setShowRepoCol] = useState(true);
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -806,6 +808,22 @@ export function ReportView({
                     }}
                   >
                     复制包名
+                  </button>
+                  <button
+                    type="button"
+                    className="button ghost compact-btn"
+                    onClick={async () => {
+                      const names = [...new Set(results.filter((r) => r.found).map((r) => r.package))];
+                      const rVector = `c(${names.map((n) => `"${n}"`).join(", ")})`;
+                      try {
+                        await navigator.clipboard.writeText(rVector);
+                        onStatusChange(`已复制 ${names.length} 个包名为 R 向量`);
+                      } catch (err) {
+                        onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                      }
+                    }}
+                  >
+                    复制R向量
                   </button>
                   <button
                     type="button"
@@ -1130,12 +1148,28 @@ export function ReportView({
               >
                 {compactMode ? "紧凑✓" : "紧凑"}
               </button>
+              <button
+                type="button"
+                className={`button ghost compact-btn${showVersionCol ? " active" : ""}`}
+                onClick={() => setShowVersionCol((v) => !v)}
+                title={showVersionCol ? "隐藏版本列" : "显示版本列"}
+              >
+                版本{showVersionCol ? "✓" : "✕"}
+              </button>
+              <button
+                type="button"
+                className={`button ghost compact-btn${showRepoCol ? " active" : ""}`}
+                onClick={() => setShowRepoCol((v) => !v)}
+                title={showRepoCol ? "隐藏仓库列" : "显示仓库列"}
+              >
+                仓库{showRepoCol ? "✓" : "✕"}
+              </button>
             </div>
             {filteredResults.length === 0 ? (
               <EmptyState text="当前筛选条件下无匹配结果" hint="尝试切换上方的筛选标签或清空搜索框" />
             ) : (
               <div className="result-table-wrapper" ref={resultTableRef}>
-                <div className={`result-table${compactMode ? " compact" : ""}`} role="table" aria-label="包来源验证结果">
+                <div className={`result-table${compactMode ? " compact" : ""}${showVersionCol ? "" : " hide-version"}${showRepoCol ? "" : " hide-repo"}`} role="table" aria-label="包来源验证结果">
                   <div className="result-row result-head" role="row">
                     <span role="columnheader" className="result-check-cell">
                       <input
@@ -1151,8 +1185,8 @@ export function ReportView({
                     </span>
                     <span role="columnheader" className={`sortable ${sortKey === "package" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("package")}>包名</span>
                     <span role="columnheader" className={`sortable ${sortKey === "source" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("source")}>来源</span>
-                    <span role="columnheader" className={`sortable ${sortKey === "version" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("version")}>版本</span>
-                    <span role="columnheader">仓库</span>
+                    {showVersionCol && <span role="columnheader" className={`sortable ${sortKey === "version" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("version")}>版本</span>}
+                    {showRepoCol && <span role="columnheader">仓库</span>}
                     <span role="columnheader" className={`sortable ${sortKey === "status" ? `sorted-${sortDir}` : ""}`} onClick={() => toggleSort("status")}>状态</span>
                   </div>
                   {sortedResults.map((result, index) => {
@@ -1218,8 +1252,8 @@ export function ReportView({
                         )}
                       </button>
                     </span>
-                    <code role="cell">{result.latestVersion || "—"}</code>
-                    <span role="cell" className="repo-cell">{result.repository || "—"}</span>
+                    {showVersionCol && <code role="cell">{result.latestVersion || "—"}</code>}
+                    {showRepoCol && <span role="cell" className="repo-cell">{result.repository || "—"}</span>}
                     <span
                       role="cell"
                       className={
