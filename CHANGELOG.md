@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-07-04 11:45:00 +08:00]
+
+### Changed
+- **mod_UI 安装策略面板直接展示常用方法卡片**：面板不再只显示选中策略摘要，而是直接渲染常用方法卡片网格（默认 4 个：智能路由、CRAN、Bioconductor、GitHub），点击即可快速切换。
+- **新增面板常用策略自定义**：在配置策略抽屉中新增"面板常用策略"勾选区，可自由添加或移除每个方法到面板；选择会持久化到 localStorage，支持一键恢复默认常用。
+
+### Tests
+- **通过完整编译与启动执行验证**：`npm run test`（62 个用例）、`npm run build`、`cargo test --manifest-path .\src-tauri\Cargo.toml --locked`（158 个测试）、`cargo clippy`（零警告）、`npm run tauri build -- --no-bundle`，并完成 release 程序启动级执行验证。
+
 ## [2026-07-04 02:35:40 +08:00]
 
 ### Added

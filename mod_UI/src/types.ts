@@ -81,6 +81,8 @@ export const defaultInputRules: InputRules = {
   excludeKeywords: [],
 };
 
+export const defaultPinnedMethods: Method[] = ["auto", "base", "biocManager", "github"];
+
 export const methods: Array<{
   id: Method;
   title: string;

@@ -18,7 +18,7 @@ import {
   MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS, utf8Length,
   type HistoryRecord, type SearchResult,
 } from "./utils";
-import { type View, type Method, type InputRules, defaultInputRules, defaultSettings } from "./types";
+import { type View, type Method, type InputRules, defaultInputRules, defaultSettings, defaultPinnedMethods } from "./types";
 
 function App() {
   const [view, setView] = useState<View>("workspace");
@@ -30,6 +30,16 @@ function App() {
   const [installDependencies, setInstallDependencies] = useState(true);
   const [showRemoteVersion, setShowRemoteVersion] = useState(true);
   const [verifyInstall, setVerifyInstall] = useState(false);
+  const [pinnedMethods, setPinnedMethods] = useState<Method[]>(() => {
+    try {
+      const stored = localStorage.getItem("rlinks_pinned_methods");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length >= 1) return parsed;
+      }
+    } catch {}
+    return [...defaultPinnedMethods];
+  });
   const [script, setScriptState] = useState("等待输入...");
   const [status, setStatus] = useState("就绪");
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -102,6 +112,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("rlinks_input", input);
   }, [input]);
+
+  useEffect(() => {
+    localStorage.setItem("rlinks_pinned_methods", JSON.stringify(pinnedMethods));
+  }, [pinnedMethods]);
 
   useEffect(() => {
     if (!input.trim()) return;
@@ -407,6 +421,8 @@ function App() {
               onOpenSearchTabs={() => openSearchTabs(input, inputTooLarge)}
               onStartSearch={handleStartSearch} onStopSearch={stopSearch}
               onMethodChange={setMethod}
+              pinnedMethods={pinnedMethods}
+              onPinnedMethodsChange={setPinnedMethods}
               onApplySmartSuggestion={(suggestion) => {
                 if (suggestion.action === "enableVerify") {
                   setVerifyInstall(true);

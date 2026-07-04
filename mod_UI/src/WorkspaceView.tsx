@@ -2,7 +2,7 @@ import { useState } from "react";
 import { PanelHeader, Toggle } from "./components";
 import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, type SmartSuggestion } from "./utils";
 import type { Method, Settings } from "./types";
-import { methods } from "./types";
+import { methods, defaultPinnedMethods } from "./types";
 
 interface WorkspaceViewProps {
   input: string;
@@ -26,6 +26,8 @@ interface WorkspaceViewProps {
   onStartSearch: () => void;
   onStopSearch: () => void;
   onMethodChange: (method: Method) => void;
+  pinnedMethods: Method[];
+  onPinnedMethodsChange: (methods: Method[]) => void;
   onApplySmartSuggestion: (suggestion: SmartSuggestion) => void;
   onConditionalChange: (v: boolean) => void;
   onInstallDependenciesChange: (v: boolean) => void;
@@ -46,14 +48,13 @@ export function WorkspaceView({
   script, scriptTooLarge,
   searching, openingSearchTabs,
   onInputChange, onPaste, onClear, onOpenSearchTabs, onStartSearch, onStopSearch,
-  onMethodChange, onApplySmartSuggestion, onConditionalChange, onInstallDependenciesChange,
+  onMethodChange, pinnedMethods, onPinnedMethodsChange, onApplySmartSuggestion, onConditionalChange, onInstallDependenciesChange,
   onShowRemoteVersionChange, onVerifyInstallChange, onFullSearchChange,
   onUseCacheChange, onTempFilter,
   onCopyScript, onCleanComments, isMethodDisabled,
 }: WorkspaceViewProps) {
   const [filterText, setFilterText] = useState("");
   const [strategyExpanded, setStrategyExpanded] = useState(false);
-  const selectedMethod = methods.find((item) => item.id === method);
 
   return (
     <div className="workspace-grid">
@@ -136,14 +137,23 @@ export function WorkspaceView({
 
       <section className="panel method-panel compact-method-panel">
         <PanelHeader step="02" title="安装策略" meta={settings.fullSearch ? "全量检索" : "快速检索"} />
-        <div className="strategy-summary">
-          <div>
-            <strong>{selectedMethod?.title || "未选择"}</strong>
-            <span>{selectedMethod?.description || "请选择安装策略"}</span>
-          </div>
-          <button type="button" className="button ghost" onClick={() => setStrategyExpanded(true)}>
-            配置策略
-          </button>
+        <div className="method-grid pinned-method-grid" aria-label="常用安装策略">
+          {pinnedMethods.map((id) => {
+            const item = methods.find((m) => m.id === id);
+            if (!item) return null;
+            return (
+              <button
+                key={item.id}
+                className={`method-card ${method === item.id ? "selected" : ""}`}
+                disabled={isMethodDisabled(item.id)}
+                aria-pressed={method === item.id}
+                onClick={() => onMethodChange(item.id)}
+              >
+                <span>{item.title}</span>
+                <small>{item.description}</small>
+              </button>
+            );
+          })}
         </div>
         <div className="strategy-chips" aria-label="当前策略选项">
           {conditional && <span>条件安装</span>}
@@ -152,6 +162,11 @@ export function WorkspaceView({
           {settings.fullSearch && <span>全量检索</span>}
           {settings.useCache && <span>使用缓存</span>}
           {verifyInstall && <span>安装后验证</span>}
+        </div>
+        <div className="strategy-panel-actions">
+          <button type="button" className="button ghost" onClick={() => setStrategyExpanded(true)}>
+            配置策略
+          </button>
         </div>
       </section>
 
@@ -172,6 +187,42 @@ export function WorkspaceView({
                   <small>{item.description}</small>
                 </button>
               ))}
+            </div>
+            <div className="pin-section">
+              <p className="pin-section-title">面板常用策略</p>
+              <div className="pin-chips">
+                {methods.map((item) => {
+                  const pinned = pinnedMethods.includes(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`pin-chip ${pinned ? "active" : ""}`}
+                      onClick={() => {
+                        if (pinned) {
+                          if (pinnedMethods.length <= 1) return;
+                          onPinnedMethodsChange(pinnedMethods.filter((m) => m !== item.id));
+                        } else {
+                          onPinnedMethodsChange([...pinnedMethods, item.id]);
+                        }
+                      }}
+                      aria-pressed={pinned}
+                      title={pinned ? "从面板移除" : "添加到面板"}
+                    >
+                      {item.title}
+                    </button>
+                  );
+                })}
+              </div>
+              {pinnedMethods.length < defaultPinnedMethods.length && (
+                <button
+                  type="button"
+                  className="text-button pin-reset"
+                  onClick={() => onPinnedMethodsChange([...defaultPinnedMethods])}
+                >
+                  恢复默认常用
+                </button>
+              )}
             </div>
             <div className="toggle-row">
               <Toggle checked={conditional} label="条件安装" description="已安装时自动跳过" onChange={onConditionalChange} />

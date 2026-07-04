@@ -725,6 +725,61 @@ input:focus-visible,
   white-space: nowrap;
 }
 
+.pinned-method-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.strategy-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 14px 14px;
+}
+
+.pin-section {
+  padding: 0 15px 8px;
+  border-top: 1px solid var(--line);
+}
+
+.pin-section-title {
+  margin: 12px 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pin-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.pin-chip {
+  padding: 4px 11px;
+  color: var(--muted);
+  background: var(--input-bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: 150ms ease;
+}
+
+.pin-chip:hover {
+  border-color: var(--theme-border-selected);
+}
+
+.pin-chip.active {
+  color: var(--theme-color);
+  background: var(--theme-color-soft);
+  border-color: var(--theme-border-selected);
+  font-weight: 600;
+}
+
+.pin-reset {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
 .toggle-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
