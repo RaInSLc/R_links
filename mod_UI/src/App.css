@@ -1728,6 +1728,15 @@ input:focus-visible,
   display: grid;
 }
 
+.history-date-divider {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  margin-top: 4px;
+}
+
 .history-item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

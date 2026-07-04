@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { PanelHeader, EmptyState } from "./components";
 import type { HistoryRecord } from "./utils";
 
@@ -173,8 +173,14 @@ export function HistoryView({
               全选
             </label>
           </div>
-          {sorted.map((record) => (
-            <article className={`history-item ${selectedIds.has(record.id) ? "selected" : ""} ${histNavIndex === sorted.indexOf(record) ? "nav-selected" : ""}`} key={record.id} onMouseEnter={() => setHistNavIndex(sorted.indexOf(record))}>
+          {sorted.map((record, idx) => {
+            const dateStr = record.createdAt ? new Date(record.createdAt).toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" }) : "未知日期";
+            const prevDate = idx > 0 && sorted[idx - 1].createdAt ? new Date(sorted[idx - 1].createdAt!).toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" }) : null;
+            const showDivider = idx === 0 || dateStr !== prevDate;
+            return (
+              <Fragment key={record.id}>
+                {showDivider && <div className="history-date-divider">{dateStr}</div>}
+                <article className={`history-item ${selectedIds.has(record.id) ? "selected" : ""} ${histNavIndex === idx ? "nav-selected" : ""}`} onMouseEnter={() => setHistNavIndex(idx)}>
               <input
                 type="checkbox"
                 className="history-checkbox"
@@ -197,7 +203,9 @@ export function HistoryView({
                 <button className="text-button danger-text" onClick={() => onDeleteRecord(record.id)}>删除</button>
               </div>
             </article>
-          ))}
+              </Fragment>
+            );
+          })}
         </div>
       )}
     </section>

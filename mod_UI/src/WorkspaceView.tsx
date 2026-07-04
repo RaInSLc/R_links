@@ -66,6 +66,7 @@ export function WorkspaceView({
   const [scriptCollapsed, setScriptCollapsed] = useState(false);
   const [pasteHint, setPasteHint] = useState(false);
   const [rScriptHint, setRScriptHint] = useState<string | null>(null);
+  const [fileLoadHint, setFileLoadHint] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineGutterRef = useRef<HTMLDivElement>(null);
 
@@ -90,7 +91,11 @@ export function WorkspaceView({
     const name = file.name.toLowerCase();
     if (!name.endsWith(".txt") && !name.endsWith(".csv") && !name.endsWith(".r")) return;
     const text = await file.text();
-    if (text) onInputChange(text, "clipboard");
+    if (text) {
+      onInputChange(text, "clipboard");
+      setFileLoadHint(`已加载文件: ${file.name} (${text.length} 字符)`);
+      setTimeout(() => setFileLoadHint(null), 4000);
+    }
   }
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -100,7 +105,11 @@ export function WorkspaceView({
     e.target.value = "";
     if (!file) return;
     const text = await file.text();
-    if (text) onInputChange(text, "clipboard");
+    if (text) {
+      onInputChange(text, "clipboard");
+      setFileLoadHint(`已加载文件: ${file.name} (${text.length} 字符)`);
+      setTimeout(() => setFileLoadHint(null), 4000);
+    }
   }
 
   function sortInputAlphabetical() {
@@ -197,6 +206,11 @@ export function WorkspaceView({
         {rScriptHint && (
           <div className="r-script-hint-bar">
             <span>{rScriptHint}</span>
+          </div>
+        )}
+        {fileLoadHint && (
+          <div className="r-script-hint-bar">
+            <span>{fileLoadHint}</span>
           </div>
         )}
         {inputTooLarge && (

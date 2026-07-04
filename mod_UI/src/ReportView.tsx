@@ -631,6 +631,18 @@ export function ReportView({
         e.preventDefault();
         const row = sortedResults[selectedRowIndex];
         if (row) handleCopy(row, `${row.package}-kbd`);
+      } else if (e.key === " " && selectedRowIndex >= 0) {
+        e.preventDefault();
+        const row = sortedResults[selectedRowIndex];
+        if (row) {
+          const k = `${row.package}-${row.source}-${selectedRowIndex}`;
+          setExpandedRows((prev) => {
+            const next = new Set(prev);
+            if (next.has(k)) next.delete(k);
+            else next.add(k);
+            return next;
+          });
+        }
       }
     }
     window.addEventListener("keydown", onKeydown);
