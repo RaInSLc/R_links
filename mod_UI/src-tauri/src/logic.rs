@@ -1363,6 +1363,68 @@ pub fn is_allowed_browser_search_url(value: &str) -> bool {
             .is_some_and(|(key, value)| key == "q" && !value.trim().is_empty())
 }
 
+pub fn build_package_page_url(package: &str, source: &str, repository: &str) -> Result<String, String> {
+    let package = package.trim();
+    if package.is_empty() {
+        return Err("包名为空".to_string());
+    }
+    match source {
+        "cran" => {
+            if !is_valid_package_name(package) {
+                return Err(format!("无效的 CRAN 包名: {package}"));
+            }
+            Ok(format!("https://cran.r-project.org/package={package}"))
+        }
+        "bioc" => {
+            if !is_valid_package_name(package) {
+                return Err(format!("无效的 Bioconductor 包名: {package}"));
+            }
+            Ok(format!("https://bioconductor.org/packages/{package}"))
+        }
+        "github" => {
+            let repo = repository.trim();
+            if !is_valid_github_repository(repo) {
+                return Err(format!("无效的 GitHub 仓库地址: {repo}"));
+            }
+            Ok(format!("https://github.com/{repo}"))
+        }
+        _ => Err(format!("不支持的来源类型: {source}")),
+    }
+}
+
+pub fn is_allowed_package_page_url(value: &str) -> bool {
+    let Ok(url) = Url::parse(value) else {
+        return false;
+    };
+    if url.scheme() != "https"
+        || url.port().is_some()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+        || url.query().is_some()
+    {
+        return false;
+    }
+    let host = url.host_str();
+    let path = url.path();
+    match host {
+        Some("cran.r-project.org") => {
+            let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            segs.len() == 2 && segs[0] == "package" && is_valid_package_name(segs[1])
+        }
+        Some("bioconductor.org") => {
+            let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            segs.len() == 2 && is_valid_package_name(segs[1])
+        }
+        Some("github.com") => {
+            let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            segs.len() == 2
+                && is_valid_github_repository(&format!("{}/{}", segs[0], segs[1]))
+        }
+        _ => false,
+    }
+}
+
 fn is_valid_bioc_version(value: &str) -> bool {
     let parts = value.split('.').collect::<Vec<_>>();
     parts.len() == 2

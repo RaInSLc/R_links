@@ -1180,6 +1180,11 @@ input:focus-visible,
   padding: 8px 5px;
   border-bottom: 1px solid var(--line);
   font-size: 15px;
+  transition: background 0.12s;
+}
+
+.result-row:not(.result-head):hover {
+  background: rgba(74, 158, 255, 0.04);
 }
 
 .result-row strong {

@@ -582,22 +582,59 @@ export function ReportView({
         <div className="report-panel-header">
           <PanelHeader step="结果" title="来源验证" meta={searching ? "实时更新" : "已完成"} />
           {results.some((r) => r.found) && (
-            <button
-              type="button"
-              className="button ghost compact-btn"
-              onClick={async () => {
-                const cmds = results.filter((r) => r.found).map((r) => getInstallCommand(r));
-                const unique = [...new Set(cmds)];
-                try {
-                  await navigator.clipboard.writeText(unique.join("\n"));
-                  onStatusChange(`已复制 ${unique.length} 条安装指令`);
-                } catch (err) {
-                  onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
-                }
-              }}
-            >
-              复制全部指令
-            </button>
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button
+                type="button"
+                className="button ghost compact-btn"
+                onClick={async () => {
+                  const cmds = results.filter((r) => r.found).map((r) => getInstallCommand(r));
+                  const unique = [...new Set(cmds)];
+                  try {
+                    await navigator.clipboard.writeText(unique.join("\n"));
+                    onStatusChange(`已复制 ${unique.length} 条安装指令`);
+                  } catch (err) {
+                    onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                  }
+                }}
+              >
+                复制全部指令
+              </button>
+              <button
+                type="button"
+                className="button ghost compact-btn"
+                onClick={async () => {
+                  const found = results.filter(
+                    (r) => r.found && (r.source === "cran" || r.source === "bioc" || r.source === "github"),
+                  );
+                  const unique = new Map<string, SearchResult>();
+                  for (const r of found) {
+                    const key = `${r.source}:${r.package}`;
+                    if (!unique.has(key)) unique.set(key, r);
+                  }
+                  if (unique.size > 5 && !window.confirm(`将要打开 ${unique.size} 个浏览器页面，是否继续？`)) {
+                    return;
+                  }
+                  let opened = 0;
+                  let failed = 0;
+                  for (const r of unique.values()) {
+                    try {
+                      await invoke("open_package_page", {
+                        package: r.realName || r.package,
+                        source: r.source,
+                        repository: r.repository || "",
+                      });
+                      opened += 1;
+                      await new Promise((res) => window.setTimeout(res, 150));
+                    } catch {
+                      failed += 1;
+                    }
+                  }
+                  onStatusChange(`已打开 ${opened} 个来源网页${failed > 0 ? `，失败 ${failed} 个` : ""}`);
+                }}
+              >
+                打开来源网页
+              </button>
+            </div>
           )}
         </div>
         {smartSuggestions.length > 0 && (

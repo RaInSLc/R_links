@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-07-04 20:08:00 +08:00]
+
+### Added
+- **报告页"打开来源网页"按钮**：批量打开已验证包的 CRAN/Bioconductor/GitHub 来源页面（>5 个时弹确认框）。
+- **后端新增 `open_package_page` 命令**：支持 `build_package_page_url()` 和 `is_allowed_package_page_url()` 安全校验。
+- **结果表格行 hover 高亮**：鼠标悬停时行背景微亮，提升数据可读性。
+
+### Tests
+- **通过完整编译与启动执行验证**：`npm run test`（72 用例）、`npm run build`、`cargo clippy`（零警告）、`npm run tauri build -- --no-bundle`，release exe 启动验证通过。
+
 ## [2026-07-04 20:02:00 +08:00]
 
 ### Added

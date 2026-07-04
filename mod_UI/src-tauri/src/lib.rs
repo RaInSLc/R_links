@@ -332,6 +332,24 @@ fn open_package_search(
         .map_err(|error| format!("打开浏览器失败: {error}"))
 }
 
+#[tauri::command]
+fn open_package_page(
+    app: AppHandle,
+    limiter: State<'_, BrowserOpenLimiter>,
+    package: String,
+    source: String,
+    repository: String,
+) -> Result<(), String> {
+    let url = logic::build_package_page_url(&package, &source, &repository)?;
+    if !logic::is_allowed_package_page_url(&url) {
+        return Err("包页面 URL 不在允许范围内".to_string());
+    }
+    limiter.try_acquire(Instant::now())?;
+    tauri_plugin_opener::OpenerExt::opener(&app)
+        .open_url(url, None::<&str>)
+        .map_err(|error| format!("打开浏览器失败: {error}"))
+}
+
 fn browser_search_url_for_package(package_name: &str) -> Result<String, String> {
     let package_name = package_name.trim();
     if !logic::is_valid_package_name(package_name) || package_name.contains('/') {
@@ -615,6 +633,7 @@ pub fn run() {
             save_history,
             clear_package_cache,
             open_package_search,
+            open_package_page,
             start_search,
             stop_search,
             export_diagnostics,
