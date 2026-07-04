@@ -12,6 +12,7 @@ interface ReportViewProps {
   uniqueFoundCount: number;
   smartSuggestions: SmartSuggestion[];
   searching: boolean;
+  searchDuration: number | null;
   onClearLogs: () => void;
   onStatusChange: (status: string) => void;
   onApplySmartSuggestion: (suggestion: SmartSuggestion) => void;
@@ -473,6 +474,7 @@ export function ReportView({
   uniqueFoundCount,
   smartSuggestions,
   searching,
+  searchDuration,
   onClearLogs,
   onStatusChange,
   onApplySmartSuggestion,
@@ -595,59 +597,119 @@ export function ReportView({
 
       <section className="panel report-panel">
         <div className="report-panel-header">
-          <PanelHeader step="结果" title="来源验证" meta={searching ? "实时更新" : "已完成"} />
-          {results.some((r) => r.found) && (
+          <PanelHeader
+            step="结果"
+            title="来源验证"
+            meta={
+              searching
+                ? "实时更新"
+                : searchDuration != null
+                ? `已完成 · ${(searchDuration / 1000).toFixed(1)}s`
+                : "已完成"
+            }
+          />
+          {results.length > 0 && (
             <div style={{ display: "flex", gap: "6px" }}>
+              {results.some((r) => r.found) && (
+                <>
+                  <button
+                    type="button"
+                    className="button ghost compact-btn"
+                    onClick={async () => {
+                      const cmds = results.filter((r) => r.found).map((r) => getInstallCommand(r));
+                      const unique = [...new Set(cmds)];
+                      try {
+                        await navigator.clipboard.writeText(unique.join("\n"));
+                        onStatusChange(`已复制 ${unique.length} 条安装指令`);
+                      } catch (err) {
+                        onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                      }
+                    }}
+                  >
+                    复制全部指令
+                  </button>
+                  <button
+                    type="button"
+                    className="button ghost compact-btn"
+                    onClick={async () => {
+                      const found = results.filter(
+                        (r) => r.found && (r.source === "cran" || r.source === "bioc" || r.source === "github"),
+                      );
+                      const unique = new Map<string, SearchResult>();
+                      for (const r of found) {
+                        const key = `${r.source}:${r.package}`;
+                        if (!unique.has(key)) unique.set(key, r);
+                      }
+                      if (unique.size > 5 && !window.confirm(`将要打开 ${unique.size} 个浏览器页面，是否继续？`)) {
+                        return;
+                      }
+                      let opened = 0;
+                      let failed = 0;
+                      for (const r of unique.values()) {
+                        try {
+                          await invoke("open_package_page", {
+                            package: r.realName || r.package,
+                            source: r.source,
+                            repository: r.repository || "",
+                          });
+                          opened += 1;
+                          await new Promise((res) => window.setTimeout(res, 150));
+                        } catch {
+                          failed += 1;
+                        }
+                      }
+                      onStatusChange(`已打开 ${opened} 个来源网页${failed > 0 ? `，失败 ${failed} 个` : ""}`);
+                    }}
+                  >
+                    打开来源网页
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 className="button ghost compact-btn"
-                onClick={async () => {
-                  const cmds = results.filter((r) => r.found).map((r) => getInstallCommand(r));
-                  const unique = [...new Set(cmds)];
-                  try {
-                    await navigator.clipboard.writeText(unique.join("\n"));
-                    onStatusChange(`已复制 ${unique.length} 条安装指令`);
-                  } catch (err) {
-                    onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
-                  }
-                }}
-              >
-                复制全部指令
-              </button>
-              <button
-                type="button"
-                className="button ghost compact-btn"
-                onClick={async () => {
-                  const found = results.filter(
-                    (r) => r.found && (r.source === "cran" || r.source === "bioc" || r.source === "github"),
+                onClick={() => {
+                  const escape = (s: string) => {
+                    const v = s ?? "";
+                    return v.includes(",") || v.includes('"') || v.includes("\n")
+                      ? `"${v.replace(/"/g, '""')}"`
+                      : v;
+                  };
+                  const header = ["包名", "来源", "版本", "仓库", "状态", "安装命令"].join(",");
+                  const rows = results.map((r) =>
+                    [
+                      escape(r.package),
+                      escape(sourceNames[r.source] ?? r.source),
+                      escape(r.latestVersion),
+                      escape(r.repository),
+                      escape(
+                        r.found
+                          ? "已验证"
+                          : r.status === "timeout"
+                          ? "超时"
+                          : r.status === "rateLimited"
+                          ? "频率限制"
+                          : r.status === "error"
+                          ? "检索异常"
+                          : "未找到",
+                      ),
+                      escape(r.found ? getInstallCommand(r) : ""),
+                    ].join(","),
                   );
-                  const unique = new Map<string, SearchResult>();
-                  for (const r of found) {
-                    const key = `${r.source}:${r.package}`;
-                    if (!unique.has(key)) unique.set(key, r);
-                  }
-                  if (unique.size > 5 && !window.confirm(`将要打开 ${unique.size} 个浏览器页面，是否继续？`)) {
-                    return;
-                  }
-                  let opened = 0;
-                  let failed = 0;
-                  for (const r of unique.values()) {
-                    try {
-                      await invoke("open_package_page", {
-                        package: r.realName || r.package,
-                        source: r.source,
-                        repository: r.repository || "",
-                      });
-                      opened += 1;
-                      await new Promise((res) => window.setTimeout(res, 150));
-                    } catch {
-                      failed += 1;
-                    }
-                  }
-                  onStatusChange(`已打开 ${opened} 个来源网页${failed > 0 ? `，失败 ${failed} 个` : ""}`);
+                  const csv = "\uFEFF" + [header, ...rows].join("\r\n");
+                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "r_package_results.csv";
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  onStatusChange(`已导出 ${results.length} 条结果至 CSV`);
                 }}
               >
-                打开来源网页
+                导出 CSV
               </button>
             </div>
           )}

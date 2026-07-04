@@ -105,11 +105,21 @@ export function useHistory(setStatus: SetStatus) {
     }
   }
 
+  async function clearAllHistory() {
+    try {
+      await enqueueHistorySave(() => []);
+      setStatus("所有历史记录已清空");
+    } catch (error) {
+      setStatus(`清空历史失败: ${formatError(error)}`);
+    }
+  }
+
   return {
     history, historySearch, setHistorySearch,
     sanitizeHistoryList,
     enqueueHistorySave,
     copyHistoryRecord,
     deleteHistoryRecord,
+    clearAllHistory,
   };
 }

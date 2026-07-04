@@ -8,23 +8,40 @@ interface HistoryViewProps {
   onApplyRecord: (record: HistoryRecord) => void;
   onCopyRecord: (record: HistoryRecord) => void;
   onDeleteRecord: (id: string) => void;
+  onClearAll: () => void;
 }
 
 export function HistoryView({
   history, historySearch, onHistorySearchChange,
-  onApplyRecord, onCopyRecord, onDeleteRecord,
+  onApplyRecord, onCopyRecord, onDeleteRecord, onClearAll,
 }: HistoryViewProps) {
   return (
     <section className="panel history-panel">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <PanelHeader step="历史" title="最近生成的命令" meta="最多保留 100 条" />
-        <input
-          type="text"
-          placeholder="搜索包名、来源或命令..."
-          value={historySearch}
-          onChange={(e) => onHistorySearchChange(e.target.value)}
-          style={{ marginRight: "16px", padding: "4px 8px", fontSize: "12px", width: "200px" }}
-        />
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", marginRight: "16px" }}>
+          <input
+            type="text"
+            placeholder="搜索包名、来源或命令..."
+            value={historySearch}
+            onChange={(e) => onHistorySearchChange(e.target.value)}
+            style={{ padding: "4px 8px", fontSize: "12px", width: "200px" }}
+          />
+          {history.length > 0 && (
+            <button
+              type="button"
+              className="button ghost"
+              style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto", whiteSpace: "nowrap" }}
+              onClick={() => {
+                if (window.confirm(`确定清空全部 ${history.length} 条历史记录？此操作不可撤销。`)) {
+                  onClearAll();
+                }
+              }}
+            >
+              清空全部
+            </button>
+          )}
+        </div>
       </div>
       {history.length === 0 ? (
         <EmptyState text="复制脚本后，命令会记录在这里" />

@@ -80,13 +80,14 @@ function App() {
 
   const { results, setResults, logs, setLogs, dependencyGraph,
     searching, openingSearchTabs, searchingRef, hasSearchEvidenceRef,
+    searchDuration,
     startSearch, stopSearch, openSearchTabs } = search;
   const { settings, showToken, setShowToken,
     tokenConfigured, settingsBusy, updateSettingsFromUser,
     acceptSettingValue, persistSettings, clearSavedToken } = settingsHook;
   const { history, historySearch, setHistorySearch,
     sanitizeHistoryList, enqueueHistorySave,
-    copyHistoryRecord, deleteHistoryRecord } = historyHook;
+    copyHistoryRecord, deleteHistoryRecord, clearAllHistory } = historyHook;
 
   function setScript(next: string) {
     latestScriptRef.current = next;
@@ -520,6 +521,7 @@ function App() {
               packageCount={packageCount} uniqueFoundCount={uniqueFoundCount}
               smartSuggestions={resultSuggestions}
               searching={searching} onClearLogs={() => setLogs([])}
+              searchDuration={searchDuration}
               onStatusChange={setStatus}
               onApplySmartSuggestion={(suggestion) => {
                 if (suggestion.action === "openSettings") {
@@ -543,6 +545,7 @@ function App() {
               onApplyRecord={applyHistoryRecord}
               onCopyRecord={copyHistoryRecord}
               onDeleteRecord={deleteHistoryRecord}
+              onClearAll={clearAllHistory}
             />
           )}
           {view === "settings" && (

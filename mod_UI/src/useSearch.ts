@@ -18,10 +18,12 @@ export function useSearch(setStatus: SetStatus) {
   const [dependencyGraph, setDependencyGraph] = useState<DependencyGraph | null>(null);
   const [searching, setSearching] = useState(false);
   const [openingSearchTabs, setOpeningSearchTabs] = useState(false);
+  const [searchDuration, setSearchDuration] = useState<number | null>(null);
   const activeSearchRunId = useRef(0);
   const searchingRef = useRef(false);
   const hasSearchEvidenceRef = useRef(false);
   const browserOpenInProgress = useRef(false);
+  const searchStartTime = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -80,6 +82,8 @@ export function useSearch(setStatus: SetStatus) {
     }
     searchingRef.current = true;
     setSearching(true);
+    setSearchDuration(null);
+    searchStartTime.current = Date.now();
     const runId = nextSearchRunId();
     activeSearchRunId.current = runId;
     hasSearchEvidenceRef.current = false;
@@ -104,6 +108,8 @@ export function useSearch(setStatus: SetStatus) {
       }
     } finally {
       if (runId === activeSearchRunId.current) {
+        const elapsed = Date.now() - searchStartTime.current;
+        setSearchDuration(elapsed);
         setSearching(false);
         searchingRef.current = false;
         activeSearchRunId.current = 0;
@@ -184,6 +190,7 @@ export function useSearch(setStatus: SetStatus) {
     openingSearchTabs,
     searchingRef,
     hasSearchEvidenceRef,
+    searchDuration,
     startSearch,
     stopSearch,
     openSearchTabs,
