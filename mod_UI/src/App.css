@@ -2382,6 +2382,15 @@ body {
   color: var(--theme-color);
 }
 
+.status-clickable {
+  transition: opacity 0.12s, transform 0.12s;
+}
+
+.status-clickable:hover {
+  opacity: 0.8;
+  transform: scale(1.05);
+}
+
 .cache-progress-bar {
   position: relative;
   width: 100%;

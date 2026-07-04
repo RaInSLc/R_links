@@ -1438,7 +1438,7 @@ export function ReportView({
                     )}
                     <span
                       role="cell"
-                      className={
+                      className={`${
                         result.found
                           ? "found"
                           : result.status === "timeout"
@@ -1448,7 +1448,13 @@ export function ReportView({
                           : result.status === "error"
                           ? "error"
                           : "missing"
-                      }
+                      } status-clickable`}
+                      style={{ cursor: "pointer" }}
+                      title="点击按此状态筛选"
+                      onClick={() => {
+                        const status = result.found ? "found" : (result.status === "timeout" || result.status === "rateLimited" || result.status === "error") ? "error" : "missing";
+                        toggleFilter(status);
+                      }}
                     >
                       {result.status === "timeout"
                         ? "超时"

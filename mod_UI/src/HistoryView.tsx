@@ -81,6 +81,16 @@ export function HistoryView({
             onChange={(e) => onHistorySearchChange(e.target.value)}
             style={{ padding: "4px 8px", fontSize: "12px", width: "200px" }}
           />
+          {historySearch && (
+            <button
+              type="button"
+              className="search-clear-btn"
+              onClick={() => onHistorySearchChange("")}
+              title="清除搜索"
+            >
+              ✕
+            </button>
+          )}
           {filtered.length > 0 && (
             <button
               type="button"

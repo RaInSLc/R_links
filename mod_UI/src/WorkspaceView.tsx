@@ -313,14 +313,14 @@ export function WorkspaceView({
             onClick={() => {
               const cleaned = input
                 .split(/\r?\n/)
-                .map((l) => l.trim())
+                .map((l) => l.trim().replace(/[;,\s]+$/, ""))
                 .filter((l, i, arr) => l !== "" || (i > 0 && i < arr.length - 1 && arr[i - 1] !== "" && arr[i + 1] !== ""))
                 .join("\n")
                 .replace(/[ \t]+/g, " ");
               onInputChange(cleaned, "manual");
             }}
             disabled={searching || !input.trim()}
-            title="去除行首尾空白、合并多余空格、移除连续空行"
+            title="去除行首尾空白、行尾分号逗号、合并多余空格、移除连续空行"
           >
             清理
           </button>
