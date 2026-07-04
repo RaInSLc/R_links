@@ -1173,6 +1173,13 @@ input:focus-visible,
 .row-copy-btn.copied {
   color: #00cc66 !important;
   opacity: 1.0 !important;
+  animation: copy-flash 0.4s ease;
+}
+
+@keyframes copy-flash {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); }
+  100% { transform: scale(1); }
 }
 
 .row-copy-btn .copy-icon {

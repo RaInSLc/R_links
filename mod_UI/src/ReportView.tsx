@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { PanelHeader, Metric, EmptyState } from "./components";
 import { sourceNames } from "./types";
@@ -488,6 +488,14 @@ export function ReportView({
   const [sortKey, setSortKey] = useState<"package" | "source" | "version" | "status">("package");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
+  const logConsoleRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (logConsoleRef.current) {
+      logConsoleRef.current.scrollTop = logConsoleRef.current.scrollHeight;
+    }
+  }, [logs]);
+
   const filteredResults = useMemo(() => {
     let list = results;
     if (resultFilter === "found") list = list.filter((r) => r.found);
@@ -967,7 +975,7 @@ export function ReportView({
             清除日志
           </button>
         </div>
-        <div className="log-console">
+        <div className="log-console" ref={logConsoleRef}>
           {logs.length ? (
             logs.map((line, index) => (
               <div key={`${line}-${index}`}>
