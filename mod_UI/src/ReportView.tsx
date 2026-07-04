@@ -1466,6 +1466,29 @@ export function ReportView({
               重试此包
             </button>
           )}
+          <button
+            type="button"
+            className="ctx-menu-item"
+            onClick={() => {
+              const r = ctxMenu.result;
+              const idx = sortedResults.indexOf(r);
+              const k = `${r.package}-${r.source}-${idx}`;
+              setExpandedRows((prev) => {
+                const next = new Set(prev);
+                if (next.has(k)) next.delete(k);
+                else next.add(k);
+                return next;
+              });
+              setCtxMenu(null);
+            }}
+          >
+            {(() => {
+              const r = ctxMenu.result;
+              const idx = sortedResults.indexOf(r);
+              const k = `${r.package}-${r.source}-${idx}`;
+              return expandedRows.has(k) ? "收起详情" : "展开详情";
+            })()}
+          </button>
         </div>
       )}
 
@@ -1570,7 +1593,17 @@ export function ReportView({
             const filtered = q ? logs.filter((line) => line.toLowerCase().includes(q)) : logs;
             return filtered.length ? (
               filtered.map((line, index) => (
-                <div key={`${line}-${index}`}>
+                <div
+                  key={`${line}-${index}`}
+                  className="log-line-copyable"
+                  title="点击复制此行"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(line);
+                      onStatusChange("已复制日志行");
+                    } catch { /* ignore */ }
+                  }}
+                >
                   <span>{String(index + 1).padStart(2, "0")}</span>
                   {line}
                 </div>

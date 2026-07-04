@@ -631,6 +631,17 @@ input:focus-visible,
   color: var(--red);
 }
 
+.dedupe-btn {
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.dedupe-btn:hover {
+  border-color: var(--red);
+  background: rgba(220, 38, 38, 0.15);
+}
+
 .paste-hint-bar {
   display: flex;
   align-items: center;
@@ -1689,6 +1700,15 @@ input:focus-visible,
 .log-console > div > span {
   color: var(--terminal-line-number);
   user-select: none;
+}
+
+.log-line-copyable {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.log-line-copyable:hover {
+  background: var(--theme-color-soft);
 }
 
 .log-console.log-wrap > div {

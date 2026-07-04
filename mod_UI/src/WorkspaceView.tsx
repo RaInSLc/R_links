@@ -225,7 +225,19 @@ export function WorkspaceView({
             {inputProfile.total > 0 && <span className="input-stat-chip">CRAN/Bioc <strong>{inputProfile.total - inputProfile.archiveUrls - inputProfile.repositories}</strong></span>}
             {inputProfile.repositories > 0 && <span className="input-stat-chip">GitHub <strong>{inputProfile.repositories}</strong></span>}
             {inputProfile.archiveUrls > 0 && <span className="input-stat-chip">URL <strong>{inputProfile.archiveUrls}</strong></span>}
-            {duplicateCount > 0 && <span className="input-stat-chip warn">重复 <strong>{duplicateCount}</strong></span>}
+            {duplicateCount > 0 && (
+              <button
+                type="button"
+                className="input-stat-chip warn dedupe-btn"
+                title="点击去除重复包名"
+                onClick={() => {
+                  const deduped = dedupePackageInput(input);
+                  onInputChange(deduped, "manual");
+                }}
+              >
+                重复 <strong>{duplicateCount}</strong> · 去重
+              </button>
+            )}
           </div>
         )}
         {smartSuggestions.length > 0 && (
