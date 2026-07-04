@@ -19,6 +19,8 @@ import {
   buildResultSmartSuggestions,
   extractCanonicalInput,
   dedupePackageInput,
+  countScriptCommands,
+  countDuplicatePackages,
   MAX_STATUS_CHARS,
 } from "./utils";
 
@@ -416,6 +418,30 @@ describe("buildInputSmartSuggestions duplicates", () => {
       "auto",
     );
     expect(suggestions.map((s) => s.id)).not.toContain("duplicate-packages");
+  });
+});
+
+describe("countScriptCommands", () => {
+  it("counts install and library calls", () => {
+    expect(countScriptCommands('install.packages("dplyr")\nlibrary(ggplot2)')).toBe(2);
+  });
+
+  it("ignores comments and blanks", () => {
+    expect(countScriptCommands('# comment\n\nif (TRUE) {\n  install.packages("dplyr")\n}')).toBe(1);
+  });
+
+  it("returns 0 for placeholder", () => {
+    expect(countScriptCommands("等待输入...")).toBe(0);
+  });
+});
+
+describe("countDuplicatePackages", () => {
+  it("counts duplicates case-insensitively", () => {
+    expect(countDuplicatePackages("dplyr\nDPLYR\nggplot2")).toBe(1);
+  });
+
+  it("returns 0 when no duplicates", () => {
+    expect(countDuplicatePackages("dplyr\nggplot2")).toBe(0);
   });
 });
 

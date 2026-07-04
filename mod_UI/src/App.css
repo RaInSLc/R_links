@@ -596,6 +596,22 @@ input:focus-visible,
   min-width: 95px;
 }
 
+.kbd-hint {
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-family: var(--font-base);
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  line-height: 1.4;
+}
+
+.button.ghost .kbd-hint {
+  color: var(--muted);
+  background: var(--row-hover);
+}
+
 .method-panel {
   min-height: auto;
 }

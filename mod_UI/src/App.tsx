@@ -14,6 +14,7 @@ import {
   formatError, scriptValueTooLarge, activeInputLineCount,
   nonEmptyLineBytesExceeds, methodSupportsInput, classifyInputProfile,
   buildInputSmartSuggestions, buildResultSmartSuggestions,
+  countScriptCommands, countDuplicatePackages,
   MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES,
   MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS, utf8Length,
   type HistoryRecord, type SearchResult,
@@ -92,6 +93,8 @@ function App() {
     packageCount > MAX_PACKAGE_LINES ||
     nonEmptyLineBytesExceeds(input, MAX_INPUT_LINE_BYTES);
   const scriptTooLarge = useMemo(() => scriptValueTooLarge(script), [script]);
+  const scriptCommandCount = useMemo(() => countScriptCommands(script), [script]);
+  const duplicateCount = useMemo(() => countDuplicatePackages(input), [input]);
   const foundCount = results.filter((r) => r.found).length;
   const uniqueFoundCount = new Set(results.filter((r) => r.found).map((r) => r.package)).size;
   const summaryProgress = packageCount ? Math.min(100, (uniqueFoundCount / packageCount) * 100) : 0;
@@ -440,6 +443,8 @@ function App() {
               settings={settings}
               smartSuggestions={smartSuggestions}
               script={script} scriptTooLarge={scriptTooLarge}
+              scriptCommandCount={scriptCommandCount}
+              duplicateCount={duplicateCount}
               searching={searching} openingSearchTabs={openingSearchTabs}
               onInputChange={acceptInputValue} onPaste={pasteInput}
               onClear={() => acceptInputValue("", "manual")}

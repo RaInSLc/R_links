@@ -17,6 +17,8 @@ interface WorkspaceViewProps {
   smartSuggestions: SmartSuggestion[];
   script: string;
   scriptTooLarge: boolean;
+  scriptCommandCount: number;
+  duplicateCount: number;
   searching: boolean;
   openingSearchTabs: boolean;
   onInputChange: (value: string, source: "manual" | "clipboard") => string;
@@ -46,6 +48,7 @@ export function WorkspaceView({
   conditional, installDependencies, showRemoteVersion, verifyInstall, settings,
   smartSuggestions,
   script, scriptTooLarge,
+  scriptCommandCount, duplicateCount,
   searching, openingSearchTabs,
   onInputChange, onPaste, onClear, onOpenSearchTabs, onStartSearch, onStopSearch,
   onMethodChange, pinnedMethods, onPinnedMethodsChange, onApplySmartSuggestion, onConditionalChange, onInstallDependenciesChange,
@@ -59,7 +62,7 @@ export function WorkspaceView({
   return (
     <div className="workspace-grid">
       <section className="panel input-panel">
-        <PanelHeader step="01" title="输入包列表" meta={`${inputProfile.total}/${MAX_PACKAGE_LINES} 项`} />
+        <PanelHeader step="01" title="输入包列表" meta={`${inputProfile.total}/${MAX_PACKAGE_LINES} 项${duplicateCount > 0 ? ` · ${duplicateCount} 重复` : ""}`} />
         <textarea
           value={input}
           onChange={(event) => onInputChange(event.currentTarget.value, "manual")}
@@ -128,8 +131,8 @@ export function WorkspaceView({
           {searching ? (
             <button className="button danger" onClick={onStopSearch}>停止</button>
           ) : (
-            <button className="button primary" onClick={onStartSearch} disabled={!input.trim() || inputTooLarge}>
-              开始检索
+            <button className="button primary" onClick={onStartSearch} disabled={!input.trim() || inputTooLarge} title="Ctrl+Enter">
+              开始检索<span className="kbd-hint">Ctrl+↵</span>
             </button>
           )}
         </div>
@@ -249,11 +252,11 @@ export function WorkspaceView({
             <button className="button ghost" style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onCleanComments} disabled={scriptTooLarge}>
               移除注释
             </button>
-            <button className="button primary" style={{ padding: "4px 12px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onCopyScript} disabled={!script || script === "等待输入..." || scriptTooLarge}>
-              复制脚本
+            <button className="button primary" style={{ padding: "4px 12px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onCopyScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+Shift+C">
+              复制脚本<span className="kbd-hint">Ctrl+⇧C</span>
             </button>
           </div>
-          <small>R Script</small>
+          <small>{scriptCommandCount > 0 ? `${scriptCommandCount} 条命令` : "R Script"}</small>
         </header>
         <pre aria-label="生成的 R 脚本" tabIndex={0}>{script}</pre>
         {scriptTooLarge && (

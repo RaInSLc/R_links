@@ -597,6 +597,31 @@ export function dedupePackageInput(value: string): string {
   return out.join("\n");
 }
 
+export function countScriptCommands(script: string): number {
+  if (!script || script === "等待输入...") return 0;
+  let count = 0;
+  for (const line of script.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    if (/\b(?:install\.packages|BiocManager::install|remotes::install_|devtools::install_|install_url|install_github|packageVersion|library|require|cat|stop|message|warning)\s*\(/.test(trimmed)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+export function countDuplicatePackages(value: string): number {
+  const items: string[] = [];
+  for (const line of value.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    if (/^https:\/\//i.test(trimmed)) { items.push(trimmed.toLowerCase()); continue; }
+    items.push(...splitInputLine(trimmed).map((s) => s.toLowerCase()));
+  }
+  if (items.length === 0) return 0;
+  return items.length - new Set(items).size;
+}
+
 export function buildInputSmartSuggestions(
   input: string,
   profile: { total: number; archiveUrls: number; repositories: number },

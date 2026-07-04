@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [2026-07-04 19:30:00 +08:00]
+
+### Added
+- **快捷键提示标签**：检索按钮显示 `Ctrl+↵`、复制按钮显示 `Ctrl+⇧C` 快捷键标签，提升快捷键可发现性。
+- **脚本命令计数**：脚本预览面板头部显示生成的 R 命令条数（如"3 条命令"），替代静态"R Script"文字。
+- **输入面板重复包计数**：输入面板标题栏在有重复包名时显示重复数量（如"3/500 项 · 1 重复"）。
+- **新增工具函数**：`countScriptCommands`、`countDuplicatePackages`，含完整测试覆盖。
+
+### Tests
+- **通过完整编译与启动执行验证**：`npm run test`（72 个用例）、`npm run build`、`cargo clippy`（零警告）、`npm run tauri build -- --no-bundle`，并完成 release 程序启动级执行验证。
+
 ## [2026-07-04 19:25:00 +08:00]
 
 ### Added
