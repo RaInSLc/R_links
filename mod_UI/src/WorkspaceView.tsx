@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { PanelHeader, Toggle } from "./components";
-import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, type SmartSuggestion } from "./utils";
+import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, dedupePackageInput, type SmartSuggestion } from "./utils";
 import type { Method, Settings } from "./types";
 import { methods, defaultPinnedMethods } from "./types";
 
@@ -173,6 +173,14 @@ export function WorkspaceView({
           <button className="button ghost" onClick={onPaste} disabled={searching}>粘贴</button>
           <button className="button ghost" onClick={onClear} disabled={searching}>清空</button>
           <button className="button ghost" onClick={sortInputAlphabetical} disabled={searching || !input.trim()} title="按字母排序">排序</button>
+          <button
+            className="button ghost"
+            onClick={() => onInputChange(dedupePackageInput(input), "manual")}
+            disabled={searching || duplicateCount === 0}
+            title="大小写不敏感去重"
+          >
+            去重{duplicateCount > 0 ? `(${duplicateCount})` : ""}
+          </button>
           <button className="button ghost" onClick={() => fileInputRef.current?.click()} disabled={searching} title="导入 .txt / .csv / .r 文件">导入文件</button>
           <input
             ref={fileInputRef}

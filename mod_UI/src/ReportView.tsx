@@ -866,6 +866,11 @@ export function ReportView({
                 value={resultSearch}
                 onChange={(e) => setResultSearch(e.target.value)}
               />
+              {(debouncedSearch || resultFilter !== "all") && (
+                <small className="result-count-hint">
+                  显示 {filteredResults.length}/{results.length} 条
+                </small>
+              )}
             </div>
             {filteredResults.length === 0 ? (
               <EmptyState text="当前筛选条件下无匹配结果" hint="尝试切换上方的筛选标签或清空搜索框" />
