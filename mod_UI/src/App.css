@@ -445,6 +445,15 @@ input:focus-visible,
   animation: pulse 1.2s infinite;
 }
 
+.status-chip.status-pulse {
+  animation: status-flash 0.6s ease-out;
+}
+
+@keyframes status-flash {
+  0% { background: var(--theme-color-soft); border-color: var(--theme-color); }
+  100% { background: rgba(255, 255, 255, 0.65); border-color: var(--line); }
+}
+
 .content {
   padding: 24px 30px 36px;
 }
@@ -1722,6 +1731,14 @@ input:focus-visible,
   line-height: 1.6;
 }
 
+.result-table-footer {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+
 .status-legend {
   display: flex;
   gap: 14px;
@@ -2447,12 +2464,27 @@ body {
   white-space: nowrap;
 }
 
-.search-progress-bar {
+.search-progress-wrapper {
   position: relative;
   height: 3px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--tag-default-bg);
+  background: var(--line);
+  overflow: visible;
+}
+
+.search-progress-wrapper .search-progress-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+}
+
+.search-progress-text {
+  position: absolute;
+  right: 16px;
+  top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .search-progress-bar::after {

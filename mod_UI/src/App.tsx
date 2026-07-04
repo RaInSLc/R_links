@@ -538,7 +538,7 @@ function App() {
               {view === "settings" && "网络与镜像设置"}
             </h1>
           </div>
-          <div className={`status-chip ${searching ? "active" : ""}`} role="status" aria-live="polite" aria-atomic="true">
+          <div key={status} className={`status-chip status-pulse ${searching ? "active" : ""}`} role="status" aria-live="polite" aria-atomic="true">
             <i aria-hidden="true" />
             {status}
           </div>

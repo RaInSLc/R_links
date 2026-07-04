@@ -761,7 +761,14 @@ export function ReportView({
       </div>
 
       <section className="panel report-panel">
-        {searching && <div className="search-progress-bar" />}
+        {searching && (
+          <div className="search-progress-wrapper">
+            <div className="search-progress-bar" />
+            <span className="search-progress-text">
+              已检索 {new Set(results.map((r) => r.package)).size} / {packageCount} 个包
+            </span>
+          </div>
+        )}
         <div className="report-panel-header">
           <PanelHeader
             step="结果"
@@ -1544,9 +1551,12 @@ export function ReportView({
                         )}
                         <div><span className="detail-label">仓库地址</span><span>{result.repository || "—"}</span></div>
                         <div><span className="detail-label">检索状态</span><span>{result.found ? "已验证" : result.status === "timeout" ? "超时" : result.status === "rateLimited" ? "频率限制" : result.status === "error" ? "检索异常" : "未找到"}</span></div>
-                      </div>
-                    </div>
-                  )}
+                </div>
+                <div className="result-table-footer">
+                  共 {filteredResults.length} 条 · 已验证 {filteredResults.filter((r) => r.found).length} · 未找到 {filteredResults.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").length} · 异常 {filteredResults.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")).length}
+                </div>
+              </div>
+            )}
                   </Fragment>
                 );
               })}
