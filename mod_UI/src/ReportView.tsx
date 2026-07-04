@@ -666,6 +666,49 @@ export function ReportView({
                     type="button"
                     className="button ghost compact-btn"
                     onClick={async () => {
+                      const found = results.filter((r) => r.found);
+                      const cmds = [...new Set(found.map((r) => getInstallCommand(r)))];
+                      const cran = cmds.filter((c) => c.includes("install.packages"));
+                      const bioc = cmds.filter((c) => c.includes("BiocManager"));
+                      const github = cmds.filter((c) => c.includes("remotes") || c.includes("devtools"));
+                      const lines: string[] = [
+                        "# ============================================================",
+                        "# R Package Installation Script",
+                        `# Generated: ${new Date().toLocaleString("zh-CN")}`,
+                        `# Packages: ${cmds.length}`,
+                        "# ============================================================",
+                        "",
+                      ];
+                      if (bioc.length > 0) {
+                        lines.push('if (!requireNamespace("BiocManager", quietly = TRUE))', '    install.packages("BiocManager")', "");
+                      }
+                      if (github.length > 0) {
+                        lines.push('if (!requireNamespace("remotes", quietly = TRUE))', '    install.packages("remotes")', "");
+                      }
+                      if (cran.length > 0) {
+                        lines.push("# --- CRAN ---", ...cran, "");
+                      }
+                      if (bioc.length > 0) {
+                        lines.push("# --- Bioconductor ---", ...bioc, "");
+                      }
+                      if (github.length > 0) {
+                        lines.push("# --- GitHub ---", ...github, "");
+                      }
+                      lines.push('# cat("\\n Installation complete.\\n")');
+                      try {
+                        await navigator.clipboard.writeText(lines.join("\n"));
+                        onStatusChange(`已复制完整安装脚本（${cmds.length} 个包）`);
+                      } catch (err) {
+                        onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                      }
+                    }}
+                  >
+                    复制为脚本
+                  </button>
+                  <button
+                    type="button"
+                    className="button ghost compact-btn"
+                    onClick={async () => {
                       const found = results.filter(
                         (r) => r.found && (r.source === "cran" || r.source === "bioc" || r.source === "github"),
                       );

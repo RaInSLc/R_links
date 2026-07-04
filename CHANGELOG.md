@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-07-04 21:25:00 +08:00]
+
+### Added
+- **报告页"复制为脚本"按钮**：将所有已验证包生成为带注释、分来源（CRAN/Bioconductor/GitHub）的完整 R 安装脚本，自动包含依赖检测前置代码。
+- **结果状态色标标签**：状态单元格改为圆角背景标签（绿=已验证、红=未找到、橙=超时），视觉更醒目。
+
+### Tests
+- **通过完整编译与启动执行验证**：`npm run test`（72 用例）、`npm run build`、`cargo clippy`（零警告）、`npm run tauri build -- --no-bundle`，release exe 启动验证通过。
+
 ## [2026-07-04 21:21:00 +08:00]
 
 ### Added

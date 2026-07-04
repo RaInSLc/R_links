@@ -1327,22 +1327,47 @@ input:focus-visible,
 
 .found {
   color: var(--success-color);
+  background: rgba(22, 163, 74, 0.08);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .missing {
   color: var(--red);
+  background: rgba(220, 38, 38, 0.08);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .timeout {
   color: #e67e22;
+  background: rgba(230, 126, 34, 0.08);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .rate-limited {
   color: #c0392b;
+  background: rgba(192, 57, 43, 0.08);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .error {
   color: #c0392b;
+  background: rgba(192, 57, 43, 0.08);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .log-console {
