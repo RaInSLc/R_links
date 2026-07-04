@@ -665,6 +665,25 @@ export function ReportView({
                   </button>
                 </>
               )}
+              {results.some((r) => !r.found) && (
+                <button
+                  type="button"
+                  className="button ghost compact-btn"
+                  onClick={async () => {
+                    const missing = [...new Set(
+                      results.filter((r) => !r.found).map((r) => r.package),
+                    )];
+                    try {
+                      await navigator.clipboard.writeText(missing.join("\n"));
+                      onStatusChange(`已复制 ${missing.length} 个未找到的包名`);
+                    } catch (err) {
+                      onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                    }
+                  }}
+                >
+                  复制未找到
+                </button>
+              )}
               <button
                 type="button"
                 className="button ghost compact-btn"
