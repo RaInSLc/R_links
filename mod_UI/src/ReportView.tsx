@@ -655,7 +655,10 @@ export function ReportView({
           </div>
         )}
         {results.length === 0 ? (
-          <EmptyState text={searching ? "正在等待首条检索结果" : "尚未执行检索"} />
+          <EmptyState
+            text={searching ? "正在等待首条检索结果" : "尚未执行检索"}
+            hint={searching ? undefined : "请在「工作台」页面输入包名并点击「开始检索」"}
+          />
         ) : (
           <>
             <div className="result-filter-bar">
@@ -685,7 +688,7 @@ export function ReportView({
               />
             </div>
             {filteredResults.length === 0 ? (
-              <EmptyState text="当前筛选条件下无匹配结果" />
+              <EmptyState text="当前筛选条件下无匹配结果" hint="尝试切换上方的筛选标签或清空搜索框" />
             ) : (
               <div className="result-table-wrapper">
                 <div className="result-table" role="table" aria-label="包来源验证结果">

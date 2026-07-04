@@ -91,8 +91,14 @@ export function Metric({
   );
 }
 
-export function EmptyState({ text }: { text: string }) {
-  return <div className="empty-state"><span>—</span>{text}</div>;
+export function EmptyState({ text, hint }: { text: string; hint?: string }) {
+  return (
+    <div className="empty-state">
+      <span>—</span>
+      {text}
+      {hint && <small className="empty-hint">{hint}</small>}
+    </div>
+  );
 }
 
 export function PanelHeaderWithChildren({

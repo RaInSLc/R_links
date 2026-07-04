@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { PanelHeader, Toggle } from "./components";
 import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, type SmartSuggestion } from "./utils";
 import type { Method, Settings } from "./types";
@@ -68,6 +68,16 @@ export function WorkspaceView({
     if (!file) return;
     const name = file.name.toLowerCase();
     if (!name.endsWith(".txt") && !name.endsWith(".csv") && !name.endsWith(".r")) return;
+    const text = await file.text();
+    if (text) onInputChange(text, "clipboard");
+  }
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFilePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
     const text = await file.text();
     if (text) onInputChange(text, "clipboard");
   }
@@ -157,6 +167,14 @@ export function WorkspaceView({
           <button className="button ghost" onClick={onPaste} disabled={searching}>粘贴</button>
           <button className="button ghost" onClick={onClear} disabled={searching}>清空</button>
           <button className="button ghost" onClick={sortInputAlphabetical} disabled={searching || !input.trim()} title="按字母排序">排序</button>
+          <button className="button ghost" onClick={() => fileInputRef.current?.click()} disabled={searching} title="导入 .txt / .csv / .r 文件">导入文件</button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.csv,.r"
+            onChange={handleFilePick}
+            style={{ display: "none" }}
+          />
           <button className="button ghost wide" onClick={onOpenSearchTabs} disabled={searching || openingSearchTabs || inputTooLarge}>
             {openingSearchTabs ? "正在打开..." : "浏览器搜索"}
           </button>

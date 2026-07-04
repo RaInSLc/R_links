@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-07-04 20:14:00 +08:00]
+
+### Added
+- **输入面板"导入文件"按钮**：除拖放外，新增显式文件选择按钮，支持 `.txt` / `.csv` / `.r` 文件导入。
+- **报告页空状态引导优化**：`EmptyState` 新增 `hint` 字段，无结果时显示操作指引（如"请切换到工作台输入包名并开始检索"）。
+
+### Tests
+- **通过完整编译与启动执行验证**：`npm run test`（72 用例）、`npm run build`、`cargo clippy`（零警告）、`npm run tauri build -- --no-bundle`，release exe 启动验证通过。
+
 ## [2026-07-04 20:08:00 +08:00]
 
 ### Added
