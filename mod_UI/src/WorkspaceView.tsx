@@ -70,6 +70,15 @@ export function WorkspaceView({
     textareaRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    if (!strategyExpanded) return;
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === "Escape") { e.preventDefault(); setStrategyExpanded(false); }
+    }
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
+  }, [strategyExpanded]);
+
   async function handleFileDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);

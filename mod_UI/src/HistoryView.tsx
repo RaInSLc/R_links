@@ -91,6 +91,21 @@ export function HistoryView({
                 type="button"
                 className="button ghost"
                 style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto", whiteSpace: "nowrap" }}
+                title="复制当前筛选结果的全部命令"
+                onClick={async () => {
+                  const cmds = sorted.map((r) => r.command).filter(Boolean);
+                  if (cmds.length === 0) return;
+                  try {
+                    await navigator.clipboard.writeText(cmds.join("\n"));
+                  } catch { /* ignore */ }
+                }}
+              >
+                复制全部
+              </button>
+              <button
+                type="button"
+                className="button ghost"
+                style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto", whiteSpace: "nowrap" }}
                 onClick={() => {
                   if (window.confirm(`确定清空全部 ${history.length} 条历史记录？此操作不可撤销。`)) {
                     onClearAll();
