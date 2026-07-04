@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-07-04 19:53:00 +08:00]
+
+### Added
+- **报告页"复制全部指令"按钮**：一键复制所有已验证包的安装命令（自动去重），便于直接粘贴到 R 终端执行。
+- **脚本面板"下载 .R"按钮**：将生成的 R 脚本下载为 `install_packages.R` 文件，便于保存和分享。
+
+### Tests
+- **通过完整编译与启动执行验证**：`npm run test`（72 个用例）、`npm run build`、`cargo clippy`（零警告）、`npm run tauri build -- --no-bundle`，并完成 release 程序启动级执行验证。
+
 ## [2026-07-04 19:46:00 +08:00]
 
 ### Added

@@ -40,6 +40,7 @@ interface WorkspaceViewProps {
   onTempFilter: (text: string, mode: "chars" | "lines") => void;
   onCopyScript: () => void;
   onCleanComments: () => void;
+  onDownloadScript: () => void;
   isMethodDisabled: (candidate: Method) => boolean;
 }
 
@@ -54,7 +55,7 @@ export function WorkspaceView({
   onMethodChange, pinnedMethods, onPinnedMethodsChange, onApplySmartSuggestion, onConditionalChange, onInstallDependenciesChange,
   onShowRemoteVersionChange, onVerifyInstallChange, onFullSearchChange,
   onUseCacheChange, onTempFilter,
-  onCopyScript, onCleanComments, isMethodDisabled,
+  onCopyScript, onCleanComments, onDownloadScript, isMethodDisabled,
 }: WorkspaceViewProps) {
   const [filterText, setFilterText] = useState("");
   const [strategyExpanded, setStrategyExpanded] = useState(false);
@@ -282,6 +283,9 @@ export function WorkspaceView({
           <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginRight: "10px" }}>
             <button className="button ghost" style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onCleanComments} disabled={scriptTooLarge}>
               移除注释
+            </button>
+            <button className="button ghost" style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onDownloadScript} disabled={!script || script === "等待输入..." || scriptTooLarge}>
+              下载 .R
             </button>
             <button className="button primary" style={{ padding: "4px 12px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onCopyScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+Shift+C">
               复制脚本<span className="kbd-hint">Ctrl+⇧C</span>

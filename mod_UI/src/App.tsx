@@ -306,6 +306,21 @@ function App() {
     }
   }
 
+  function downloadScript() {
+    const snapshot = latestScriptRef.current;
+    if (!snapshot || snapshot === "等待输入...") return;
+    const blob = new Blob([snapshot], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "install_packages.R";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setStatus("已下载 R 脚本文件");
+  }
+
   async function cleanComments() {
     const source = latestScriptRef.current;
     if (scriptValueTooLarge(source)) {
@@ -492,6 +507,7 @@ function App() {
               }}
               onTempFilter={handleTempFilter}
               onCopyScript={copyScript} onCleanComments={cleanComments}
+              onDownloadScript={downloadScript}
               isMethodDisabled={isMethodDisabled}
             />
           )}

@@ -518,7 +518,27 @@ export function ReportView({
       </div>
 
       <section className="panel report-panel">
-        <PanelHeader step="结果" title="来源验证" meta={searching ? "实时更新" : "已完成"} />
+        <div className="report-panel-header">
+          <PanelHeader step="结果" title="来源验证" meta={searching ? "实时更新" : "已完成"} />
+          {results.some((r) => r.found) && (
+            <button
+              type="button"
+              className="button ghost compact-btn"
+              onClick={async () => {
+                const cmds = results.filter((r) => r.found).map((r) => getInstallCommand(r));
+                const unique = [...new Set(cmds)];
+                try {
+                  await navigator.clipboard.writeText(unique.join("\n"));
+                  onStatusChange(`已复制 ${unique.length} 条安装指令`);
+                } catch (err) {
+                  onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                }
+              }}
+            >
+              复制全部指令
+            </button>
+          )}
+        </div>
         {smartSuggestions.length > 0 && (
           <div className="smart-suggestion-list report-suggestions" aria-label="检索智能建议">
             {smartSuggestions.map((suggestion) => (

@@ -952,6 +952,14 @@ input:focus-visible,
   min-height: 0;
 }
 
+.report-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-right: 14px;
+}
+
 .result-filter-bar {
   display: flex;
   align-items: center;
