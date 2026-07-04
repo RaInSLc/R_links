@@ -33,10 +33,21 @@ function App() {
         stored === "biocManager" || stored === "checkSystem") return stored as Method;
     return "auto";
   });
-  const [conditional, setConditional] = useState(true);
-  const [installDependencies, setInstallDependencies] = useState(true);
-  const [showRemoteVersion, setShowRemoteVersion] = useState(true);
-  const [verifyInstall, setVerifyInstall] = useState(false);
+  const [conditional, setConditionalState] = useState(() => {
+    const s = localStorage.getItem("rlinks_conditional");
+    return s === null ? true : s === "1";
+  });
+  const [installDependencies, setInstallDependenciesState] = useState(() => {
+    const s = localStorage.getItem("rlinks_install_deps");
+    return s === null ? true : s === "1";
+  });
+  const [showRemoteVersion, setShowRemoteVersionState] = useState(() => {
+    const s = localStorage.getItem("rlinks_show_remote_version");
+    return s === null ? true : s === "1";
+  });
+  const [verifyInstall, setVerifyInstallState] = useState(() => {
+    return localStorage.getItem("rlinks_verify_install") === "1";
+  });
   const [pinnedMethods, setPinnedMethods] = useState<Method[]>(() => {
     try {
       const stored = localStorage.getItem("rlinks_pinned_methods");
@@ -53,6 +64,11 @@ function App() {
   const [updateMessage, setUpdateMessage] = useState("");
   const [inputRules, setInputRules] = useState<InputRules>(defaultInputRules);
   const [inputRulesBusy, setInputRulesBusy] = useState(false);
+
+  function setConditional(v: boolean) { setConditionalState(v); localStorage.setItem("rlinks_conditional", v ? "1" : "0"); }
+  function setInstallDependencies(v: boolean) { setInstallDependenciesState(v); localStorage.setItem("rlinks_install_deps", v ? "1" : "0"); }
+  function setShowRemoteVersion(v: boolean) { setShowRemoteVersionState(v); localStorage.setItem("rlinks_show_remote_version", v ? "1" : "0"); }
+  function setVerifyInstall(v: boolean) { setVerifyInstallState(v); localStorage.setItem("rlinks_verify_install", v ? "1" : "0"); }
 
   const latestInputRef = useRef(localStorage.getItem("rlinks_input") || "");
   const latestScriptRef = useRef("等待输入...");
@@ -411,7 +427,7 @@ function App() {
         </nav>
         <div className="sidebar-summary">
           <span>当前任务</span>
-          <strong>{searching ? "检索中" : `${packageCount} 个输入`}</strong>
+          <strong>{searching ? `检索中 ${foundCount}/${packageCount}` : `${packageCount} 个输入`}</strong>
           <progress className="summary-track" value={summaryProgress} max={100} aria-label="已验证包比例" />
           <small>{results.length ? `${foundCount} 条来源记录` : "等待开始"}</small>
         </div>
