@@ -443,6 +443,30 @@ input:focus-visible,
   font-size: 15px;
 }
 
+.textarea-with-gutter {
+  display: flex;
+  border-bottom: 1px solid var(--line);
+}
+
+.line-gutter {
+  flex-shrink: 0;
+  width: 40px;
+  padding: 18px 6px 18px 0;
+  text-align: right;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--terminal-line-number, var(--muted));
+  user-select: none;
+  background: var(--tag-default-bg);
+  border-right: 1px solid var(--line);
+}
+
+.line-gutter > div {
+  min-height: calc(15px * 1.75);
+}
+
 .input-panel textarea {
   display: block;
   width: 100%;
@@ -453,7 +477,6 @@ input:focus-visible,
   color: #24302d;
   background: var(--input-bg);
   border: 0;
-  border-bottom: 1px solid var(--line);
   outline: none;
   font-family: var(--font-mono);
   font-size: 15px;

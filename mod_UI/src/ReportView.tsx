@@ -499,6 +499,7 @@ export function ReportView({
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; result: SearchResult } | null>(null);
   const [selectedRowIndex, setSelectedRowIndex] = useState<number>(-1);
   const resultTableRef = useRef<HTMLDivElement>(null);
+  const [logSearch, setLogSearch] = useState("");
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -1185,31 +1186,43 @@ export function ReportView({
       <section className="panel log-panel">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <PanelHeader step="日志" title="检索过程" meta={`${logs.length} 行`} />
-          <button
-            className="button ghost"
-            style={{
-              marginRight: "16px",
-              padding: "4px 8px",
-              fontSize: "12px",
-              height: "auto",
-            }}
-            onClick={onClearLogs}
-            disabled={searching || logs.length === 0}
-          >
-            清除日志
-          </button>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginRight: "16px" }}>
+            <input
+              type="text"
+              placeholder="过滤日志..."
+              value={logSearch}
+              onChange={(e) => setLogSearch(e.target.value)}
+              style={{ padding: "4px 8px", fontSize: "12px", width: "120px", borderRadius: "4px", border: "1px solid var(--line)", background: "var(--input-bg, #fff)", color: "var(--ink)" }}
+            />
+            <button
+              className="button ghost"
+              style={{
+                padding: "4px 8px",
+                fontSize: "12px",
+                height: "auto",
+              }}
+              onClick={onClearLogs}
+              disabled={searching || logs.length === 0}
+            >
+              清除日志
+            </button>
+          </div>
         </div>
         <div className="log-console" ref={logConsoleRef}>
-          {logs.length ? (
-            logs.map((line, index) => (
-              <div key={`${line}-${index}`}>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                {line}
-              </div>
-            ))
-          ) : (
-            <EmptyState text="日志将在检索开始后显示" />
-          )}
+          {(() => {
+            const q = logSearch.trim().toLowerCase();
+            const filtered = q ? logs.filter((line) => line.toLowerCase().includes(q)) : logs;
+            return filtered.length ? (
+              filtered.map((line, index) => (
+                <div key={`${line}-${index}`}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  {line}
+                </div>
+              ))
+            ) : (
+              <EmptyState text={q ? "无匹配日志" : "日志将在检索开始后显示"} />
+            );
+          })()}
         </div>
       </section>
     </div>

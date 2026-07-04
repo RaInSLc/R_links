@@ -61,6 +61,7 @@ export function WorkspaceView({
   const [strategyExpanded, setStrategyExpanded] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lineGutterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -105,35 +106,47 @@ export function WorkspaceView({
     <div className="workspace-grid">
       <section className="panel input-panel">
         <PanelHeader step="01" title="输入包列表" meta={`${inputProfile.total}/${MAX_PACKAGE_LINES} 项${duplicateCount > 0 ? ` · ${duplicateCount} 重复` : ""} · ${new Blob([input]).size}/${MAX_INPUT_CHARS}B`} />
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(event) => onInputChange(event.currentTarget.value, "manual")}
-          onKeyDown={(e) => {
-            if (e.key === "Tab") {
-              e.preventDefault();
-              const el = e.currentTarget;
-              const s = el.selectionStart;
-              const en = el.selectionEnd;
-              const newVal = input.slice(0, s) + "  " + input.slice(en);
-              const accepted = onInputChange(newVal, "manual");
-              if (accepted !== "rejected") {
-                requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = s + 2; });
+        <div className="textarea-with-gutter">
+          <div className="line-gutter" ref={lineGutterRef} aria-hidden="true">
+            {input.split("\n").map((_, i) => (
+              <div key={i}>{i + 1}</div>
+            ))}
+          </div>
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(event) => onInputChange(event.currentTarget.value, "manual")}
+            onScroll={() => {
+              if (lineGutterRef.current && textareaRef.current) {
+                lineGutterRef.current.scrollTop = textareaRef.current.scrollTop;
               }
-            }
-          }}
-          onDragOver={(e) => { e.preventDefault(); if (!searching) setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleFileDrop}
-          className={dragOver ? "drag-over" : ""}
-          placeholder={"每行一个包，例如：\nSeurat 5.2.1\nGSVA 1.50\nbuenrostrolab/FigR\nhttps://example.org/pkg_1.0.tar.gz\n\n可拖放 .txt / .csv / .r 文件"}
-          aria-label="R 包输入列表"
-          aria-describedby={inputTooLarge ? "input-limit-warning" : undefined}
-          aria-invalid={inputTooLarge}
-          spellCheck={false}
-          maxLength={MAX_INPUT_CHARS + 1}
-          disabled={searching}
-        />
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Tab") {
+                e.preventDefault();
+                const el = e.currentTarget;
+                const s = el.selectionStart;
+                const en = el.selectionEnd;
+                const newVal = input.slice(0, s) + "  " + input.slice(en);
+                const accepted = onInputChange(newVal, "manual");
+                if (accepted !== "rejected") {
+                  requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = s + 2; });
+                }
+              }
+            }}
+            onDragOver={(e) => { e.preventDefault(); if (!searching) setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleFileDrop}
+            className={dragOver ? "drag-over" : ""}
+            placeholder={"每行一个包，例如：\nSeurat 5.2.1\nGSVA 1.50\nbuenrostrolab/FigR\nhttps://example.org/pkg_1.0.tar.gz\n\n可拖放 .txt / .csv / .r 文件"}
+            aria-label="R 包输入列表"
+            aria-describedby={inputTooLarge ? "input-limit-warning" : undefined}
+            aria-invalid={inputTooLarge}
+            spellCheck={false}
+            maxLength={MAX_INPUT_CHARS + 1}
+            disabled={searching}
+          />
+        </div>
         {inputTooLarge && (
           <div className="inline-warning" id="input-limit-warning" role="alert">
             输入超出限制或包含非法字符：最多 {MAX_PACKAGE_LINES} 行、总计 {MAX_INPUT_CHARS} 字节、单行 {MAX_INPUT_LINE_BYTES} 字节。
