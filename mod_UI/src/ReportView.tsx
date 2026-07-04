@@ -16,6 +16,7 @@ interface ReportViewProps {
   onClearLogs: () => void;
   onStatusChange: (status: string) => void;
   onApplySmartSuggestion: (suggestion: SmartSuggestion) => void;
+  onRetryMissing: (packages: string[]) => void;
 }
 
 function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
@@ -478,6 +479,7 @@ export function ReportView({
   onClearLogs,
   onStatusChange,
   onApplySmartSuggestion,
+  onRetryMissing,
 }: ReportViewProps) {
   const [activeTab, setActiveTab] = useState<"graph" | "list">("graph");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -666,23 +668,38 @@ export function ReportView({
                 </>
               )}
               {results.some((r) => !r.found) && (
-                <button
-                  type="button"
-                  className="button ghost compact-btn"
-                  onClick={async () => {
-                    const missing = [...new Set(
-                      results.filter((r) => !r.found).map((r) => r.package),
-                    )];
-                    try {
-                      await navigator.clipboard.writeText(missing.join("\n"));
-                      onStatusChange(`已复制 ${missing.length} 个未找到的包名`);
-                    } catch (err) {
-                      onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
-                    }
-                  }}
-                >
-                  复制未找到
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="button ghost compact-btn"
+                    onClick={async () => {
+                      const missing = [...new Set(
+                        results.filter((r) => !r.found).map((r) => r.package),
+                      )];
+                      try {
+                        await navigator.clipboard.writeText(missing.join("\n"));
+                        onStatusChange(`已复制 ${missing.length} 个未找到的包名`);
+                      } catch (err) {
+                        onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
+                      }
+                    }}
+                  >
+                    复制未找到
+                  </button>
+                  <button
+                    type="button"
+                    className="button ghost compact-btn"
+                    disabled={searching}
+                    onClick={() => {
+                      const missing = [...new Set(
+                        results.filter((r) => !r.found).map((r) => r.package),
+                      )];
+                      onRetryMissing(missing);
+                    }}
+                  >
+                    重试未找到
+                  </button>
+                </>
               )}
               <button
                 type="button"

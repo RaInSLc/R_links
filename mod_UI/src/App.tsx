@@ -536,6 +536,11 @@ function App() {
                   handleStartSearch();
                 }
               }}
+              onRetryMissing={(packages) => {
+                acceptInputValue(packages.join("\n"), "manual");
+                setView("workspace");
+                setStatus(`已回填 ${packages.length} 个未找到的包名，可重新检索`);
+              }}
             />
           )}
           {view === "history" && (
