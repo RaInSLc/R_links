@@ -479,7 +479,7 @@ export function WorkspaceView({
         <header className="panel-header" style={{ gridTemplateColumns: "auto auto 1fr auto" }}>
           <span>03</span>
           <h2>脚本预览</h2>
-          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginRight: "10px", alignItems: "center" }}>
+          <div className="script-toolbar">
             <label className="line-num-toggle" title="复制时在每行前添加行号">
               <input
                 type="checkbox"
@@ -488,13 +488,13 @@ export function WorkspaceView({
               />
               <span>行号</span>
             </label>
-            <button className="button ghost" style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onCleanComments} disabled={scriptTooLarge}>
+            <button className="button ghost script-toolbar-btn" onClick={onCleanComments} disabled={scriptTooLarge}>
               移除注释
             </button>
-            <button className="button ghost" style={{ padding: "4px 10px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onDownloadScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+S">
+            <button className="button ghost script-toolbar-btn" onClick={onDownloadScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+S">
               下载 .R<span className="kbd-hint">Ctrl+S</span>
             </button>
-            <button className="button primary" style={{ padding: "4px 12px", fontSize: "11px", height: "30px", minHeight: "auto" }} onClick={onCopyScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+Shift+C">
+            <button className="button primary script-toolbar-btn" onClick={onCopyScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+Shift+C">
               复制脚本<span className="kbd-hint">Ctrl+⇧C</span>
             </button>
           </div>
@@ -509,8 +509,7 @@ export function WorkspaceView({
             </small>
             <button
               type="button"
-              className="button ghost"
-              style={{ padding: "2px 8px", fontSize: "11px", height: "26px", minHeight: "auto", lineHeight: 1 }}
+              className="button ghost script-toolbar-btn"
               onClick={() => setScriptCollapsed((v) => !v)}
               title={scriptCollapsed ? "展开脚本" : "折叠脚本"}
             >

@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [2026-07-06 14:45:00 +08:00]
+
+### Fixed
+- **按钮文字竖排折行**：所有 `.button` 添加 `white-space: nowrap` + `flex-shrink: 0`，容器添加 `flex-wrap: wrap`，彻底消除"粘贴""清空""导入文件"等按钮中文竖排问题。
+- **代码预览断词截断**：`.line-text` 将 `word-break: break-all` 改为 `overflow-wrap: break-word`，不再在单词中间截断（如 `FALSE` 拆为 `FALS/E`）。
+- **Ctrl+↵ 拥挤**：增大 `.kbd-hint` 内边距与间距，主按钮 padding 提升至 `0 18px`。
+- **左侧栏空白过大**：`.sidebar-summary` 将 `margin-top: auto` 改为 `margin-top: 18px`，消除导航与任务卡之间的空洞。
+- **过滤按钮间距**：`.temp-filter-bar` gap 从 8px 提升至 10px 并启用 flex-wrap。
+- **脚本工具栏比例**：移除全部内联样式，统一使用 `.script-toolbar` + `.script-toolbar-btn` CSS 类，按钮高度统一为 32px。
+
+### Tests
+- **通过完整验证**：72 用例全通过、TypeScript 编译零错误、Clippy 零警告、Tauri release 构建成功。
+
 ## [2026-07-05 00:44:00 +08:00]
 
 ### Added
