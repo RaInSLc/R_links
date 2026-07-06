@@ -1573,6 +1573,7 @@ export function ReportView({
                             className={`cache-feedback-btn ${cacheVotes[feedbackKey] === "up" ? "active" : ""}`}
                             title={searching ? "检索完成后才能反馈缓存" : cacheVotePending[feedbackKey] ? "正在提交缓存反馈" : "结果正确：提升缓存可信度"}
                             aria-label={`标记 ${result.package} 缓存结果正确`}
+                            aria-pressed={cacheVotes[feedbackKey] === "up"}
                             disabled={searching || cacheVotePending[feedbackKey]}
                             onClick={() => handleRateCache(result, "up")}
                           >
@@ -1583,6 +1584,7 @@ export function ReportView({
                             className={`cache-feedback-btn ${cacheVotes[feedbackKey] === "down" ? "active bad" : ""}`}
                             title={searching ? "检索完成后才能反馈缓存" : cacheVotePending[feedbackKey] ? "正在提交缓存反馈" : "结果不对：标记缓存失效"}
                             aria-label={`标记 ${result.package} 缓存结果不正确`}
+                            aria-pressed={cacheVotes[feedbackKey] === "down"}
                             disabled={searching || cacheVotePending[feedbackKey]}
                             onClick={() => handleRateCache(result, "down")}
                           >
