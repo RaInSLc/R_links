@@ -19,7 +19,7 @@ use tauri::{AppHandle, State};
 
 use models::{
     GenerateOptions, HistoryRecord, InputRules, MirrorSpeedResult, PublicSettings,
-    ReverseDependenciesInfo, SearchResponse, SearchResult, Settings, CACHE_TRUST_THRESHOLD,
+    ReverseDependenciesInfo, SearchResponse, SearchResult, Settings,
 };
 
 const MAX_BROWSER_OPEN_REQUESTS: usize = 30;
@@ -207,7 +207,7 @@ fn build_offline_results(
     for pkg in packages {
         let pkg_lower = pkg.name.to_ascii_lowercase();
 
-        if let Some(entry) = cache.get(&pkg_lower).filter(|entry| cache_entry_trusted(entry)) {
+        if let Some(entry) = cache.get(&pkg_lower).filter(|entry| entry.is_trusted()) {
             offline_results.push(SearchResult {
                 package: pkg.name.clone(),
                 requested_version: pkg.version.clone(),
@@ -275,10 +275,6 @@ fn load_cached_results(app: tauri::AppHandle, input: String) -> Vec<SearchResult
     build_offline_results(&app, &input, &rules)
 }
 
-fn cache_entry_trusted(entry: &models::PackageCacheEntry) -> bool {
-    entry.verified_count >= CACHE_TRUST_THRESHOLD && entry.up_votes >= entry.down_votes && !entry.invalidated
-}
-
 fn cache_entry_matches_result(
     entry: &models::PackageCacheEntry,
     source: &str,
@@ -321,7 +317,7 @@ fn rate_cache_result(
     let message = if vote == "up" {
         entry.up_votes = entry.up_votes.saturating_add(1);
         entry.invalidated = entry.down_votes > entry.up_votes;
-        if cache_entry_trusted(entry) {
+        if entry.is_trusted() {
             "缓存反馈已记录，当前缓存仍可信".to_string()
         } else {
             "缓存反馈已记录，仍需继续验证".to_string()

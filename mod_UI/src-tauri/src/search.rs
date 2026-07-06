@@ -15,7 +15,7 @@ use url::Url;
 use crate::logic::{infer_bioc_version, normalize_github_repository, parse_inputs_filtered};
 use crate::models::{
     InputRules, PackageCacheEntry, PackageInput, SearchResponse, SearchResult, Settings,
-    CACHE_TRUST_THRESHOLD, MAX_FIELD_CHARS, MAX_PACKAGE_LINES,
+    MAX_FIELD_CHARS, MAX_PACKAGE_LINES,
 };
 use crate::storage;
 
@@ -294,7 +294,7 @@ pub async fn search_packages(
             let index = batch_start + offset;
             let cache_key = package.name.to_ascii_lowercase();
 
-            if let Some(cached_entry) = cache.get(&cache_key).filter(|entry| cache_entry_trusted(entry)) {
+            if let Some(cached_entry) = cache.get(&cache_key).filter(|entry| entry.is_trusted()) {
                 log(
                     app,
                     run_id,
@@ -644,10 +644,6 @@ fn has_found_result_for_package(results: &[SearchResult], package_name: &str) ->
                     .as_deref()
                     .is_some_and(|repository| result.package.eq_ignore_ascii_case(repository)))
     })
-}
-
-fn cache_entry_trusted(entry: &PackageCacheEntry) -> bool {
-    entry.verified_count >= CACHE_TRUST_THRESHOLD && entry.up_votes >= entry.down_votes && !entry.invalidated
 }
 
 fn cache_entry_matches_result(entry: &PackageCacheEntry, result: &SearchResult) -> bool {

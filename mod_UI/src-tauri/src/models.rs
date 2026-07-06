@@ -253,6 +253,14 @@ pub struct PackageCacheEntry {
     pub invalidated: bool,
 }
 
+impl PackageCacheEntry {
+    pub fn is_trusted(&self) -> bool {
+        self.verified_count >= CACHE_TRUST_THRESHOLD
+            && self.up_votes >= self.down_votes
+            && !self.invalidated
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageInput {
     pub raw: String,
