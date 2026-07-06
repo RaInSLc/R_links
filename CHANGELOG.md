@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-07 00:05:00 +08:00]
+
+### Fixed
+- **缓存反馈写入串行化**：新增后端 `CACHE_FEEDBACK_LOCK`，为 `rate_cache_result` 的缓存读写加锁，避免多个结果行同时反馈时互相覆盖 `pkg_cache.json`。
+
+### Tests
+- **通过完整验证**：72 用例全通过、TypeScript 编译零错误、Clippy 零警告、Tauri release 构建成功、exe 启动验证通过。
+
 ## [2026-07-06 23:55:00 +08:00]
 
 ### Fixed

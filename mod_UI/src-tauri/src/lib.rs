@@ -27,6 +27,7 @@ const BROWSER_OPEN_WINDOW: Duration = Duration::from_secs(60);
 const MAX_JS_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const CACHE_TRUST_THRESHOLD: u32 = 3;
 static SETTINGS_UPDATE_LOCK: Mutex<()> = Mutex::new(());
+static CACHE_FEEDBACK_LOCK: Mutex<()> = Mutex::new(());
 static HISTORY_EXTRACT_RE: OnceLock<Regex> = OnceLock::new();
 
 pub struct SearchState {
@@ -302,6 +303,9 @@ fn rate_cache_result(
     real_name: String,
     vote: String,
 ) -> Result<String, String> {
+    let _guard = CACHE_FEEDBACK_LOCK
+        .lock()
+        .map_err(|_| "缓存反馈锁已损坏".to_string())?;
     let key = package.trim().to_ascii_lowercase();
     if key.is_empty() || !matches!(vote.as_str(), "up" | "down") {
         return Err("缓存反馈参数无效".to_string());
