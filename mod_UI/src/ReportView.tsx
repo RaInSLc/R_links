@@ -516,6 +516,7 @@ export function ReportView({
   const [showVersionCol, setShowVersionCol] = useState(true);
   const [showRepoCol, setShowRepoCol] = useState(true);
   const [cacheVotes, setCacheVotes] = useState<Record<string, "up" | "down">>({});
+  const [cacheVotePending, setCacheVotePending] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -677,7 +678,9 @@ export function ReportView({
       return;
     }
     const key = `${result.package}\u0001${result.source}\u0001${result.repository}\u0001${result.realName}`;
+    if (cacheVotePending[key]) return;
     try {
+      setCacheVotePending((current) => ({ ...current, [key]: true }));
       const message = await invoke<string>("rate_cache_result", {
         package: result.package,
         source: result.source,
@@ -690,6 +693,8 @@ export function ReportView({
       onStatusChange(message);
     } catch (error) {
       onStatusChange(`缓存反馈失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setCacheVotePending((current) => ({ ...current, [key]: false }));
     }
   };
 
@@ -1560,8 +1565,8 @@ export function ReportView({
                           <button
                             type="button"
                             className={`cache-feedback-btn ${cacheVotes[feedbackKey] === "up" ? "active" : ""}`}
-                            title={searching ? "检索完成后才能反馈缓存" : "结果正确：提升缓存可信度"}
-                            disabled={searching}
+                            title={searching ? "检索完成后才能反馈缓存" : cacheVotePending[feedbackKey] ? "正在提交缓存反馈" : "结果正确：提升缓存可信度"}
+                            disabled={searching || cacheVotePending[feedbackKey]}
                             onClick={() => handleRateCache(result, "up")}
                           >
                             赞
@@ -1569,8 +1574,8 @@ export function ReportView({
                           <button
                             type="button"
                             className={`cache-feedback-btn ${cacheVotes[feedbackKey] === "down" ? "active bad" : ""}`}
-                            title={searching ? "检索完成后才能反馈缓存" : "结果不对：标记缓存失效"}
-                            disabled={searching}
+                            title={searching ? "检索完成后才能反馈缓存" : cacheVotePending[feedbackKey] ? "正在提交缓存反馈" : "结果不对：标记缓存失效"}
+                            disabled={searching || cacheVotePending[feedbackKey]}
                             onClick={() => handleRateCache(result, "down")}
                           >
                             踩
