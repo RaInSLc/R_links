@@ -242,6 +242,14 @@ pub struct PackageCacheEntry {
     pub repository: String,
     pub real_name: String,
     pub cached_at: String,
+    #[serde(default)]
+    pub verified_count: u32,
+    #[serde(default)]
+    pub up_votes: u32,
+    #[serde(default)]
+    pub down_votes: u32,
+    #[serde(default)]
+    pub invalidated: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -2500,6 +2500,39 @@ body {
   transform: scale(1.05);
 }
 
+.cache-feedback {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.cache-feedback-btn {
+  min-height: 0;
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.45);
+  color: inherit;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.cache-feedback-btn:hover {
+  border-color: currentColor;
+}
+
+.cache-feedback-btn.active {
+  background: rgba(22, 163, 74, 0.18);
+  border-color: rgba(22, 163, 74, 0.45);
+}
+
+.cache-feedback-btn.active.bad {
+  background: rgba(220, 38, 38, 0.16);
+  border-color: rgba(220, 38, 38, 0.45);
+}
+
 .cache-progress-bar {
   position: relative;
   width: 100%;

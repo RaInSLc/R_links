@@ -41,6 +41,7 @@ const SEARCH_STOPPED_ERROR: &str = "检索已停止";
 const SEARCH_LOGS_TRUNCATED_MESSAGE: &str = "检索日志达到上限，后续日志已停止记录";
 const SEARCH_RESULTS_TRUNCATED_MESSAGE: &str = "检索结果达到上限，后续来源请求已停止";
 const STREAM_RESULT_PAUSE: Duration = Duration::from_millis(35);
+const CACHE_TRUST_THRESHOLD: u32 = 3;
 const R_FORGE_PACKAGES_URL: &str = "https://r-forge.r-project.org/src/contrib/PACKAGES";
 const R_FORGE_REPOS_URL: &str = "http://R-Forge.R-project.org";
 static HTML_VERSION_RE: OnceLock<Regex> = OnceLock::new();
@@ -294,7 +295,7 @@ pub async fn search_packages(
             let index = batch_start + offset;
             let cache_key = package.name.to_ascii_lowercase();
 
-            if let Some(cached_entry) = cache.get(&cache_key) {
+            if let Some(cached_entry) = cache.get(&cache_key).filter(|entry| cache_entry_trusted(entry)) {
                 log(
                     app,
                     run_id,
@@ -321,6 +322,13 @@ pub async fn search_packages(
                 );
                 sleep(STREAM_RESULT_PAUSE).await;
                 continue;
+            } else if cache.contains_key(&cache_key) {
+                log(
+                    app,
+                    run_id,
+                    &mut logs,
+                    &format!("[{}/{}] {} (缓存待验证)", index + 1, total, package.name),
+                );
             }
 
             batch_tasks.push((index, package.clone()));
@@ -371,7 +379,6 @@ pub async fn search_packages(
             for result in &task_results_inner {
                 let result_key = result.package.to_ascii_lowercase();
                 if result.found
-                    && !cache.contains_key(&result_key)
                     && matches!(
                         result.source.as_str(),
                         "cran" | "bioc" | "biocGit" | "github" | "r-forge"
@@ -382,17 +389,8 @@ pub async fn search_packages(
                         .unwrap_or_default()
                         .as_secs()
                         .to_string();
-                    cache_update.insert(
-                        result_key,
-                        PackageCacheEntry {
-                            package_name: result.real_name.clone(),
-                            source: result.source.clone(),
-                            version: result.latest_version.clone(),
-                            repository: result.repository.clone(),
-                            real_name: result.real_name.clone(),
-                            cached_at: now,
-                        },
-                    );
+                    let existing = cache_update.get(&result_key).or_else(|| cache.get(&result_key));
+                    cache_update.insert(result_key, cache_entry_from_result(result, existing, now));
                 }
             }
 
@@ -647,6 +645,50 @@ fn has_found_result_for_package(results: &[SearchResult], package_name: &str) ->
                     .as_deref()
                     .is_some_and(|repository| result.package.eq_ignore_ascii_case(repository)))
     })
+}
+
+fn cache_entry_trusted(entry: &PackageCacheEntry) -> bool {
+    entry.verified_count >= CACHE_TRUST_THRESHOLD && entry.up_votes >= entry.down_votes && !entry.invalidated
+}
+
+fn cache_entry_matches_result(entry: &PackageCacheEntry, result: &SearchResult) -> bool {
+    entry.source == result.source
+        && entry.version == result.latest_version
+        && entry.repository == result.repository
+        && entry.real_name.eq_ignore_ascii_case(&result.real_name)
+}
+
+fn cache_entry_from_result(
+    result: &SearchResult,
+    existing: Option<&PackageCacheEntry>,
+    cached_at: String,
+) -> PackageCacheEntry {
+    let mut verified_count = 1;
+    let mut up_votes = 0;
+    let mut down_votes = 0;
+    let mut invalidated = false;
+
+    if let Some(entry) = existing {
+        if cache_entry_matches_result(entry, result) {
+            verified_count = entry.verified_count.saturating_add(1).max(1);
+            up_votes = entry.up_votes;
+            down_votes = entry.down_votes;
+            invalidated = entry.invalidated && entry.down_votes > entry.up_votes;
+        }
+    }
+
+    PackageCacheEntry {
+        package_name: result.real_name.clone(),
+        source: result.source.clone(),
+        version: result.latest_version.clone(),
+        repository: result.repository.clone(),
+        real_name: result.real_name.clone(),
+        cached_at,
+        verified_count,
+        up_votes,
+        down_votes,
+        invalidated,
+    }
 }
 
 fn build_client(settings: &Settings) -> Result<Client, String> {

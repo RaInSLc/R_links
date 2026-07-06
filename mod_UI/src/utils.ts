@@ -10,6 +10,10 @@ export interface SearchResult {
   found: boolean;
   message: string;
   status?: string;
+  verifiedCount?: number;
+  upVotes?: number;
+  downVotes?: number;
+  invalidated?: boolean;
 }
 
 export interface DependencyNode {

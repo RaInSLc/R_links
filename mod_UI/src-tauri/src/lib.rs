@@ -25,6 +25,7 @@ use models::{
 const MAX_BROWSER_OPEN_REQUESTS: usize = 30;
 const BROWSER_OPEN_WINDOW: Duration = Duration::from_secs(60);
 const MAX_JS_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+const CACHE_TRUST_THRESHOLD: u32 = 3;
 static SETTINGS_UPDATE_LOCK: Mutex<()> = Mutex::new(());
 static HISTORY_EXTRACT_RE: OnceLock<Regex> = OnceLock::new();
 
@@ -206,7 +207,7 @@ fn build_offline_results(
     for pkg in packages {
         let pkg_lower = pkg.name.to_ascii_lowercase();
 
-        if let Some(entry) = cache.get(&pkg_lower) {
+        if let Some(entry) = cache.get(&pkg_lower).filter(|entry| cache_entry_trusted(entry)) {
             offline_results.push(SearchResult {
                 package: pkg.name.clone(),
                 requested_version: pkg.version.clone(),
@@ -272,6 +273,67 @@ fn build_offline_results(
 fn load_cached_results(app: tauri::AppHandle, input: String) -> Vec<SearchResult> {
     let rules = storage::load_input_rules(&app);
     build_offline_results(&app, &input, &rules)
+}
+
+fn cache_entry_trusted(entry: &models::PackageCacheEntry) -> bool {
+    entry.verified_count >= CACHE_TRUST_THRESHOLD && entry.up_votes >= entry.down_votes && !entry.invalidated
+}
+
+fn cache_entry_matches_result(
+    entry: &models::PackageCacheEntry,
+    source: &str,
+    version: &str,
+    repository: &str,
+    real_name: &str,
+) -> bool {
+    entry.source == source
+        && entry.version == version
+        && entry.repository == repository
+        && entry.real_name.eq_ignore_ascii_case(real_name)
+}
+
+#[tauri::command]
+fn rate_cache_result(
+    app: AppHandle,
+    package: String,
+    source: String,
+    version: String,
+    repository: String,
+    real_name: String,
+    vote: String,
+) -> Result<String, String> {
+    let key = package.trim().to_ascii_lowercase();
+    if key.is_empty() || !matches!(vote.as_str(), "up" | "down") {
+        return Err("缓存反馈参数无效".to_string());
+    }
+
+    let mut cache = storage::load_cache(&app)?;
+    let Some(entry) = cache.get_mut(&key) else {
+        return Err("没有找到可反馈的缓存记录".to_string());
+    };
+    if !cache_entry_matches_result(entry, &source, &version, &repository, &real_name) {
+        return Err("当前结果与缓存记录不一致，已跳过反馈".to_string());
+    }
+
+    let message = if vote == "up" {
+        entry.up_votes = entry.up_votes.saturating_add(1);
+        entry.invalidated = entry.down_votes > entry.up_votes;
+        if cache_entry_trusted(entry) {
+            "缓存反馈已记录，当前缓存仍可信".to_string()
+        } else {
+            "缓存反馈已记录，仍需继续验证".to_string()
+        }
+    } else {
+        entry.down_votes = entry.down_votes.saturating_add(1);
+        entry.invalidated = entry.down_votes > entry.up_votes;
+        if entry.invalidated {
+            "缓存已标记失效，后续将重新联网验证".to_string()
+        } else {
+            "缓存反馈已记录，当前缓存仍可信".to_string()
+        }
+    };
+    storage::save_cache(&app, &cache)?;
+    Ok(message)
 }
 
 #[tauri::command]
@@ -644,7 +706,8 @@ pub fn run() {
             save_input_rules,
             test_mirror_speed,
             fetch_reverse_dependencies,
-            load_cached_results
+            load_cached_results,
+            rate_cache_result
         ])
         .run(tauri::generate_context!())
         .expect("启动 Tauri 应用失败");

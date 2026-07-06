@@ -515,6 +515,7 @@ export function ReportView({
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const [showVersionCol, setShowVersionCol] = useState(true);
   const [showRepoCol, setShowRepoCol] = useState(true);
+  const [cacheVotes, setCacheVotes] = useState<Record<string, "up" | "down">>({});
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -666,6 +667,25 @@ export function ReportView({
       setTimeout(() => setCopiedKey(null), 1500);
     } catch (error) {
       onStatusChange(`复制安装指令失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleRateCache = async (result: SearchResult, vote: "up" | "down") => {
+    if (!result.found) return;
+    const key = `${result.package}\u0001${result.source}\u0001${result.repository}\u0001${result.realName}`;
+    try {
+      const message = await invoke<string>("rate_cache_result", {
+        package: result.package,
+        source: result.source,
+        version: result.latestVersion || "",
+        repository: result.repository || "",
+        realName: result.realName || result.package,
+        vote,
+      });
+      setCacheVotes((current) => ({ ...current, [key]: vote }));
+      onStatusChange(message);
+    } catch (error) {
+      onStatusChange(`缓存反馈失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -1387,6 +1407,7 @@ export function ReportView({
                 const isCopied = copiedKey === rowKey;
                 const installCmd = getInstallCommand(result);
                 const isExpanded = expandedRows.has(rowKey);
+                const feedbackKey = `${result.package}\u0001${result.source}\u0001${result.repository}\u0001${result.realName}`;
                 return (
                   <Fragment key={rowKey}>
                   <div
@@ -1519,15 +1540,37 @@ export function ReportView({
                         toggleFilter(status);
                       }}
                     >
-                      {result.status === "timeout"
-                        ? "超时"
-                        : result.status === "rateLimited"
-                        ? "频率限制"
-                        : result.status === "error"
-                        ? "检索异常"
-                        : result.found
-                        ? "已验证"
-                        : "未找到"}
+                      <span>
+                        {result.status === "timeout"
+                          ? "超时"
+                          : result.status === "rateLimited"
+                          ? "频率限制"
+                          : result.status === "error"
+                          ? "检索异常"
+                          : result.found
+                          ? "已验证"
+                          : "未找到"}
+                      </span>
+                      {result.found && (
+                        <span className="cache-feedback" onClick={(event) => event.stopPropagation()}>
+                          <button
+                            type="button"
+                            className={`cache-feedback-btn ${cacheVotes[feedbackKey] === "up" ? "active" : ""}`}
+                            title="结果正确：提升缓存可信度"
+                            onClick={() => handleRateCache(result, "up")}
+                          >
+                            赞
+                          </button>
+                          <button
+                            type="button"
+                            className={`cache-feedback-btn ${cacheVotes[feedbackKey] === "down" ? "active bad" : ""}`}
+                            title="结果不对：标记缓存失效"
+                            onClick={() => handleRateCache(result, "down")}
+                          >
+                            踩
+                          </button>
+                        </span>
+                      )}
                     </span>
                     <button
                       type="button"
