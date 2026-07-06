@@ -12,6 +12,14 @@ import type { Settings, SearchLogBatchEvent, SearchProgressEvent } from "./types
 
 type SetStatus = (s: string) => void;
 
+function mergeSearchResults(current: SearchResult[], incoming: SearchResult[]) {
+  let next = current;
+  for (const item of incoming) {
+    next = upsertBoundedResult(next, item, MAX_SEARCH_RESULTS);
+  }
+  return next;
+}
+
 export function useSearch(setStatus: SetStatus) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
@@ -97,8 +105,14 @@ export function useSearch(setStatus: SetStatus) {
       const clean = sanitizeSearchResponse(response);
       if (clean.runId !== activeSearchRunId.current) return;
       hasSearchEvidenceRef.current = clean.results.length > 0 || clean.logs.length > 0;
-      setResults(clean.results);
-      setLogs(clean.logs);
+      setResults((current) => mergeSearchResults(current, clean.results));
+      setLogs((current) => {
+        let next = current;
+        for (const msg of clean.logs) {
+          next = appendBounded(next, msg, MAX_SEARCH_LOGS);
+        }
+        return next;
+      });
       setDependencyGraph(clean.dependencyGraph || null);
       setStatus(clean.stopped ? "检索任务已停止" : "检索完成，脚本已自动刷新");
       if (!clean.stopped) onSetMethodAuto();

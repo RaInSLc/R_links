@@ -1,4 +1,4 @@
-use futures_util::future::join_all;
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use reqwest::{Client, RequestBuilder, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
+use tokio::time::sleep;
 use url::Url;
 
 use crate::logic::{infer_bioc_version, normalize_github_repository, parse_inputs_filtered};
@@ -39,6 +40,7 @@ const SEARCH_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const SEARCH_STOPPED_ERROR: &str = "检索已停止";
 const SEARCH_LOGS_TRUNCATED_MESSAGE: &str = "检索日志达到上限，后续日志已停止记录";
 const SEARCH_RESULTS_TRUNCATED_MESSAGE: &str = "检索结果达到上限，后续来源请求已停止";
+const STREAM_RESULT_PAUSE: Duration = Duration::from_millis(35);
 const R_FORGE_PACKAGES_URL: &str = "https://r-forge.r-project.org/src/contrib/PACKAGES";
 const R_FORGE_REPOS_URL: &str = "http://R-Forge.R-project.org";
 static HTML_VERSION_RE: OnceLock<Regex> = OnceLock::new();
@@ -317,6 +319,7 @@ pub async fn search_packages(
                         result: results.last().expect("刚刚推送的结果应存在").clone(),
                     },
                 );
+                sleep(STREAM_RESULT_PAUSE).await;
                 continue;
             }
 
@@ -328,7 +331,7 @@ pub async fn search_packages(
             continue;
         }
 
-        let futures: Vec<_> = batch_tasks
+        let mut futures: FuturesUnordered<_> = batch_tasks
             .iter()
             .map(|(index, package)| {
                 let pkg = package.clone();
@@ -357,11 +360,8 @@ pub async fn search_packages(
             })
             .collect();
 
-        let outputs = join_all(futures).await;
-
-        let mut task_results = Vec::new();
         let mut batch_new_logs = Vec::new();
-        for (task_results_inner, task_logs) in outputs {
+        while let Some((task_results_inner, task_logs)) = futures.next().await {
             for msg in &task_logs {
                 if let Some(msg) = append_search_log(&mut logs, msg) {
                     batch_new_logs.push(msg);
@@ -396,23 +396,22 @@ pub async fn search_packages(
                 }
             }
 
-            task_results.extend(task_results_inner);
-        }
-
-        for result in &task_results {
-            if results.len() >= MAX_SEARCH_RESULTS {
-                log(app, run_id, &mut logs, SEARCH_RESULTS_TRUNCATED_MESSAGE);
-                break;
+            for result in task_results_inner {
+                if results.len() >= MAX_SEARCH_RESULTS {
+                    log(app, run_id, &mut logs, SEARCH_RESULTS_TRUNCATED_MESSAGE);
+                    break;
+                }
+                let sanitized = sanitize_search_result_for_emit(result);
+                results.push(sanitized.clone());
+                let _ = app.emit(
+                    "search-progress",
+                    SearchProgressEvent {
+                        run_id,
+                        result: sanitized,
+                    },
+                );
+                sleep(STREAM_RESULT_PAUSE).await;
             }
-            let sanitized = sanitize_search_result_for_emit(result.clone());
-            results.push(sanitized.clone());
-            let _ = app.emit(
-                "search-progress",
-                SearchProgressEvent {
-                    run_id,
-                    result: sanitized,
-                },
-            );
         }
 
         if !batch_new_logs.is_empty() {

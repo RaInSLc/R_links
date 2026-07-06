@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-07-06 23:05:00 +08:00]
+
+### Changed
+- **检索结果流式输出**：后端搜索循环从整批 `join_all` 后统一 emit，改为 `FuturesUnordered` 按任务完成顺序即时 emit `search-progress`。
+- **前端结果合并策略**：`startSearch` 最终响应不再整包覆盖流式结果，改为 `upsertBoundedResult` 补齐合并，避免最后一次“全量抖动”。
+- **流式刷新节奏**：结果事件之间增加 35ms UI 刷新间隔，缓存命中和多来源结果也能逐条显现。
+
+### Tests
+- **通过完整验证**：72 用例全通过、TypeScript 编译零错误、Clippy 零警告、Tauri release 构建成功。
+
 ## [2026-07-06 22:30:00 +08:00]
 
 ### Added
