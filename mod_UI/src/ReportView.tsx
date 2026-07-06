@@ -4,6 +4,8 @@ import { PanelHeader, Metric, EmptyState } from "./components";
 import { sourceNames } from "./types";
 import type { SearchResult, DependencyGraph, DependencyNode, ReverseDependenciesInfo, SmartSuggestion } from "./utils";
 
+const CACHE_FEEDBACK_SOURCES = new Set(["cran", "bioc", "biocGit", "github", "r-forge"]);
+
 interface ReportViewProps {
   results: SearchResult[];
   logs: string[];
@@ -483,7 +485,7 @@ function getInstallCommand(result: SearchResult): string {
 }
 
 function isCacheFeedbackSource(source: string) {
-  return ["cran", "bioc", "biocGit", "github", "r-forge"].includes(source);
+  return CACHE_FEEDBACK_SOURCES.has(source);
 }
 
 export function ReportView({
