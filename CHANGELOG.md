@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-07 00:25:00 +08:00]
+
+### Changed
+- **缓存反馈显示条件**：结果行“赞 / 踩”仅对后端可缓存来源显示（CRAN、Bioconductor、Bioc 历史版、GitHub、R-Forge），避免非缓存来源点击后被后端拒绝。
+
+### Tests
+- **通过完整验证**：72 用例全通过、TypeScript 编译零错误、Clippy 零警告、Tauri release 构建成功、exe 启动验证通过。
+
 ## [2026-07-07 00:15:00 +08:00]
 
 ### Changed

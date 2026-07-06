@@ -482,6 +482,10 @@ function getInstallCommand(result: SearchResult): string {
   return `install.packages("${result.package}")`;
 }
 
+function isCacheFeedbackSource(source: string) {
+  return ["cran", "bioc", "biocGit", "github", "r-forge"].includes(source);
+}
+
 export function ReportView({
   results,
   logs,
@@ -1560,7 +1564,7 @@ export function ReportView({
                           ? "已验证"
                           : "未找到"}
                       </span>
-                      {result.found && (
+                      {result.found && isCacheFeedbackSource(result.source) && (
                         <span className="cache-feedback" onClick={(event) => event.stopPropagation()}>
                           <button
                             type="button"
