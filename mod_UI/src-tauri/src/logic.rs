@@ -487,6 +487,7 @@ fn generate_script_inner(
                             value = best.repository.clone();
                         }
                     }
+                    "r-forge" => method = "rForge".to_string(),
                     _ => method = "remotesVersion".to_string(),
                 }
             }
@@ -500,7 +501,7 @@ fn generate_script_inner(
 
         if requested_method == "auto"
             && !is_archive_url
-            && !matches!(method.as_str(), "github" | "biocManager" | "biocGit")
+            && !matches!(method.as_str(), "github" | "biocManager" | "biocGit" | "rForge")
         {
             method = if package.name.contains('/')
                 && normalize_github_repository(&package.name).is_some()
@@ -662,7 +663,8 @@ fn choose_best_result<'a>(
             "cran" => 1,
             "bioc" => 2,
             "github" => 3,
-            _ => 4,
+            "r-forge" => 4,
+            _ => 5,
         };
         (
             hint_match,
@@ -756,6 +758,7 @@ fn is_trusted_found_result(
         "cran" | "bioc" => true,
         "biocGit" => !repository.is_empty(),
         "github" => !repository.is_empty() && real_name_is_valid,
+        "r-forge" => repository == "http://R-Forge.R-project.org",
         _ => false,
     }
 }
@@ -775,7 +778,7 @@ fn clean_result_version(value: &str) -> Option<String> {
 
 fn clean_result_source(value: &str) -> Option<String> {
     match value.trim() {
-        "cran" | "bioc" | "biocGit" | "github" | "none" => Some(value.trim().to_string()),
+        "cran" | "bioc" | "biocGit" | "github" | "r-forge" | "none" => Some(value.trim().to_string()),
         _ => None,
     }
 }
@@ -792,6 +795,13 @@ fn clean_result_repository(source: &str, value: &str) -> Option<String> {
         }
         "biocGit" => {
             if trimmed.is_empty() || is_valid_bioc_version(trimmed) {
+                Some(trimmed.to_string())
+            } else {
+                None
+            }
+        }
+        "r-forge" => {
+            if trimmed.is_empty() || trimmed == "http://R-Forge.R-project.org" {
                 Some(trimmed.to_string())
             } else {
                 None
@@ -912,6 +922,9 @@ fn generate_command(
         "biocManager" => format!(
             "BiocManager::install(\"{escaped_value}\", update = FALSE, ask = FALSE, dependencies = {dependencies})"
         ),
+        "rForge" => format!(
+            "install.packages(\"{escaped_value}\", repos = \"http://R-Forge.R-project.org\", dependencies = {dependencies})"
+        ),
         "biocGit" => {
             let (real_version, bioc_version) =
                 version.split_once('|').unwrap_or((version, "3.18"));
@@ -1026,6 +1039,8 @@ pub fn history_metadata_from_command(command: &str) -> Option<(String, String, S
         "GitHub"
     } else if command.contains("BiocManager") || command.contains("install_git") {
         "Bioconductor"
+    } else if command.contains("R-Forge.R-project.org") {
+        "R-Forge"
     } else if command.contains("remotes") {
         "remotes"
     } else if command.contains("devtools") {
@@ -1137,8 +1152,11 @@ fn supported_cran_history_command(command: &str) -> bool {
         .any(|regex| {
             regex
                 .captures(command)
-            .and_then(|capture| capture.get(1))
-            .is_some_and(|mirror| normalize_cran_mirror_url(mirror.as_str()).is_ok())
+                .and_then(|capture| capture.get(1))
+                .is_some_and(|mirror| {
+                    normalize_cran_mirror_url(mirror.as_str()).is_ok()
+                        || mirror.as_str() == "http://R-Forge.R-project.org"
+                })
         })
 }
 
@@ -1157,6 +1175,7 @@ fn source_label(source: &str) -> &str {
         "bioc" => "Bioconductor",
         "biocGit" => "Bioconductor 历史版本",
         "github" => "GitHub",
+        "r-forge" => "R-Forge",
         _ => "未知来源",
     }
 }
@@ -1388,6 +1407,12 @@ pub fn build_package_page_url(package: &str, source: &str, repository: &str) -> 
             }
             Ok(format!("https://github.com/{repo}"))
         }
+        "r-forge" => {
+            if !is_valid_package_name(package) {
+                return Err(format!("无效的 R-Forge 包名: {package}"));
+            }
+            Ok(format!("https://r-forge.r-project.org/projects/{package}/"))
+        }
         _ => Err(format!("不支持的来源类型: {source}")),
     }
 }
@@ -1420,6 +1445,10 @@ pub fn is_allowed_package_page_url(value: &str) -> bool {
             let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
             segs.len() == 2
                 && is_valid_github_repository(&format!("{}/{}", segs[0], segs[1]))
+        }
+        Some("r-forge.r-project.org") => {
+            let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            segs.len() == 2 && segs[0] == "projects" && is_valid_package_name(segs[1])
         }
         _ => false,
     }

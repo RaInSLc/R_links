@@ -476,6 +476,9 @@ function getInstallCommand(result: SearchResult): string {
     }
     return `remotes::install_github("${result.repository}", upgrade = "never")`;
   }
+  if (result.source === "r-forge") {
+    return `install.packages("${result.package}", repos = "http://R-Forge.R-project.org")`;
+  }
   return `install.packages("${result.package}")`;
 }
 
@@ -668,7 +671,7 @@ export function ReportView({
 
   const handleOpenPage = async (result: SearchResult) => {
     if (!result.found) return;
-    if (result.source !== "cran" && result.source !== "bioc" && result.source !== "github") return;
+    if (result.source !== "cran" && result.source !== "bioc" && result.source !== "github" && result.source !== "r-forge") return;
     try {
       await invoke("open_package_page", {
         package: result.realName || result.package,
@@ -960,7 +963,7 @@ export function ReportView({
                     className="button ghost compact-btn"
                     onClick={async () => {
                       const found = results.filter(
-                        (r) => r.found && (r.source === "cran" || r.source === "bioc" || r.source === "github"),
+                        (r) => r.found && (r.source === "cran" || r.source === "bioc" || r.source === "github" || r.source === "r-forge"),
                       );
                       const unique = new Map<string, SearchResult>();
                       for (const r of found) {
@@ -1434,12 +1437,12 @@ export function ReportView({
                     </span>
                     <strong
                       role="cell"
-                      className={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github") ? "pkg-link" : ""}
+                      className={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github" || result.source === "r-forge") ? "pkg-link" : ""}
                       onClick={(e) => {
                         if (e.altKey) { e.preventDefault(); setResultSearch(result.package); return; }
                         handleOpenPage(result);
                       }}
-                      title={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github") ? `点击打开网页 · Alt+点击搜索此包` : `Alt+点击搜索此包`}
+                      title={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github" || result.source === "r-forge") ? `点击打开网页 · Alt+点击搜索此包` : `Alt+点击搜索此包`}
                     >{result.package}</strong>
                     <span role="cell" className="source-cell-with-copy">
                       <span
@@ -1581,7 +1584,7 @@ export function ReportView({
           >
             {ctxMenu.result.found ? "复制安装命令" : "复制包名"}
           </button>
-          {ctxMenu.result.found && (ctxMenu.result.source === "cran" || ctxMenu.result.source === "bioc" || ctxMenu.result.source === "github") && (
+          {ctxMenu.result.found && (ctxMenu.result.source === "cran" || ctxMenu.result.source === "bioc" || ctxMenu.result.source === "github" || ctxMenu.result.source === "r-forge") && (
             <button
               type="button"
               className="ctx-menu-item"

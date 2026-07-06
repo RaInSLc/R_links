@@ -24,6 +24,9 @@ pub(crate) fn validate_search_request_url(value: &str) -> Result<(), String> {
                 && (is_allowed_cran_package_path(&parsed) || is_allowed_cran_archive_path(&parsed))
         }
         "bioconductor.org" => parsed.query().is_none() && is_allowed_bioc_package_path(&parsed),
+        "r-forge.r-project.org" => {
+            parsed.query().is_none() && is_allowed_r_forge_path(&parsed)
+        }
         "r-universe.dev" => path == "/api/search" && is_allowed_r_universe_query(&parsed),
         "api.github.com" => {
             path == "/search/repositories" && is_allowed_github_search_query(&parsed)
@@ -155,4 +158,8 @@ fn is_allowed_github_search_query(url: &Url) -> bool {
 
 fn is_valid_search_package_query(value: &str) -> bool {
     !value.contains('/') && is_valid_package_name(value)
+}
+
+fn is_allowed_r_forge_path(url: &Url) -> bool {
+    url.path() == "/src/contrib/PACKAGES"
 }

@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [2026-07-06 18:35:00 +08:00]
+
+### Added
+- **R-Forge 仓库检索**：当 CRAN/Bioconductor/GitHub 均未找到包时，自动回退检索 R-Forge 仓库（`https://r-forge.r-project.org/src/contrib/PACKAGES`）。
+  - 解析 DCF 格式 PACKAGES 文件提取包名和版本号。
+  - 检索结果标记来源为 `r-forge`（紫色标签），仓库字段记录 `http://R-Forge.R-project.org`。
+  - 智能路由模式下自动生成 `install.packages("pkg", repos = "http://R-Forge.R-project.org", ...)` 安装命令。
+  - 支持 R-Forge 结果缓存、包页面跳转（`https://r-forge.r-project.org/projects/{pkg}/`）。
+  - 历史命令识别 R-Forge repos URL，工具名标记为 "R-Forge"。
+  - 全量检索模式同样覆盖 R-Forge。
+
+### Tests
+- **通过完整验证**：72 用例全通过、TypeScript 编译零错误、Clippy 零警告、Tauri release 构建成功。
+
 ## [2026-07-06 14:45:00 +08:00]
 
 ### Fixed

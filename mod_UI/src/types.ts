@@ -110,5 +110,6 @@ export const sourceNames: Record<string, string> = {
   bioc: "Bioconductor",
   biocGit: "Bioc 历史版",
   github: "GitHub",
+  "r-forge": "R-Forge",
   none: "未找到",
 };

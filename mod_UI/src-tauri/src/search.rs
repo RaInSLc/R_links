@@ -39,6 +39,8 @@ const SEARCH_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const SEARCH_STOPPED_ERROR: &str = "检索已停止";
 const SEARCH_LOGS_TRUNCATED_MESSAGE: &str = "检索日志达到上限，后续日志已停止记录";
 const SEARCH_RESULTS_TRUNCATED_MESSAGE: &str = "检索结果达到上限，后续来源请求已停止";
+const R_FORGE_PACKAGES_URL: &str = "https://r-forge.r-project.org/src/contrib/PACKAGES";
+const R_FORGE_REPOS_URL: &str = "http://R-Forge.R-project.org";
 static HTML_VERSION_RE: OnceLock<Regex> = OnceLock::new();
 
 #[derive(Debug, Deserialize)]
@@ -372,7 +374,7 @@ pub async fn search_packages(
                     && !cache.contains_key(&result_key)
                     && matches!(
                         result.source.as_str(),
-                        "cran" | "bioc" | "biocGit" | "github"
+                        "cran" | "bioc" | "biocGit" | "github" | "r-forge"
                     )
                 {
                     let now = SystemTime::now()
@@ -587,6 +589,22 @@ async fn search_one_package(
                     }
                 }
             }
+
+            if (context.settings.full_search
+                || !has_found_result_for_package(results, &loop_package.name))
+                && !context.should_stop()
+            {
+                context.log("尝试 R-Forge 仓库检索...");
+                match search_r_forge(context, &loop_package).await {
+                    Ok(Some(result)) => {
+                        results.push(result);
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        errors.push(format!("R-Forge 检索失败: {error}"));
+                    }
+                }
+            }
         }
 
         if !had_found_before
@@ -747,6 +765,48 @@ async fn search_cran(
         }
         None => Ok(None),
     }
+}
+
+async fn search_r_forge(
+    context: &mut SearchContext<'_>,
+    package: &PackageInput,
+) -> Result<Option<SearchResult>, String> {
+    let text = get_text(context, R_FORGE_PACKAGES_URL).await?;
+    if let Some(content) = text {
+        if let Some(version) = find_package_in_r_forge_dcf(&content, &package.name) {
+            context.log(&format!("R-Forge 命中版本 {version}"));
+            return Ok(Some(found_result(
+                package,
+                &version,
+                R_FORGE_REPOS_URL,
+                &package.name,
+                "r-forge",
+            )));
+        }
+    }
+    Ok(None)
+}
+
+fn find_package_in_r_forge_dcf(text: &str, package_name: &str) -> Option<String> {
+    let target = format!("Package: {package_name}");
+    let lines: Vec<&str> = text.lines().collect();
+    for (i, line) in lines.iter().enumerate() {
+        if line.trim().eq_ignore_ascii_case(&target) {
+            for subsequent in lines.get(i + 1..).unwrap_or(&[]) {
+                let trimmed = subsequent.trim();
+                if trimmed.is_empty() {
+                    break;
+                }
+                if let Some(version) = trimmed.strip_prefix("Version:") {
+                    let version = version.trim();
+                    if !version.is_empty() {
+                        return Some(version.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 async fn search_bioconductor(

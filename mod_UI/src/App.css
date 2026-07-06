@@ -1669,6 +1669,11 @@ input:focus-visible,
   background: rgba(72, 101, 170, 0.1);
 }
 
+.source-tag.r-forge {
+  color: #7c2d92;
+  background: rgba(147, 51, 234, 0.1);
+}
+
 .found {
   color: var(--success-color);
   background: rgba(22, 163, 74, 0.08);

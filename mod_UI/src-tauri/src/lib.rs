@@ -228,6 +228,7 @@ fn build_offline_results(
             let source = match record.tool_name.as_str() {
                 "Bioconductor" => "bioc",
                 "GitHub" => "github",
+                "R-Forge" => "r-forge",
                 "CRAN" | "base R" => "cran",
                 _ => "cran",
             };
@@ -247,6 +248,8 @@ fn build_offline_results(
                         }
                     }
                 }
+            } else if source == "r-forge" {
+                repository = "http://R-Forge.R-project.org".to_string();
             }
 
             offline_results.push(SearchResult {
