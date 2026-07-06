@@ -2523,6 +2523,11 @@ body {
   border-color: currentColor;
 }
 
+.cache-feedback-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .cache-feedback-btn.active {
   background: rgba(22, 163, 74, 0.18);
   border-color: rgba(22, 163, 74, 0.45);

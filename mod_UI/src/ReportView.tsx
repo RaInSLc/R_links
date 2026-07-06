@@ -672,6 +672,10 @@ export function ReportView({
 
   const handleRateCache = async (result: SearchResult, vote: "up" | "down") => {
     if (!result.found) return;
+    if (searching) {
+      onStatusChange("检索完成后才能反馈缓存结果");
+      return;
+    }
     const key = `${result.package}\u0001${result.source}\u0001${result.repository}\u0001${result.realName}`;
     try {
       const message = await invoke<string>("rate_cache_result", {
@@ -1556,7 +1560,8 @@ export function ReportView({
                           <button
                             type="button"
                             className={`cache-feedback-btn ${cacheVotes[feedbackKey] === "up" ? "active" : ""}`}
-                            title="结果正确：提升缓存可信度"
+                            title={searching ? "检索完成后才能反馈缓存" : "结果正确：提升缓存可信度"}
+                            disabled={searching}
                             onClick={() => handleRateCache(result, "up")}
                           >
                             赞
@@ -1564,7 +1569,8 @@ export function ReportView({
                           <button
                             type="button"
                             className={`cache-feedback-btn ${cacheVotes[feedbackKey] === "down" ? "active bad" : ""}`}
-                            title="结果不对：标记缓存失效"
+                            title={searching ? "检索完成后才能反馈缓存" : "结果不对：标记缓存失效"}
+                            disabled={searching}
                             onClick={() => handleRateCache(result, "down")}
                           >
                             踩
