@@ -812,6 +812,15 @@ pub fn save_cache(
         .map(|s| s.max_cache_entries)
         .unwrap_or(1000);
     let path = data_file(app, CACHE_FILE_NAME)?;
+    let entries = sorted_cache_entries(cache, limit);
+    let content = serde_json::to_string_pretty(&entries).map_err(|error| error.to_string())?;
+    atomic_write(&path, &content)
+}
+
+fn sorted_cache_entries(
+    cache: &HashMap<String, PackageCacheEntry>,
+    limit: usize,
+) -> Vec<&PackageCacheEntry> {
     let mut entries: Vec<(u64, String, &PackageCacheEntry)> = cache
         .values()
         .map(|entry| {
@@ -828,12 +837,10 @@ pub fn save_cache(
             .then_with(|| left_name.cmp(right_name))
     });
     entries.truncate(limit);
-    let entries = entries
+    entries
         .into_iter()
         .map(|(_, _, entry)| entry)
-        .collect::<Vec<_>>();
-    let content = serde_json::to_string_pretty(&entries).map_err(|error| error.to_string())?;
-    atomic_write(&path, &content)
+        .collect::<Vec<_>>()
 }
 
 pub fn clear_cache(app: &AppHandle) -> Result<(), String> {
@@ -974,6 +981,37 @@ mod tests {
     #[test]
     fn unique_file_suffix_changes_between_calls() {
         assert_ne!(unique_file_suffix(), unique_file_suffix());
+    }
+
+    #[test]
+    fn sorted_cache_entries_keeps_newest_then_package_name() {
+        fn entry(package_name: &str, cached_at: &str) -> PackageCacheEntry {
+            PackageCacheEntry {
+                package_name: package_name.to_string(),
+                source: "cran".to_string(),
+                version: "1.0.0".to_string(),
+                repository: String::new(),
+                real_name: package_name.to_string(),
+                cached_at: cached_at.to_string(),
+                verified_count: 3,
+                up_votes: 0,
+                down_votes: 0,
+                invalidated: false,
+            }
+        }
+
+        let mut cache = HashMap::new();
+        cache.insert("zeta".to_string(), entry("zeta", "200"));
+        cache.insert("alpha".to_string(), entry("alpha", "200"));
+        cache.insert("newest".to_string(), entry("newest", "300"));
+        cache.insert("oldest".to_string(), entry("oldest", "100"));
+
+        let sorted = sorted_cache_entries(&cache, 3)
+            .into_iter()
+            .map(|entry| entry.package_name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(sorted, vec!["newest", "alpha", "zeta"]);
     }
 
     #[test]
