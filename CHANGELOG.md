@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-07 00:15:00 +08:00]
+
+### Changed
+- **缓存阈值常量集中化**：将缓存可信阈值 `CACHE_TRUST_THRESHOLD` 移至 `models` 共享常量，移除 `search.rs` 与 `lib.rs` 的重复定义，行为保持不变。
+
+### Tests
+- **通过完整验证**：72 用例全通过、TypeScript 编译零错误、Clippy 零警告、Tauri release 构建成功、exe 启动验证通过。
+
 ## [2026-07-07 00:05:00 +08:00]
 
 ### Fixed

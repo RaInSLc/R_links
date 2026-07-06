@@ -4,6 +4,7 @@ use url::{Host, Url};
 pub const MAX_INPUT_CHARS: usize = 100_000;
 pub const MAX_PACKAGE_LINES: usize = 500;
 pub const MAX_FIELD_CHARS: usize = 2_048;
+pub const CACHE_TRUST_THRESHOLD: u32 = 3;
 pub const MAX_TOKEN_CHARS: usize = 512;
 pub const MAX_HISTORY_RECORDS: usize = 10000;
 pub const MAX_HISTORY_COMMAND_CHARS: usize = 8_000;

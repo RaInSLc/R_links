@@ -19,13 +19,12 @@ use tauri::{AppHandle, State};
 
 use models::{
     GenerateOptions, HistoryRecord, InputRules, MirrorSpeedResult, PublicSettings,
-    ReverseDependenciesInfo, SearchResponse, SearchResult, Settings,
+    ReverseDependenciesInfo, SearchResponse, SearchResult, Settings, CACHE_TRUST_THRESHOLD,
 };
 
 const MAX_BROWSER_OPEN_REQUESTS: usize = 30;
 const BROWSER_OPEN_WINDOW: Duration = Duration::from_secs(60);
 const MAX_JS_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
-const CACHE_TRUST_THRESHOLD: u32 = 3;
 static SETTINGS_UPDATE_LOCK: Mutex<()> = Mutex::new(());
 static CACHE_FEEDBACK_LOCK: Mutex<()> = Mutex::new(());
 static HISTORY_EXTRACT_RE: OnceLock<Regex> = OnceLock::new();

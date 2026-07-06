@@ -15,7 +15,7 @@ use url::Url;
 use crate::logic::{infer_bioc_version, normalize_github_repository, parse_inputs_filtered};
 use crate::models::{
     InputRules, PackageCacheEntry, PackageInput, SearchResponse, SearchResult, Settings,
-    MAX_FIELD_CHARS, MAX_PACKAGE_LINES,
+    CACHE_TRUST_THRESHOLD, MAX_FIELD_CHARS, MAX_PACKAGE_LINES,
 };
 use crate::storage;
 
@@ -41,7 +41,6 @@ const SEARCH_STOPPED_ERROR: &str = "检索已停止";
 const SEARCH_LOGS_TRUNCATED_MESSAGE: &str = "检索日志达到上限，后续日志已停止记录";
 const SEARCH_RESULTS_TRUNCATED_MESSAGE: &str = "检索结果达到上限，后续来源请求已停止";
 const STREAM_RESULT_PAUSE: Duration = Duration::from_millis(35);
-const CACHE_TRUST_THRESHOLD: u32 = 3;
 const R_FORGE_PACKAGES_URL: &str = "https://r-forge.r-project.org/src/contrib/PACKAGES";
 const R_FORGE_REPOS_URL: &str = "http://R-Forge.R-project.org";
 static HTML_VERSION_RE: OnceLock<Regex> = OnceLock::new();
