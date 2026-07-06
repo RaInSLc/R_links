@@ -787,7 +787,7 @@ export function ReportView({
             }
           />
           {results.length > 0 && (
-            <div style={{ display: "flex", gap: "6px" }}>
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
               {results.some((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error") && (
                 <button
                   type="button"

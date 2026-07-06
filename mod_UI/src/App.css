@@ -1153,7 +1153,7 @@ input:focus-visible,
 .report-layout.has-deps .dependency-panel {
   display: flex;
   flex-direction: column;
-  height: 580px; /* 固定等高，平整对齐 */
+  min-height: 500px;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -1278,7 +1278,7 @@ input:focus-visible,
 .metric-row {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
   gap: 12px;
 }
 
@@ -1317,6 +1317,9 @@ input:focus-visible,
 .metric span {
   color: var(--muted);
   font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .metric strong {
@@ -2151,13 +2154,49 @@ input:focus-visible,
 @media (max-width: 1200px) {
   .workspace-grid,
   .settings-layout,
-  .report-layout {
+  .report-layout,
+  .report-layout.has-deps {
     grid-template-columns: 1fr;
   }
 
   .script-panel,
   .metric-row {
     grid-column: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    padding: 20px 12px 16px;
+  }
+
+  .brand {
+    padding: 0 4px 20px;
+  }
+
+  .brand strong {
+    font-size: 14px;
+  }
+
+  .brand span {
+    font-size: 13px;
+  }
+
+  .content {
+    padding: 16px 16px 28px;
+  }
+
+  .topbar {
+    min-height: 72px;
+    padding: 14px 18px 12px;
+  }
+
+  .topbar h1 {
+    font-size: 20px;
   }
 }
 

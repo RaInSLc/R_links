@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [2026-07-06 21:00:00 +08:00]
+
+### Fixed
+- **CSS 优先级导致响应式失效**：`.report-layout.has-deps` 选择器优先级高于 `@media` 中的 `.report-layout`，导致 ≤1200px 时双栏不收起。已将 `.report-layout.has-deps` 纳入 media query。
+- **统计卡片文字碎片化折行**：`.metric-row` 从固定 5 列改为 `repeat(auto-fit, minmax(135px, 1fr))`，标签添加 `white-space: nowrap` + 省略号。
+- **操作按钮行溢出截断**：ReportView 操作按钮容器添加 `flex-wrap: wrap`。
+- **表格区域高度不足**：报告面板从固定 `height: 580px` 改为 `min-height: 500px`（无上限），表格内部 `max-height: 65vh` 滚动。
+- **侧边栏固定宽度**：新增 `@media (max-width: 900px)` 将侧边栏从 226px 缩窄至 180px，减小内容区内边距。
+
+### Tests
+- **通过完整验证**：72 用例全通过、TypeScript 编译零错误、Clippy 零警告、Tauri release 构建成功。
+
 ## [2026-07-06 18:35:00 +08:00]
 
 ### Added
