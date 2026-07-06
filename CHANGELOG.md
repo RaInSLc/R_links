@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-07 01:05:00 +08:00]
+
+### Fixed
+- **缓存保存截断稳定性**：保存 `pkg_cache.json` 时按 `cachedAt` 倒序保留最新记录，避免 `HashMap.values().take(limit)` 在容量超限时随机淘汰缓存。
+
+### Tests
+- **通过完整验证**：72 用例全通过、TypeScript 编译零错误、Clippy 零警告、Tauri release 构建成功、exe 启动验证通过。
+
 ## [2026-07-07 00:55:00 +08:00]
 
 ### Changed
