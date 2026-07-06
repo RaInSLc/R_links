@@ -812,15 +812,25 @@ pub fn save_cache(
         .map(|s| s.max_cache_entries)
         .unwrap_or(1000);
     let path = data_file(app, CACHE_FILE_NAME)?;
-    let mut entries: Vec<(u64, &PackageCacheEntry)> = cache
+    let mut entries: Vec<(u64, String, &PackageCacheEntry)> = cache
         .values()
-        .map(|entry| (entry.cached_at.parse::<u64>().unwrap_or_default(), entry))
+        .map(|entry| {
+            (
+                entry.cached_at.parse::<u64>().unwrap_or_default(),
+                entry.package_name.to_ascii_lowercase(),
+                entry,
+            )
+        })
         .collect();
-    entries.sort_by_key(|(cached_at, _)| std::cmp::Reverse(*cached_at));
+    entries.sort_by(|(left_time, left_name, _), (right_time, right_name, _)| {
+        right_time
+            .cmp(left_time)
+            .then_with(|| left_name.cmp(right_name))
+    });
     entries.truncate(limit);
     let entries = entries
         .into_iter()
-        .map(|(_, entry)| entry)
+        .map(|(_, _, entry)| entry)
         .collect::<Vec<_>>();
     let content = serde_json::to_string_pretty(&entries).map_err(|error| error.to_string())?;
     atomic_write(&path, &content)

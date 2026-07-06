@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-07 01:25:00 +08:00]
+
+### Changed
+- **缓存保存排序可重复性**：`pkg_cache.json` 保存排序在 `cachedAt` 相同的情况下追加包名 tie-breaker，避免同秒写入时受 `HashMap` 遍历顺序影响。
+
+### Tests
+- **通过完整验证**：72 用例全通过、TypeScript 编译零错误、Clippy 零警告、Tauri release 构建成功、exe 启动验证通过。
+
 ## [2026-07-07 01:15:00 +08:00]
 
 ### Changed
