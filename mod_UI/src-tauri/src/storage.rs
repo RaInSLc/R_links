@@ -812,11 +812,16 @@ pub fn save_cache(
         .map(|s| s.max_cache_entries)
         .unwrap_or(1000);
     let path = data_file(app, CACHE_FILE_NAME)?;
-    let mut entries: Vec<&PackageCacheEntry> = cache.values().collect();
-    entries.sort_by_key(|entry| {
-        std::cmp::Reverse(entry.cached_at.parse::<u64>().unwrap_or_default())
-    });
+    let mut entries: Vec<(u64, &PackageCacheEntry)> = cache
+        .values()
+        .map(|entry| (entry.cached_at.parse::<u64>().unwrap_or_default(), entry))
+        .collect();
+    entries.sort_by_key(|(cached_at, _)| std::cmp::Reverse(*cached_at));
     entries.truncate(limit);
+    let entries = entries
+        .into_iter()
+        .map(|(_, entry)| entry)
+        .collect::<Vec<_>>();
     let content = serde_json::to_string_pretty(&entries).map_err(|error| error.to_string())?;
     atomic_write(&path, &content)
 }
