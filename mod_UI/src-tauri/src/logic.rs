@@ -501,7 +501,10 @@ fn generate_script_inner(
 
         if requested_method == "auto"
             && !is_archive_url
-            && !matches!(method.as_str(), "github" | "biocManager" | "biocGit" | "rForge")
+            && !matches!(
+                method.as_str(),
+                "github" | "biocManager" | "biocGit" | "rForge"
+            )
         {
             method = if package.name.contains('/')
                 && normalize_github_repository(&package.name).is_some()
@@ -778,7 +781,9 @@ fn clean_result_version(value: &str) -> Option<String> {
 
 fn clean_result_source(value: &str) -> Option<String> {
     match value.trim() {
-        "cran" | "bioc" | "biocGit" | "github" | "r-forge" | "none" => Some(value.trim().to_string()),
+        "cran" | "bioc" | "biocGit" | "github" | "r-forge" | "none" => {
+            Some(value.trim().to_string())
+        }
         _ => None,
     }
 }
@@ -1382,7 +1387,11 @@ pub fn is_allowed_browser_search_url(value: &str) -> bool {
             .is_some_and(|(key, value)| key == "q" && !value.trim().is_empty())
 }
 
-pub fn build_package_page_url(package: &str, source: &str, repository: &str) -> Result<String, String> {
+pub fn build_package_page_url(
+    package: &str,
+    source: &str,
+    repository: &str,
+) -> Result<String, String> {
     let package = package.trim();
     if package.is_empty() {
         return Err("包名为空".to_string());
@@ -1443,8 +1452,7 @@ pub fn is_allowed_package_page_url(value: &str) -> bool {
         }
         Some("github.com") => {
             let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-            segs.len() == 2
-                && is_valid_github_repository(&format!("{}/{}", segs[0], segs[1]))
+            segs.len() == 2 && is_valid_github_repository(&format!("{}/{}", segs[0], segs[1]))
         }
         Some("r-forge.r-project.org") => {
             let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();

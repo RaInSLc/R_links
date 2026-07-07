@@ -388,7 +388,9 @@ pub async fn search_packages(
                         .unwrap_or_default()
                         .as_secs()
                         .to_string();
-                    let existing = cache_update.get(&result_key).or_else(|| cache.get(&result_key));
+                    let existing = cache_update
+                        .get(&result_key)
+                        .or_else(|| cache.get(&result_key));
                     cache_update.insert(result_key, cache_entry_from_result(result, existing, now));
                 }
             }
