@@ -33,11 +33,24 @@ pub(crate) fn validate_search_request_url(value: &str) -> Result<(), String> {
             parsed.query().is_none()
                 && parsed.path_segments().is_some_and(|segments| {
                     let segments = segments.collect::<Vec<_>>();
-                    segments.len() == 4
-                        && normalize_github_repository(&format!("{}/{}", segments[0], segments[1]))
-                            .is_some()
-                        && matches!(segments[2], "HEAD" | "master" | "main" | "devel")
-                        && segments[3] == "DESCRIPTION"
+                    if segments.len() < 4 {
+                        return false;
+                    }
+                    let owner = segments[0];
+                    let repo = segments[1];
+                    let branch = segments[2];
+                    let file = *segments.last().unwrap();
+                    let subdir_count = segments.len() - 4;
+
+                    let mut repo_path = format!("{owner}/{repo}");
+                    if subdir_count > 0 {
+                        repo_path.push('/');
+                        repo_path.push_str(&segments[3..segments.len() - 1].join("/"));
+                    }
+
+                    normalize_github_repository(&repo_path).is_some()
+                        && matches!(branch, "HEAD" | "master" | "main" | "devel")
+                        && file == "DESCRIPTION"
                 })
         }
         _ => false,

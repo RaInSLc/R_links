@@ -1114,7 +1114,17 @@ async fn github_description(
         if context.is_stopped() {
             return Ok(None);
         }
-        let url = format!("https://raw.githubusercontent.com/{repository}/{branch}/DESCRIPTION");
+        let url = {
+            let parts: Vec<&str> = repository.split('/').collect();
+            if parts.len() > 2 {
+                let owner = parts[0];
+                let repo = parts[1];
+                let subdir = parts[2..].join("/");
+                format!("https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{subdir}/DESCRIPTION")
+            } else {
+                format!("https://raw.githubusercontent.com/{repository}/{branch}/DESCRIPTION")
+            }
+        };
         let request = match authorized_get(context.client, &url, context.settings) {
             Ok(request) => request,
             Err(error) => {

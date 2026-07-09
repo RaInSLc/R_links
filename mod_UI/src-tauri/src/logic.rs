@@ -1298,10 +1298,13 @@ pub fn is_valid_github_repository(value: &str) -> bool {
         return false;
     }
     let parts = value.trim_matches('/').split('/').collect::<Vec<_>>();
-    if parts.len() != 2 {
+    if parts.len() < 2 {
         return false;
     }
-    is_valid_github_owner_segment(parts[0]) && is_valid_github_repo_segment(parts[1])
+    if !is_valid_github_owner_segment(parts[0]) || !is_valid_github_repo_segment(parts[1]) {
+        return false;
+    }
+    parts[2..].iter().all(|part| is_valid_github_repo_segment(part))
 }
 
 fn is_valid_github_owner_segment(value: &str) -> bool {
