@@ -1607,6 +1607,7 @@ mod tests {
             "https://r-universe.dev/api/search?q=package%3Ademo&limit=1",
             "https://api.github.com/search/repositories?q=demo+language%3AR&sort=stars&per_page=10",
             "https://raw.githubusercontent.com/owner/repo/HEAD/DESCRIPTION",
+            "https://raw.githubusercontent.com/owner/repo/HEAD/path/DESCRIPTION",
         ] {
             assert!(validate_search_request_url(url).is_ok(), "{url}");
         }
@@ -1640,7 +1641,7 @@ mod tests {
             "https://api.github.com/search/repositories?q=+language%3AR&sort=stars&per_page=10",
             "https://api.github.com/search/repositories?q=owner%2Frepo+language%3AR&sort=stars&per_page=10",
             "https://raw.githubusercontent.com/owner/repo/feature/DESCRIPTION",
-            "https://raw.githubusercontent.com/owner/repo/HEAD/path/DESCRIPTION",
+            "https://raw.githubusercontent.com/owner/repo/HEAD/../DESCRIPTION",
         ] {
             assert!(validate_search_request_url(url).is_err(), "{url}");
         }

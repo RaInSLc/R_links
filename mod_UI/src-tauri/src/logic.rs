@@ -1304,7 +1304,9 @@ pub fn is_valid_github_repository(value: &str) -> bool {
     if !is_valid_github_owner_segment(parts[0]) || !is_valid_github_repo_segment(parts[1]) {
         return false;
     }
-    parts[2..].iter().all(|part| is_valid_github_repo_segment(part))
+    parts[2..]
+        .iter()
+        .all(|part| is_valid_github_repo_segment(part))
 }
 
 fn is_valid_github_owner_segment(value: &str) -> bool {
@@ -1797,7 +1799,6 @@ mod tests {
 
     #[test]
     fn rejects_invalid_github_repository() {
-        assert!(!is_valid_github_repository("owner/repo/extra"));
         assert!(!is_valid_github_repository("../repo"));
         assert!(!is_valid_github_repository("owner_name/repo"));
         assert!(!is_valid_github_repository("owner.name/repo"));
@@ -1809,6 +1810,8 @@ mod tests {
         )));
         assert!(is_valid_github_repository("owner/repo.name"));
         assert!(is_valid_github_repository("owner-name/repo_name"));
+        assert!(is_valid_github_repository("owner/repo/extra"));
+        assert!(is_valid_github_repository("owner/repo/path/to/subdir"));
         assert!(normalize_github_repository("https://github.com/owner.name/repo").is_none());
         assert!(normalize_github_repository("https://github.com:443/owner/repo").is_none());
     }

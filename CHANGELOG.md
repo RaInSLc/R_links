@@ -1,6 +1,16 @@
 # CHANGELOG
 
-## [2026-7-10 23:12:49]
+## [2026-07-11 00:00:00 +08:00]
+
+### Changed
+- **发布闭环收口**：将正式打包入口 `报告\build_exe.ps1` 与 `报告\build_exe.bat` 纳入 Git 追踪范围，保留 `release\` 为本地/GitHub Release 产物目录。
+- **维护分叉清理**：删除旧版无扩展名 `CHANGELOG` 与一次性剪贴板修复脚本，避免变更记录和临时脚本继续参与主线维护。
+- **更新链路说明**：补充 updater 清单必须由真实签名和实际安装包生成，禁止使用占位 signature 发布。
+
+### Tests
+- **通过完整验证**：72 个前端用例全通过、TypeScript/Vite 生产构建通过、159 个 Rust 单元测试全通过、Clippy 零警告、Tauri release 构建成功并生成 MSI 与 NSIS 安装包。
+
+## [2026-07-10 23:12:49 +08:00]
 
 ### Changed
 - **修复发布链路**：统一 build_exe.ps1 和字体脚本的路径推导，补充 Github Updater 的 latest.json 清单。
