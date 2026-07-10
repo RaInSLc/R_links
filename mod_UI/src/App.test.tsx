@@ -2,10 +2,15 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import App from './App';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as tauriCore from '@tauri-apps/api/core';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import '@testing-library/jest-dom';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({
+  writeText: vi.fn(),
 }));
 
 describe('App Component Input Validation', () => {
@@ -67,7 +72,7 @@ describe('App Component Input Validation', () => {
       if (cmd === 'generate_script') return 'install.packages("ggplot2")';
       return null;
     });
-    vi.mocked(navigator.clipboard.writeText).mockRejectedValueOnce(new Error('clipboard denied'));
+    vi.mocked(writeText).mockRejectedValueOnce(new Error('clipboard denied'));
 
     render(<App />);
     fireEvent.click(screen.getByText('检索报告'));

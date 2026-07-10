@@ -28,7 +28,6 @@ temp_*.html
 # AI generated temporary code (not source)
 报告/
 mod_UI/.vscode
-CHANGELOG*
 AGENTS.md
 # Node
 node_modules/

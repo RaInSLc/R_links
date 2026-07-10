@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect, Fragment } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { PanelHeader, Metric, EmptyState } from "./components";
 import { sourceNames } from "./types";
 import type { SearchResult, DependencyGraph, DependencyNode, ReverseDependenciesInfo, SmartSuggestion } from "./utils";
@@ -252,7 +253,7 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
                   onClick={() => { setSelectedNode(node); fetchReverseDeps(node.package); }}
                   onDoubleClick={async (e) => {
                     e.preventDefault();
-                    try { await navigator.clipboard.writeText(node.package); } catch { /* ignore */ }
+                    try { await writeText(node.package); } catch { /* ignore */ }
                   }}
                 >
                   <div className={`dep-node-card ${borderClass} ${isHovered ? "hovered" : ""}`}>
@@ -668,7 +669,7 @@ export function ReportView({
   const handleCopy = async (result: SearchResult, key: string) => {
     const cmd = getInstallCommand(result);
     try {
-      await navigator.clipboard.writeText(cmd);
+      await writeText(cmd);
       setCopiedKey(key);
       onStatusChange(result.found ? `已复制 ${result.package} 的安装指令` : `已复制包名 ${result.package}`);
       setTimeout(() => setCopiedKey(null), 1500);
@@ -874,7 +875,7 @@ export function ReportView({
                       .map((r) => getInstallCommand(r));
                     const unique = [...new Set(cmds)];
                     try {
-                      await navigator.clipboard.writeText(unique.join("\n"));
+                      await writeText(unique.join("\n"));
                       onStatusChange(`已复制 ${unique.length} 条选中命令`);
                     } catch (err) {
                       onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -890,7 +891,7 @@ export function ReportView({
                     const names = [...new Set(sortedResults.filter((r) => selectedResults.has(r.package)).map((r) => r.package))];
                     const rVector = `c(${names.map((n) => `"${n}"`).join(", ")})`;
                     try {
-                      await navigator.clipboard.writeText(rVector);
+                      await writeText(rVector);
                       onStatusChange(`已复制 ${names.length} 个选中包名为 R 向量`);
                     } catch (err) {
                       onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -910,7 +911,7 @@ export function ReportView({
                       const cmds = results.filter((r) => r.found).map((r) => getInstallCommand(r));
                       const unique = [...new Set(cmds)];
                       try {
-                        await navigator.clipboard.writeText(unique.join("\n"));
+                        await writeText(unique.join("\n"));
                         onStatusChange(`已复制 ${unique.length} 条安装指令`);
                       } catch (err) {
                         onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -925,7 +926,7 @@ export function ReportView({
                     onClick={async () => {
                       const names = [...new Set(results.filter((r) => r.found).map((r) => r.package))];
                       try {
-                        await navigator.clipboard.writeText(names.join("\n"));
+                        await writeText(names.join("\n"));
                         onStatusChange(`已复制 ${names.length} 个包名`);
                       } catch (err) {
                         onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -941,7 +942,7 @@ export function ReportView({
                       const names = [...new Set(results.filter((r) => r.found).map((r) => r.package))];
                       const rVector = `c(${names.map((n) => `"${n}"`).join(", ")})`;
                       try {
-                        await navigator.clipboard.writeText(rVector);
+                        await writeText(rVector);
                         onStatusChange(`已复制 ${names.length} 个包名为 R 向量`);
                       } catch (err) {
                         onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -984,7 +985,7 @@ export function ReportView({
                       }
                       lines.push('# cat("\\n Installation complete.\\n")');
                       try {
-                        await navigator.clipboard.writeText(lines.join("\n"));
+                        await writeText(lines.join("\n"));
                         onStatusChange(`已复制完整安装脚本（${cmds.length} 个包）`);
                       } catch (err) {
                         onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -1040,7 +1041,7 @@ export function ReportView({
                         results.filter((r) => !r.found).map((r) => r.package),
                       )];
                       try {
-                        await navigator.clipboard.writeText(missing.join("\n"));
+                        await writeText(missing.join("\n"));
                         onStatusChange(`已复制 ${missing.length} 个未找到的包名`);
                       } catch (err) {
                         onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -1147,7 +1148,7 @@ export function ReportView({
                     })),
                   }, null, 2);
                   try {
-                    await navigator.clipboard.writeText(json);
+                    await writeText(json);
                     onStatusChange(`已复制 JSON（${results.length} 条结果）`);
                   } catch (err) {
                     onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -1253,7 +1254,7 @@ export function ReportView({
                     lines.push("", "异常包:", ...errorPkgs.map((p) => `  - ${p}`));
                   }
                   try {
-                    await navigator.clipboard.writeText(lines.join("\n"));
+                    await writeText(lines.join("\n"));
                     onStatusChange("已复制检索结果摘要");
                   } catch (err) {
                     onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -1515,7 +1516,7 @@ export function ReportView({
                         onClick={async () => {
                           if (!result.latestVersion) return;
                           try {
-                            await navigator.clipboard.writeText(result.latestVersion);
+                            await writeText(result.latestVersion);
                             onStatusChange(`已复制版本号: ${result.latestVersion}`);
                           } catch (err) {
                             onStatusChange(`复制失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -1695,7 +1696,7 @@ export function ReportView({
               className="ctx-menu-item"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(ctxMenu.result.latestVersion || "");
+                  await writeText(ctxMenu.result.latestVersion || "");
                   onStatusChange(`已复制版本号: ${ctxMenu.result.latestVersion}`);
                 } catch { /* ignore */ }
                 setCtxMenu(null);
@@ -1833,7 +1834,7 @@ export function ReportView({
                   title="点击复制此行"
                   onClick={async () => {
                     try {
-                      await navigator.clipboard.writeText(line);
+                      await writeText(line);
                       onStatusChange("已复制日志行");
                     } catch { /* ignore */ }
                   }}

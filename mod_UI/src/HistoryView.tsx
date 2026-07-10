@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { PanelHeader, EmptyState } from "./components";
 import type { HistoryRecord } from "./utils";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 interface HistoryViewProps {
   history: HistoryRecord[];
@@ -123,7 +124,7 @@ export function HistoryView({
                   const cmds = sorted.map((r) => r.command).filter(Boolean);
                   if (cmds.length === 0) return;
                   try {
-                    await navigator.clipboard.writeText(cmds.join("\n"));
+                    await writeText(cmds.join("\n"));
                   } catch { /* ignore */ }
                 }}
               >

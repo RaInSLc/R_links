@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-7-10 23:12:49]
+
+### Changed
+- **修复发布链路**：统一 build_exe.ps1 和字体脚本的路径推导，补充 Github Updater 的 latest.json 清单。
+- **依赖与产物同步**：同步 package-lock.json 至 0.1.9，清空 release/ 下无关陈旧 EXE。
+- **一致性与规范**：全量统一前端剪贴板至 Tauri Plugin，清理乱码的文档，放开 CHANGELOG.md 的 Git 追踪。
+
+
 ## [2026-07-07 18:55:03 +08:00]
 
 ### Changed
