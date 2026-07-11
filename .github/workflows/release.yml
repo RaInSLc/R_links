@@ -56,6 +56,34 @@ jobs:
       - name: Rename portable exe
         run: copy mod_UI\src-tauri\target\release\mod_ui.exe mod_UI\src-tauri\target\release\R_Package_Command_Center_Portable.exe
 
+      - name: Verify latest.json content
+        working-directory: mod_UI
+        run: |
+          $jsonPath = "src-tauri\target\release\bundle\windows\latest.json"
+          if (-not (Test-Path $jsonPath)) {
+            Write-Error "latest.json not found at $jsonPath"
+            exit 1
+          }
+          $pkg = (Get-Content 'package.json' -Raw | ConvertFrom-Json).version
+          $json = Get-Content $jsonPath | ConvertFrom-Json
+          if (-not $json.version -or -not $json.platforms."windows-x86_64".url -or -not $json.platforms."windows-x86_64".signature) {
+            Write-Error "latest.json is missing required fields (version, url, signature)"
+            exit 1
+          }
+          if ($json.version -ne $pkg) {
+            Write-Error "latest.json version ($($json.version)) does not match package.json version ($pkg)"
+            exit 1
+          }
+          if ($json.platforms."windows-x86_64".signature -eq "REPLACE_WITH_SIGNATURE") {
+            Write-Error "latest.json still contains REPLACE_WITH_SIGNATURE"
+            exit 1
+          }
+          if ($json.platforms."windows-x86_64".url -notmatch "^https://github\.com/RaInSLc/R_links/releases/download/v$([regex]::Escape($pkg))/") {
+            Write-Error "latest.json download URL does not point to the expected release version v$pkg"
+            exit 1
+          }
+          Write-Host "latest.json verification passed."
+
       - name: Upload Additional Assets
         uses: softprops/action-gh-release@v2
         with:
@@ -64,21 +92,3 @@ jobs:
           files: |
             mod_UI/src-tauri/target/release/R_Package_Command_Center_Portable.exe
             mod_UI/src-tauri/target/release/bundle/windows/latest.json
-
-      - name: Verify latest.json content
-        run: |
-          $jsonPath = "mod_UI\src-tauri\target\release\bundle\windows\latest.json"
-          if (-not (Test-Path $jsonPath)) {
-            Write-Error "latest.json not found at $jsonPath"
-            exit 1
-          }
-          $json = Get-Content $jsonPath | ConvertFrom-Json
-          if (-not $json.version -or -not $json.platforms."windows-x86_64".url -or -not $json.platforms."windows-x86_64".signature) {
-            Write-Error "latest.json is missing required fields (version, url, signature)"
-            exit 1
-          }
-          if ($json.platforms."windows-x86_64".signature -eq "REPLACE_WITH_SIGNATURE") {
-            Write-Error "latest.json still contains REPLACE_WITH_SIGNATURE"
-            exit 1
-          }
-          Write-Host "latest.json verification passed."
