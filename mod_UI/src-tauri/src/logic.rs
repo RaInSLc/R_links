@@ -52,6 +52,19 @@ pub fn parse_inputs_filtered(input: &str, rules: &InputRules) -> Result<Vec<Pack
         if trimmed.is_empty() || is_comment_line(trimmed, rules) {
             continue;
         }
+        if let Some(markdown_line) = normalize_markdown_table_line(trimmed) {
+            if markdown_line.is_empty() {
+                continue;
+            }
+            if let Some(pkg) = parse_input_line(&markdown_line) {
+                packages.push(pkg);
+                if packages.len() > MAX_PACKAGE_LINES {
+                    return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+                }
+                continue;
+            }
+            return Err(format!("第 {} 行 Markdown 表格输入格式无效", line_idx + 1));
+        }
         if exclude_regexes.iter().any(|re| re.is_match(trimmed)) {
             continue;
         }
@@ -137,6 +150,42 @@ pub fn parse_inputs_filtered(input: &str, rules: &InputRules) -> Result<Vec<Pack
         }
     }
     Ok(packages)
+}
+
+fn normalize_markdown_table_line(line: &str) -> Option<String> {
+    if !line.starts_with('|') || !line.ends_with('|') {
+        return None;
+    }
+    let cells: Vec<String> = line
+        .trim_matches('|')
+        .split('|')
+        .map(|cell| cell.trim().to_string())
+        .collect();
+    if cells.is_empty() {
+        return Some(String::new());
+    }
+    if cells.iter().all(|cell| is_markdown_separator_cell(cell)) {
+        return Some(String::new());
+    }
+    let package = cells.first().map(String::as_str).unwrap_or_default().trim();
+    if package.is_empty() || matches!(package, "包名" | "package" | "Package" | "PACKAGE") {
+        return Some(String::new());
+    }
+    let source_hint = cells
+        .get(1)
+        .map(String::as_str)
+        .unwrap_or_default()
+        .replace(['（', '）', '(', ')'], " ");
+    Some(format!("{package} {source_hint}").trim().to_string())
+}
+
+fn is_markdown_separator_cell(cell: &str) -> bool {
+    let trimmed = cell.trim();
+    !trimmed.is_empty()
+        && trimmed
+            .chars()
+            .all(|character| matches!(character, '-' | ':' | ' '))
+        && trimmed.contains('-')
 }
 
 fn is_comment_line(line: &str, rules: &InputRules) -> bool {
@@ -2641,6 +2690,42 @@ mod tests {
         .expect("URL 行应保持完整");
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].name, "demo");
+    }
+
+    #[test]
+    fn parses_markdown_package_source_table() {
+        let input = r#"| 包名                | 来源        |
+| ----------------- | --------- |
+| DMwR              | CRAN（已归档） |
+| kernelshap        | CRAN      |
+| extraTrees        | CRAN      |
+| DALEX             | CRAN      |
+| ResourceSelection | CRAN      |
+| DynNom            | CRAN      |
+| shapper           | CRAN      |
+| iml               | CRAN      |
+| naivebayes        | CRAN      |
+| ingredients       | CRAN      |
+| adabag            | CRAN      |
+| mice              | CRAN      |
+| autoReg           | CRAN      |
+| cvms              | CRAN      |
+| ROSE              | CRAN      |
+| CBCgrps           | CRAN      |"#;
+
+        let packages = parse_inputs_filtered(input, &InputRules::default())
+            .expect("Markdown 表格应可解析为包名列表");
+        let names = packages
+            .iter()
+            .map(|pkg| pkg.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names.len(), 16);
+        assert_eq!(names[0], "DMwR");
+        assert_eq!(names[15], "CBCgrps");
+        assert!(packages
+            .iter()
+            .all(|pkg| pkg.source_hint.as_deref() == Some("cran")));
     }
 
     #[test]
