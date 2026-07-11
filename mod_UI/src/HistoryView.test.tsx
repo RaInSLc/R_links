@@ -13,6 +13,7 @@ describe("HistoryView", () => {
     {
       id: "1",
       packageName: "dplyr",
+      version: "1.1.4",
       toolName: "RLinks",
       command: "install.packages('dplyr')",
       createdAt: "2026-07-11T10:00:00Z",
@@ -20,6 +21,7 @@ describe("HistoryView", () => {
     {
       id: "2",
       packageName: "tidyr",
+      version: "1.3.1",
       toolName: "RLinks",
       command: "install.packages('tidyr')",
       createdAt: "2026-07-11T10:05:00Z",

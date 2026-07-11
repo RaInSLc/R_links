@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import "@testing-library/jest-dom";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { WorkspaceView } from "./WorkspaceView";
-import type { Method, Settings } from "./types";
+import { defaultSettings, type Method } from "./types";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: vi.fn(),
@@ -13,18 +13,18 @@ describe("WorkspaceView", () => {
     input: "dplyr\ntidyr",
     inputTooLarge: false,
     inputProfile: { total: 2, archiveUrls: 0, repositories: 0 },
-    method: "normal" as Method,
+    method: "auto" as Method,
     conditional: false,
     installDependencies: false,
     showRemoteVersion: false,
     verifyInstall: false,
     settings: {
+      ...defaultSettings,
       fullSearch: false,
       useCache: false,
       proxy: "",
       githubToken: "",
-      biocVersionFallback: "",
-    } as Settings,
+    },
     smartSuggestions: [],
     script: "install.packages(c('dplyr', 'tidyr'))",
     scriptTooLarge: false,
@@ -39,7 +39,7 @@ describe("WorkspaceView", () => {
     onStartSearch: vi.fn(),
     onStopSearch: vi.fn(),
     onMethodChange: vi.fn(),
-    pinnedMethods: ["normal" as Method],
+    pinnedMethods: ["auto" as Method],
     onPinnedMethodsChange: vi.fn(),
     onApplySmartSuggestion: vi.fn(),
     onConditionalChange: vi.fn(),

@@ -4,7 +4,7 @@ import { vi, describe, it, expect } from 'vitest';
 import '@testing-library/jest-dom';
 
 describe('SettingsView Component', () => {
-  const defaultProps = {
+  const createProps = () => ({
     settings: {
       proxy: '',
       githubToken: '',
@@ -46,6 +46,7 @@ describe('SettingsView Component', () => {
     onIncludeLightDependenciesChange: vi.fn(),
     onMaxDependencyNodesChange: vi.fn(),
     onSaveSettings: vi.fn(),
+    onReplaceSettings: vi.fn(),
     onThemeChange: vi.fn(),
     onFontChange: vi.fn(),
     currentFontSize: 14,
@@ -63,23 +64,43 @@ describe('SettingsView Component', () => {
       excludeKeywords: [],
     },
     onInputRulesChange: vi.fn(),
+    onReplaceInputRules: vi.fn(),
     onSaveInputRules: vi.fn(),
     inputRulesBusy: false,
-  };
+  });
 
   it('点击“保存过滤规则”按钮时，应触发 onSaveInputRules 回调', () => {
-    render(<SettingsView {...defaultProps} />);
+    const props = createProps();
+    render(<SettingsView {...props} />);
     const saveRulesBtn = screen.getByText('保存过滤规则');
     expect(saveRulesBtn).toBeInTheDocument();
     fireEvent.click(saveRulesBtn);
-    expect(defaultProps.onSaveInputRules).toHaveBeenCalledTimes(1);
+    expect(props.onSaveInputRules).toHaveBeenCalledTimes(1);
   });
 
   it('点击“保存设置”按钮时，应触发 onSaveSettings 回调', () => {
-    render(<SettingsView {...defaultProps} />);
+    const props = createProps();
+    render(<SettingsView {...props} />);
     const saveSettingsBtn = screen.getByText('保存设置');
     expect(saveSettingsBtn).toBeInTheDocument();
     fireEvent.click(saveSettingsBtn);
-    expect(defaultProps.onSaveSettings).toHaveBeenCalledTimes(1);
+    expect(props.onSaveSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('恢复默认时应使用可选字体值并一次性替换设置', () => {
+    const props = createProps();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<SettingsView {...props} />);
+
+    fireEvent.click(screen.getByText('恢复默认'));
+
+    expect(props.onReplaceSettings).toHaveBeenCalledWith(expect.objectContaining({
+      resolveDependencies: true,
+      maxDependencyDepth: 2,
+      includeLightDependencies: false,
+      maxDependencyNodes: 100,
+    }));
+    expect(props.onFontChange).toHaveBeenCalledWith('system');
+    expect(props.onSaveSettings).not.toHaveBeenCalled();
   });
 });

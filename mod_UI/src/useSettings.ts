@@ -10,6 +10,7 @@ import type { Settings } from "./types";
 import { defaultSettings } from "./types";
 
 type SettingsBoolField = "fullSearch" | "conditional" | "installDependencies" | "showRemoteVersion" | "useCache" | "useFilter" | "resolveDependencies" | "includeLightDependencies";
+type SettingsPersistOverrides = Partial<Pick<Settings, SettingsBoolField | "maxCacheEntries" | "maxDependencyDepth" | "maxDependencyNodes" | "proxy" | "githubToken" | "cranMirror">>;
 
 type SetStatus = (s: string) => void;
 
@@ -18,8 +19,14 @@ export function useSettings(setStatus: SetStatus) {
   const [showToken, setShowToken] = useState(false);
   const [tokenConfigured, setTokenConfigured] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
+  const latestSettingsRef = useRef(defaultSettings);
   const settingsActionSeq = useRef(0);
   const settingsBusyRef = useRef(false);
+
+  function applySettings(next: Settings) {
+    latestSettingsRef.current = next;
+    setSettings(next);
+  }
 
   useEffect(() => {
     let active = true;
@@ -28,7 +35,7 @@ export function useSettings(setStatus: SetStatus) {
       .then((saved) => {
         if (!active || loadSeq !== settingsActionSeq.current) return;
         const clean = sanitizePublicSettings(saved);
-        setSettings({
+        applySettings({
           proxy: clean.proxy,
           githubToken: "",
           cranMirror: clean.cranMirror,
@@ -56,7 +63,12 @@ export function useSettings(setStatus: SetStatus) {
 
   function updateSettingsFromUser(update: (current: Settings) => Settings) {
     settingsActionSeq.current += 1;
-    setSettings(update);
+    applySettings(update(latestSettingsRef.current));
+  }
+
+  function replaceSettingsFromUser(next: Settings) {
+    settingsActionSeq.current += 1;
+    applySettings(next);
   }
 
   function beginSettingsOperation() {
@@ -93,11 +105,11 @@ export function useSettings(setStatus: SetStatus) {
     return true;
   }
 
-  async function persistSettings(overrides?: Partial<Pick<Settings, SettingsBoolField>>) {
+  async function persistSettings(overrides?: SettingsPersistOverrides) {
     if (!beginSettingsOperation()) return;
     const actionSeq = settingsActionSeq.current + 1;
     settingsActionSeq.current = actionSeq;
-    const settingsSnapshot = overrides ? { ...settings, ...overrides } : settings;
+    const settingsSnapshot = overrides ? { ...latestSettingsRef.current, ...overrides } : latestSettingsRef.current;
     try {
       const publicSettings = sanitizePublicSettings(
         await invoke<PublicSettings>("save_settings", { settings: settingsSnapshot }),
@@ -107,7 +119,7 @@ export function useSettings(setStatus: SetStatus) {
         setStatus("设置已保存；检测到新的界面修改，请再次保存");
         return;
       }
-      setSettings({
+      applySettings({
         proxy: publicSettings.proxy,
         githubToken: "",
         cranMirror: publicSettings.cranMirror,
@@ -149,8 +161,8 @@ export function useSettings(setStatus: SetStatus) {
         setStatus("已清除保存的 GitHub Token；界面保留了新的修改");
         return;
       }
-      setSettings((current) => ({
-        ...current,
+      applySettings({
+        ...latestSettingsRef.current,
         proxy: publicSettings.proxy,
         githubToken: "",
         cranMirror: publicSettings.cranMirror,
@@ -161,7 +173,11 @@ export function useSettings(setStatus: SetStatus) {
         useCache: publicSettings.useCache,
         maxCacheEntries: publicSettings.maxCacheEntries,
         useFilter: publicSettings.useFilter,
-      }));
+        resolveDependencies: publicSettings.resolveDependencies,
+        maxDependencyDepth: publicSettings.maxDependencyDepth,
+        includeLightDependencies: publicSettings.includeLightDependencies,
+        maxDependencyNodes: publicSettings.maxDependencyNodes,
+      });
       setShowToken(false);
       setStatus("已清除保存的 GitHub Token");
     } catch (error) {
@@ -180,6 +196,7 @@ export function useSettings(setStatus: SetStatus) {
     showToken, setShowToken,
     tokenConfigured, settingsBusy,
     updateSettingsFromUser,
+    replaceSettingsFromUser,
     acceptSettingValue,
     persistSettings,
     clearSavedToken,

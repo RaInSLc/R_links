@@ -1198,20 +1198,17 @@ fn authorized_get(
 }
 
 #[cfg(test)]
+type MockGetText = Box<dyn FnMut(&str) -> Result<Option<String>, String>>;
+
+#[cfg(test)]
 thread_local! {
-    pub static MOCK_GET_TEXT: std::cell::RefCell<Option<Box<dyn FnMut(&str) -> Result<Option<String>, String>>>> = std::cell::RefCell::new(None);
+    pub static MOCK_GET_TEXT: std::cell::RefCell<Option<MockGetText>> = std::cell::RefCell::new(None);
 }
 
 async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Result<Option<String>, String> {
     #[cfg(test)]
     {
-        let mock_result = MOCK_GET_TEXT.with(|mock| {
-            if let Some(f) = mock.borrow_mut().as_mut() {
-                Some(f(url))
-            } else {
-                None
-            }
-        });
+        let mock_result = MOCK_GET_TEXT.with(|mock| mock.borrow_mut().as_mut().map(|f| f(url)));
         if let Some(result) = mock_result {
             return result;
         }
@@ -1246,20 +1243,17 @@ async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Result<Option<S
 }
 
 #[cfg(test)]
+type MockGetJson = Box<dyn FnMut(&str) -> Result<Option<Value>, String>>;
+
+#[cfg(test)]
 thread_local! {
-    pub static MOCK_GET_JSON: std::cell::RefCell<Option<Box<dyn FnMut(&str) -> Result<Option<Value>, String>>>> = std::cell::RefCell::new(None);
+    pub static MOCK_GET_JSON: std::cell::RefCell<Option<MockGetJson>> = std::cell::RefCell::new(None);
 }
 
 async fn get_json(context: &mut SearchContext<'_>, url: &str) -> Result<Option<Value>, String> {
     #[cfg(test)]
     {
-        let mock_result = MOCK_GET_JSON.with(|mock| {
-            if let Some(f) = mock.borrow_mut().as_mut() {
-                Some(f(url))
-            } else {
-                None
-            }
-        });
+        let mock_result = MOCK_GET_JSON.with(|mock| mock.borrow_mut().as_mut().map(|f| f(url)));
         if let Some(result) = mock_result {
             return result;
         }
@@ -2101,7 +2095,7 @@ mod tests {
         });
 
         let result = search_cran(&mut context, &package).await;
-        
+
         MOCK_GET_TEXT.with(|mock| *mock.borrow_mut() = None);
 
         assert!(result.is_ok());

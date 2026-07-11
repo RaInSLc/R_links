@@ -38,10 +38,24 @@ if (-not (Test-Path -Path $releaseDir)) {
     New-Item -ItemType Directory -Path $releaseDir | Out-Null
 }
 
-$sourceExe = Join-Path -Path $modUiDir -ChildPath "src-tauri\target\release\mod_ui.exe"
+$releaseTargetDir = Join-Path -Path $modUiDir -ChildPath "src-tauri\target\release"
+$sourceExe = Join-Path -Path $releaseTargetDir -ChildPath "mod_ui.exe"
+if (-not (Test-Path -LiteralPath $sourceExe)) {
+    $candidates = Get-ChildItem -LiteralPath $releaseTargetDir -Filter "*.exe" -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notmatch "setup|installer|uninstall" } |
+        Sort-Object LastWriteTime -Descending
+    if ($candidates.Count -gt 0) {
+        $sourceExe = $candidates[0].FullName
+    }
+}
+if (-not (Test-Path -LiteralPath $sourceExe)) {
+    Write-Host "[错误] 未找到 Tauri 构建产物 EXE。请检查 src-tauri\target\release 目录。" -ForegroundColor Red
+    Read-Host "按回车键退出..."
+    exit 1
+}
 $destExe = Join-Path -Path $releaseDir -ChildPath "RLinks_UI.exe"
 
-Copy-Item -Path $sourceExe -Destination $destExe -Force
+Copy-Item -LiteralPath $sourceExe -Destination $destExe -Force
 
 Write-Host ""
 Write-Host "已将执行文件复制到 release 目录：" -ForegroundColor Cyan

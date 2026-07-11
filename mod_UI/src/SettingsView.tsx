@@ -32,6 +32,7 @@ interface SettingsViewProps {
   onMaxDependencyNodesChange: (v: number) => void;
   onMirrorSelect: (value: string) => void;
   onSaveSettings: () => void;
+  onReplaceSettings: (settings: Settings) => void;
   onThemeChange: (theme: string) => void;
   onFontChange: (font: string) => void;
   currentFontSize: number;
@@ -41,6 +42,7 @@ interface SettingsViewProps {
   onExportDiagnostics: () => Promise<void>;
   inputRules: InputRules;
   onInputRulesChange: (rules: InputRules) => void;
+  onReplaceInputRules: (rules: InputRules) => void;
   onSaveInputRules: () => void;
   inputRulesBusy: boolean;
 }
@@ -54,34 +56,14 @@ export function SettingsView({
   onCranMirrorChange, onMirrorSelect,
   onResolveDependenciesChange, onMaxDependencyDepthChange,
   onIncludeLightDependenciesChange, onMaxDependencyNodesChange,
-  onSaveSettings, onThemeChange, onFontChange,
+  onSaveSettings, onReplaceSettings, onThemeChange, onFontChange,
   currentFontSize, onFontSizeChange,
   onCheckUpdates, onClearCache, onExportDiagnostics,
-  inputRules, onInputRulesChange, onSaveInputRules, inputRulesBusy,
+  inputRules, onInputRulesChange, onReplaceInputRules, onSaveInputRules, inputRulesBusy,
 }: SettingsViewProps) {
   const [speedTesting, setSpeedTesting] = useState(false);
   const [speedResults, setSpeedResults] = useState<MirrorSpeedResult[]>([]);
   const fileConfigRef = useRef<HTMLInputElement>(null);
-
-  const updateSetting = (key: string, val: unknown) => {
-    const m: Record<string, (v: never) => void> = {
-      proxy: onProxyChange as never,
-      githubToken: onTokenChange as never,
-      cranMirror: onCranMirrorChange as never,
-      fullSearch: onFullSearchChange as never,
-      conditional: onConditionalChange as never,
-      installDependencies: onInstallDependenciesChange as never,
-      showRemoteVersion: onShowRemoteVersionChange as never,
-      useCache: onUseCacheChange as never,
-      maxCacheEntries: onMaxCacheEntriesChange as never,
-      useFilter: onUseFilterChange as never,
-      resolveDependencies: onResolveDependenciesChange as never,
-      maxDependencyDepth: onMaxDependencyDepthChange as never,
-      includeLightDependencies: onIncludeLightDependenciesChange as never,
-      maxDependencyNodes: onMaxDependencyNodesChange as never,
-    };
-    if (key in m) m[key](val as never);
-  };
 
   async function handleTestSpeed() {
     setSpeedTesting(true);
@@ -402,15 +384,11 @@ export function SettingsView({
               className="button ghost"
               onClick={() => {
                 if (!window.confirm("确定恢复全部设置为默认值？此操作不可撤销。")) return;
-                Object.entries(defaultSettings).forEach(([key, val]) => {
-                  if (key !== "githubToken") updateSetting(key, val);
-                });
+                onReplaceSettings({ ...defaultSettings, githubToken: settings.githubToken });
                 onThemeChange("office");
-                onFontChange("system-ui");
+                onFontChange("system");
                 onFontSizeChange(14);
-                onInputRulesChange({ ...defaultInputRules });
-                onSaveSettings();
-                onSaveInputRules();
+                onReplaceInputRules({ ...defaultInputRules });
               }}
             >
               恢复默认
@@ -427,17 +405,11 @@ export function SettingsView({
                 try {
                   const text = await file.text();
                   const config = JSON.parse(text);
-                  if (config.settings) {
-                    Object.entries(config.settings).forEach(([key, val]) => {
-                      updateSetting(key, val);
-                    });
-                  }
+                  if (config.settings) onReplaceSettings({ ...settings, ...config.settings });
                   if (config.theme) { onThemeChange(config.theme); }
                   if (config.fontFamily) { onFontChange(config.fontFamily); }
                   if (config.fontSize) { onFontSizeChange(Number(config.fontSize)); }
-                  if (config.inputRules) { onInputRulesChange(config.inputRules); }
-                  onSaveSettings();
-                  onSaveInputRules();
+                  if (config.inputRules) onReplaceInputRules(config.inputRules);
                 } catch {
                   /* invalid file */
                 }

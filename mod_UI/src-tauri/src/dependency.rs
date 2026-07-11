@@ -24,6 +24,26 @@ const CORE_PACKAGES: &[&str] = &[
     "tools",
     "utils",
 ];
+const BIOC_DEPENDENCY_CATEGORIES: &[&str] =
+    &["bioc", "data/annotation", "data/experiment", "workflows"];
+
+#[derive(Clone)]
+struct DependencyRequest {
+    package: String,
+    depth: usize,
+    path_roots: Vec<String>,
+    source: String,
+    version: String,
+    repository: String,
+}
+
+fn merge_roots(target: &mut Vec<String>, roots: Vec<String>) {
+    for root in roots {
+        if !target.contains(&root) {
+            target.push(root);
+        }
+    }
+}
 
 /// 解析 Debian control (RFC 822) 格式的 DESCRIPTION 文件
 pub fn parse_description(content: &str) -> HashMap<String, String> {
@@ -76,57 +96,82 @@ async fn fetch_description(
     client: &reqwest::Client,
     package: &str,
     source: &str,
+    version: &str,
+    repository: &str,
     mirror: &str,
 ) -> Result<String, String> {
-    let mut urls = Vec::new();
+    let mut urls: Vec<(String, bool)> = Vec::new();
     let mirror_clean = mirror.trim_end_matches('/');
 
     if source.eq_ignore_ascii_case("cran") || source.eq_ignore_ascii_case("none") {
-        urls.push(format!(
-            "{}/web/packages/{}/DESCRIPTION",
-            mirror_clean, package
+        urls.push((
+            format!("{}/web/packages/{}/DESCRIPTION", mirror_clean, package),
+            false,
         ));
     } else if source.eq_ignore_ascii_case("bioc") || source.eq_ignore_ascii_case("biocGit") {
-        urls.push(format!(
-            "https://raw.githubusercontent.com/bioconductor-packages/{}/master/DESCRIPTION",
-            package
-        ));
-        urls.push(format!(
-            "https://raw.githubusercontent.com/bioconductor/{}/master/DESCRIPTION",
-            package
-        ));
-        urls.push(format!(
-            "{}/web/packages/{}/DESCRIPTION",
-            mirror_clean, package
-        ));
+        let bioc_versions =
+            if source.eq_ignore_ascii_case("biocGit") && !repository.trim().is_empty() {
+                vec![
+                    repository.trim().trim_matches('/').to_string(),
+                    "release".to_string(),
+                ]
+            } else {
+                vec!["release".to_string()]
+            };
+        for bioc_version in bioc_versions {
+            for category in BIOC_DEPENDENCY_CATEGORIES {
+                urls.push((format!(
+                    "https://bioconductor.org/packages/{bioc_version}/{category}/src/contrib/PACKAGES",
+                ), true));
+            }
+        }
     } else if source.eq_ignore_ascii_case("github") {
-        if package.contains('/') {
-            urls.push(format!(
-                "https://raw.githubusercontent.com/{}/master/DESCRIPTION",
-                package
-            ));
-            urls.push(format!(
-                "https://raw.githubusercontent.com/{}/main/DESCRIPTION",
-                package
-            ));
+        let github_repo = if !repository.trim().is_empty() {
+            repository.trim()
+        } else if package.contains('/') {
+            package
         } else {
-            urls.push(format!(
-                "https://raw.githubusercontent.com/cran/{}/master/DESCRIPTION",
-                package
+            ""
+        };
+        if !github_repo.is_empty() {
+            urls.push((
+                format!(
+                    "https://raw.githubusercontent.com/{}/master/DESCRIPTION",
+                    github_repo
+                ),
+                false,
+            ));
+            urls.push((
+                format!(
+                    "https://raw.githubusercontent.com/{}/main/DESCRIPTION",
+                    github_repo
+                ),
+                false,
             ));
         }
+        urls.push((
+            format!(
+                "https://raw.githubusercontent.com/cran/{}/master/DESCRIPTION",
+                package
+            ),
+            false,
+        ));
     } else {
-        urls.push(format!(
-            "{}/web/packages/{}/DESCRIPTION",
-            mirror_clean, package
+        urls.push((
+            format!("{}/web/packages/{}/DESCRIPTION", mirror_clean, package),
+            false,
         ));
     }
 
-    for url in urls {
+    for (url, is_packages_index) in urls {
         match client.get(&url).send().await {
             Ok(resp) if resp.status().is_success() => {
                 if let Ok(text) = resp.text().await {
-                    if !text.trim().is_empty() {
+                    if is_packages_index {
+                        if let Some(entry) = extract_packages_index_entry(&text, package, version) {
+                            return Ok(entry);
+                        }
+                    } else if !text.trim().is_empty() {
                         return Ok(text);
                     }
                 }
@@ -136,6 +181,53 @@ async fn fetch_description(
     }
 
     Err(format!("无法获取包 {} 的 DESCRIPTION 元数据", package))
+}
+
+fn extract_packages_index_entry(text: &str, package: &str, version: &str) -> Option<String> {
+    for entry in text.split("\n\n") {
+        let meta = parse_description(entry);
+        let Some(entry_package) = meta.get("Package") else {
+            continue;
+        };
+        if !entry_package.eq_ignore_ascii_case(package) {
+            continue;
+        }
+        if !version.is_empty()
+            && meta
+                .get("Version")
+                .is_some_and(|entry_version| entry_version != version)
+        {
+            continue;
+        }
+        return Some(entry.to_string());
+    }
+    None
+}
+
+fn enqueue_dependency(
+    queue: &mut VecDeque<DependencyRequest>,
+    visited: &mut HashSet<String>,
+    pending_roots: &mut HashMap<String, Vec<String>>,
+    nodes_map: &mut HashMap<String, DependencyNode>,
+    request: DependencyRequest,
+) {
+    if let Some(node) = nodes_map.get_mut(&request.package) {
+        merge_roots(&mut node.root_packages, request.path_roots);
+        return;
+    }
+    if let Some(queued) = queue
+        .iter_mut()
+        .find(|queued| queued.package == request.package)
+    {
+        merge_roots(&mut queued.path_roots, request.path_roots);
+        return;
+    }
+    if !visited.insert(request.package.clone()) {
+        let roots = pending_roots.entry(request.package).or_default();
+        merge_roots(roots, request.path_roots);
+        return;
+    }
+    queue.push_back(request);
 }
 
 /// 解析单包的依赖项，返回 (heavy_deps, light_deps, version)
@@ -186,11 +278,13 @@ pub async fn resolve_dependencies(
 
     let mut root_sources = HashMap::new();
     let mut root_versions = HashMap::new();
+    let mut root_repositories = HashMap::new();
     for res in root_results {
         if res.found {
             roots.push(res.package.clone());
             root_sources.insert(res.package.clone(), res.source.clone());
             root_versions.insert(res.package.clone(), res.latest_version.clone());
+            root_repositories.insert(res.package.clone(), res.repository.clone());
         }
     }
 
@@ -209,11 +303,22 @@ pub async fn resolve_dependencies(
         });
     }
 
-    let mut queue: VecDeque<(String, usize, Vec<String>)> = VecDeque::new();
+    let mut queue: VecDeque<DependencyRequest> = VecDeque::new();
     let mut visited: HashSet<String> = HashSet::new();
+    let mut pending_roots: HashMap<String, Vec<String>> = HashMap::new();
 
     for r in &roots {
-        queue.push_back((r.clone(), 0, vec![r.clone()]));
+        queue.push_back(DependencyRequest {
+            package: r.clone(),
+            depth: 0,
+            path_roots: vec![r.clone()],
+            source: root_sources
+                .get(r)
+                .cloned()
+                .unwrap_or_else(|| "none".to_string()),
+            version: root_versions.get(r).cloned().unwrap_or_default(),
+            repository: root_repositories.get(r).cloned().unwrap_or_default(),
+        });
         visited.insert(r.clone());
     }
 
@@ -226,23 +331,16 @@ pub async fn resolve_dependencies(
         let mut level_tasks = Vec::new();
 
         for _ in 0..level_size {
-            if let Some((pkg, depth, path_roots)) = queue.pop_front() {
+            if let Some(mut request) = queue.pop_front() {
+                if let Some(extra_roots) = pending_roots.remove(&request.package) {
+                    merge_roots(&mut request.path_roots, extra_roots);
+                }
+                let pkg = request.package.clone();
                 if let Some(existing_node) = nodes_map.get_mut(&pkg) {
-                    for r in path_roots {
-                        if !existing_node.root_packages.contains(&r) {
-                            existing_node.root_packages.push(r);
-                        }
-                    }
+                    merge_roots(&mut existing_node.root_packages, request.path_roots);
                     continue;
                 }
-
-                let source = root_sources
-                    .get(&pkg)
-                    .cloned()
-                    .unwrap_or_else(|| "none".to_string());
-                let version = root_versions.get(&pkg).cloned().unwrap_or_default();
-
-                level_tasks.push((pkg, depth, path_roots, source, version));
+                level_tasks.push(request);
             }
         }
 
@@ -252,25 +350,38 @@ pub async fn resolve_dependencies(
 
         let futures: Vec<_> = level_tasks
             .into_iter()
-            .map(|(pkg, depth, path_roots, source, _version)| {
+            .map(|request| {
                 let client_clone = client.clone();
                 let mirror = settings.cran_mirror.clone();
-                let cache_entry = dep_cache.get(&pkg).cloned();
+                let cache_entry = dep_cache.get(&request.package).cloned();
                 async move {
                     if let Some(entry) = cache_entry {
                         return (
-                            pkg,
-                            depth,
-                            path_roots,
-                            source,
+                            request.package,
+                            request.depth,
+                            request.path_roots,
+                            request.source,
                             Ok((entry.heavy_deps, entry.light_deps, entry.version)),
                         );
                     }
 
-                    let fetch_result =
-                        fetch_description(&client_clone, &pkg, &source, &mirror).await;
+                    let fetch_result = fetch_description(
+                        &client_clone,
+                        &request.package,
+                        &request.source,
+                        &request.version,
+                        &request.repository,
+                        &mirror,
+                    )
+                    .await;
                     let parsed = fetch_result.map(|content| parse_package_dependencies(&content));
-                    (pkg, depth, path_roots, source, parsed)
+                    (
+                        request.package,
+                        request.depth,
+                        request.path_roots,
+                        request.source,
+                        parsed,
+                    )
                 }
             })
             .collect();
@@ -284,6 +395,11 @@ pub async fn resolve_dependencies(
             }
             if nodes_map.len() >= settings.max_dependency_nodes {
                 break;
+            }
+
+            let mut path_roots = path_roots;
+            if let Some(extra_roots) = pending_roots.remove(&pkg) {
+                merge_roots(&mut path_roots, extra_roots);
             }
 
             match parsed_res {
@@ -325,10 +441,20 @@ pub async fn resolve_dependencies(
                                 depth: depth + 1,
                             });
 
-                            if !visited.contains(&heavy) {
-                                visited.insert(heavy.clone());
-                                queue.push_back((heavy, depth + 1, path_roots.clone()));
-                            }
+                            enqueue_dependency(
+                                &mut queue,
+                                &mut visited,
+                                &mut pending_roots,
+                                &mut nodes_map,
+                                DependencyRequest {
+                                    package: heavy,
+                                    depth: depth + 1,
+                                    path_roots: path_roots.clone(),
+                                    source: "none".to_string(),
+                                    version: String::new(),
+                                    repository: String::new(),
+                                },
+                            );
                         }
 
                         if settings.include_light_dependencies {
@@ -341,14 +467,20 @@ pub async fn resolve_dependencies(
                                     depth: depth + 1,
                                 });
 
-                                if !visited.contains(&light) {
-                                    visited.insert(light.clone());
-                                    queue.push_back((
-                                        light,
-                                        settings.max_dependency_depth,
-                                        path_roots.clone(),
-                                    ));
-                                }
+                                enqueue_dependency(
+                                    &mut queue,
+                                    &mut visited,
+                                    &mut pending_roots,
+                                    &mut nodes_map,
+                                    DependencyRequest {
+                                        package: light,
+                                        depth: settings.max_dependency_depth,
+                                        path_roots: path_roots.clone(),
+                                        source: "none".to_string(),
+                                        version: String::new(),
+                                        repository: String::new(),
+                                    },
+                                );
                             }
                         }
                     }
@@ -480,5 +612,66 @@ Suggests:
         assert!(heavy.contains(&"ggplot2".to_string()));
         assert!(!heavy.contains(&"R".to_string()));
         assert!(light.contains(&"future".to_string()));
+    }
+
+    #[test]
+    fn extracts_matching_bioconductor_packages_entry() {
+        let content = "\
+Package: Other
+Version: 1.0.0
+Imports: wrong
+
+Package: GSVA
+Version: 1.52.0
+Imports: BiocGenerics, matrixStats
+Suggests: knitr
+";
+
+        let entry = extract_packages_index_entry(content, "GSVA", "1.52.0")
+            .expect("应提取匹配包的 PACKAGES 条目");
+
+        assert!(entry.contains("Package: GSVA"));
+        assert!(entry.contains("Imports: BiocGenerics, matrixStats"));
+    }
+
+    #[test]
+    fn enqueue_dependency_merges_roots_for_queued_package() {
+        let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
+        let mut pending_roots = HashMap::new();
+        let mut nodes_map = HashMap::new();
+
+        enqueue_dependency(
+            &mut queue,
+            &mut visited,
+            &mut pending_roots,
+            &mut nodes_map,
+            DependencyRequest {
+                package: "shared".to_string(),
+                depth: 1,
+                path_roots: vec!["root_a".to_string()],
+                source: "none".to_string(),
+                version: String::new(),
+                repository: String::new(),
+            },
+        );
+        enqueue_dependency(
+            &mut queue,
+            &mut visited,
+            &mut pending_roots,
+            &mut nodes_map,
+            DependencyRequest {
+                package: "shared".to_string(),
+                depth: 1,
+                path_roots: vec!["root_b".to_string()],
+                source: "none".to_string(),
+                version: String::new(),
+                repository: String::new(),
+            },
+        );
+
+        let request = queue.pop_front().expect("共享依赖应只入队一次");
+        assert_eq!(request.path_roots, vec!["root_a", "root_b"]);
+        assert!(pending_roots.is_empty());
     }
 }

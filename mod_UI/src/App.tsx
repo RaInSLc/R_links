@@ -92,7 +92,7 @@ function App() {
     startSearch, stopSearch, openSearchTabs } = search;
   const { settings, showToken, setShowToken,
     tokenConfigured, settingsBusy, updateSettingsFromUser,
-    acceptSettingValue, persistSettings, clearSavedToken } = settingsHook;
+    replaceSettingsFromUser, acceptSettingValue, persistSettings, clearSavedToken } = settingsHook;
   const { history, historySearch, setHistorySearch,
     sanitizeHistoryList, enqueueHistorySave,
     copyHistoryRecord, deleteHistoryRecord, clearAllHistory } = historyHook;
@@ -384,10 +384,10 @@ function App() {
     return !methodSupportsInput(candidate, inputProfile);
   }
 
-  async function saveInputRules() {
+  async function saveInputRules(rulesToSave: InputRules = inputRules) {
     setInputRulesBusy(true);
     try {
-      await invoke("save_input_rules", { rules: inputRules });
+      await invoke("save_input_rules", { rules: rulesToSave });
       setStatus("过滤规则已保存并立即生效");
     } catch (error) {
       setStatus(`保存过滤规则失败: ${formatError(error)}`);
@@ -442,10 +442,10 @@ function App() {
         downloadScript();
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "K" || e.key === "k")) {
         e.preventDefault();
-        if (!searching && input.trim()) { setInput(""); }
+        if (!searching && input.trim()) { acceptInputValue("", "manual"); }
       } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "d" || e.key === "D")) {
         e.preventDefault();
-        if (!searching && input.trim()) { setInput(dedupePackageInput(input)); }
+        if (!searching && input.trim()) { acceptInputValue(dedupePackageInput(input), "manual"); }
       }
     }
     window.addEventListener("keydown", onKeydown);
@@ -676,6 +676,10 @@ function App() {
                 updateSettingsFromUser((c) => ({ ...c, maxDependencyNodes: v }));
               }}
               onSaveSettings={persistSettings}
+              onReplaceSettings={(next) => {
+                replaceSettingsFromUser(next);
+                persistSettings(next);
+              }}
               onThemeChange={handleThemeChange} onFontChange={handleFontChange}
               currentFontSize={currentFontSize} onFontSizeChange={handleFontSizeChange}
               onCheckUpdates={checkForUpdates}
@@ -713,6 +717,10 @@ function App() {
               }}
               inputRules={inputRules}
               onInputRulesChange={setInputRules}
+              onReplaceInputRules={(next) => {
+                setInputRules(next);
+                saveInputRules(next);
+              }}
               onSaveInputRules={saveInputRules}
               inputRulesBusy={inputRulesBusy}
             />
