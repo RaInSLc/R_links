@@ -48,7 +48,7 @@ jobs:
           projectPath: mod_UI
           tagName: v__VERSION__
           releaseName: 'R Package Command Center v__VERSION__'
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
           includeUpdaterJson: true
@@ -89,6 +89,15 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           generate_release_notes: true
+          draft: true
           files: |
             mod_UI/src-tauri/target/release/R_Package_Command_Center_Portable.exe
             mod_UI/src-tauri/target/release/bundle/windows/latest.json
+
+      - name: Publish verified release
+        working-directory: mod_UI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $pkg = (Get-Content 'package.json' -Raw | ConvertFrom-Json).version
+          gh release edit "v$pkg" --draft=false
