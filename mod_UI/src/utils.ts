@@ -1,4 +1,4 @@
-import { sourceNames } from "./types";
+import { sourceNames, type Method } from "./types";
 
 export interface SearchResult {
   package: string;
@@ -73,6 +73,7 @@ export interface PublicSettings {
   maxDependencyDepth: number;
   includeLightDependencies: boolean;
   maxDependencyNodes: number;
+  pinnedMethods: Method[];
 }
 
 export interface HistoryRecord {
@@ -115,6 +116,8 @@ export const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
 export const MAX_SEARCH_RESULT_SCAN = MAX_SEARCH_RESULTS * 2;
 export const MAX_SEARCH_LOGS = 1_000;
 const INPUT_SEPARATORS = /[,;]/;
+const DEFAULT_PINNED_METHODS: Method[] = ["auto", "base", "biocManager", "github"];
+const VALID_METHODS: Method[] = ["auto", "devtools", "remotes", "github", "base", "version", "biocManager", "checkSystem"];
 function splitInputLine(line: string): string[] {
   const trimmed = line.trim();
   if (!trimmed || trimmed.startsWith("#")) return [];
@@ -514,6 +517,14 @@ export function inputHasDisallowedControlCharacters(value: string) {
 
 export function sanitizePublicSettings(value: unknown): PublicSettings {
   const s = asRecord(value);
+  const pinnedMethods = Array.isArray(s.pinnedMethods)
+    ? s.pinnedMethods.filter(
+      (item, index, list): item is Method =>
+        typeof item === "string" &&
+        VALID_METHODS.includes(item as Method) &&
+        list.indexOf(item) === index,
+    )
+    : [];
   return {
     proxy: safeText(s.proxy, MAX_RESULT_FIELD_CHARS),
     githubTokenConfigured: safeBoolean(s.githubTokenConfigured),
@@ -529,6 +540,7 @@ export function sanitizePublicSettings(value: unknown): PublicSettings {
     maxDependencyDepth: typeof s.maxDependencyDepth === "number" && Number.isSafeInteger(s.maxDependencyDepth) && s.maxDependencyDepth >= 1 && s.maxDependencyDepth <= 5 ? s.maxDependencyDepth : 2,
     includeLightDependencies: safeBoolean(s.includeLightDependencies),
     maxDependencyNodes: typeof s.maxDependencyNodes === "number" && Number.isSafeInteger(s.maxDependencyNodes) && s.maxDependencyNodes >= 1 && s.maxDependencyNodes <= 500 ? s.maxDependencyNodes : 100,
+    pinnedMethods: pinnedMethods.length >= 1 ? pinnedMethods : [...DEFAULT_PINNED_METHODS],
   };
 }
 

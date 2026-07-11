@@ -80,6 +80,8 @@ struct StoredSettings {
     include_light_dependencies: bool,
     #[serde(default = "default_max_dependency_nodes")]
     max_dependency_nodes: usize,
+    #[serde(default = "default_pinned_methods")]
+    pinned_methods: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     github_token: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -111,6 +113,7 @@ impl StoredSettings {
             max_dependency_depth: self.max_dependency_depth,
             include_light_dependencies: self.include_light_dependencies,
             max_dependency_nodes: self.max_dependency_nodes,
+            pinned_methods: self.pinned_methods,
         }
         .normalized()
     }
@@ -133,8 +136,16 @@ impl StoredSettings {
             max_dependency_depth: settings.max_dependency_depth,
             include_light_dependencies: settings.include_light_dependencies,
             max_dependency_nodes: settings.max_dependency_nodes,
+            pinned_methods: settings.pinned_methods,
         })
     }
+}
+
+fn default_pinned_methods() -> Vec<String> {
+    ["auto", "base", "biocManager", "github"]
+        .into_iter()
+        .map(str::to_string)
+        .collect()
 }
 
 pub fn data_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {

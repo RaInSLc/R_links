@@ -26,7 +26,7 @@ describe('App Component Input Validation', () => {
     vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
       if (cmd === 'load_history') return [];
       if (cmd === 'load_input_rules') return { separators: [','], commentChars: ['#'], stripQuotes: true, stripCParens: true, splitSpaces: false };
-      if (cmd === 'load_settings') return { proxy: '', githubToken: '', cranMirror: '', fullSearch: false, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100 };
+      if (cmd === 'load_settings') return { proxy: '', githubToken: '', cranMirror: '', fullSearch: false, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100, pinnedMethods: ['auto', 'base', 'biocManager', 'github'] };
       if (cmd === 'generate_script') return 'install.packages("ggplot2")';
       return null;
     });
@@ -67,7 +67,7 @@ describe('App Component Input Validation', () => {
     vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
       if (cmd === 'load_history') return [];
       if (cmd === 'load_input_rules') return { separators: [','], commentChars: ['#'], stripQuotes: true, stripCParens: true, splitSpaces: false };
-      if (cmd === 'load_settings') return { proxy: '', githubToken: '', cranMirror: '', fullSearch: false, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100 };
+      if (cmd === 'load_settings') return { proxy: '', githubToken: '', cranMirror: '', fullSearch: false, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100, pinnedMethods: ['auto', 'base', 'biocManager', 'github'] };
       if (cmd === 'load_cached_results') return [{ package: 'ggplot2', requestedVersion: '', latestVersion: '3.5.0', repository: '', realName: 'ggplot2', source: 'cran', found: true, message: '缓存命中', status: 'found' }];
       if (cmd === 'generate_script') return 'install.packages("ggplot2")';
       return null;
@@ -123,6 +123,22 @@ describe('App Component Input Validation', () => {
     await waitFor(() => {
       expect(textarea).toHaveValue('dplyr\nggplot2\nSeurat');
       expect(screen.getByRole('status')).toHaveTextContent('已应用智能建议：检测到混合文本');
+    });
+  });
+
+  it('修改常用策略时应保存到后端设置', async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByText('配置策略'));
+    const remoteButtons = screen.getAllByText('远程地址');
+    fireEvent.click(remoteButtons[remoteButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(tauriCore.invoke).toHaveBeenCalledWith('save_settings', expect.objectContaining({
+        settings: expect.objectContaining({
+          pinnedMethods: expect.arrayContaining(['remotes']),
+        }),
+      }));
     });
   });
 });

@@ -26,7 +26,7 @@ describe('useSettings', () => {
   });
 
   it('should save settings', async () => {
-    const mockSettings = { fullSearch: true, proxy: '127.0.0.1:8080', cranMirror: '', githubTokenConfigured: false, githubToken: '', useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100 };
+    const mockSettings = { fullSearch: true, proxy: '127.0.0.1:8080', cranMirror: '', githubTokenConfigured: false, githubToken: '', useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100, pinnedMethods: ['auto', 'base', 'biocManager', 'github'] };
     
     vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
       if (cmd === 'save_settings') return { ...mockSettings, githubToken: undefined };
@@ -45,7 +45,7 @@ describe('useSettings', () => {
   });
 
   it('should save the latest settings snapshot after immediate user updates', async () => {
-    const saved = { proxy: 'http://127.0.0.1:7890', githubTokenConfigured: false, cranMirror: 'https://cloud.r-project.org/', fullSearch: true, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: false, maxDependencyDepth: 2, includeLightDependencies: true, maxDependencyNodes: 100 };
+    const saved = { proxy: 'http://127.0.0.1:7890', githubTokenConfigured: false, cranMirror: 'https://cloud.r-project.org/', fullSearch: true, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: false, maxDependencyDepth: 2, includeLightDependencies: true, maxDependencyNodes: 100, pinnedMethods: ['auto', 'base', 'biocManager', 'github'] };
     vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
       if (cmd === 'load_settings') return { ...saved, proxy: '', fullSearch: false, resolveDependencies: true, includeLightDependencies: false };
       if (cmd === 'save_settings') return saved;
@@ -75,7 +75,7 @@ describe('useSettings', () => {
   });
 
   it('should refresh dependency settings after clearing saved token', async () => {
-    const publicSettings = { proxy: '', githubTokenConfigured: false, cranMirror: 'https://cloud.r-project.org/', fullSearch: false, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: false, maxDependencyDepth: 4, includeLightDependencies: true, maxDependencyNodes: 250 };
+    const publicSettings = { proxy: '', githubTokenConfigured: false, cranMirror: 'https://cloud.r-project.org/', fullSearch: false, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: false, maxDependencyDepth: 4, includeLightDependencies: true, maxDependencyNodes: 250, pinnedMethods: ['auto', 'base', 'biocManager', 'github'] };
     vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
       if (cmd === 'load_settings') return { ...publicSettings, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100 };
       if (cmd === 'clear_github_token') return publicSettings;

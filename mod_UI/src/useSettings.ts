@@ -10,7 +10,7 @@ import type { Settings } from "./types";
 import { defaultSettings } from "./types";
 
 type SettingsBoolField = "fullSearch" | "conditional" | "installDependencies" | "showRemoteVersion" | "useCache" | "useFilter" | "resolveDependencies" | "includeLightDependencies";
-type SettingsPersistOverrides = Partial<Pick<Settings, SettingsBoolField | "maxCacheEntries" | "maxDependencyDepth" | "maxDependencyNodes" | "proxy" | "githubToken" | "cranMirror">>;
+type SettingsPersistOverrides = Partial<Pick<Settings, SettingsBoolField | "maxCacheEntries" | "maxDependencyDepth" | "maxDependencyNodes" | "proxy" | "githubToken" | "cranMirror" | "pinnedMethods">>;
 
 type SetStatus = (s: string) => void;
 
@@ -50,6 +50,7 @@ export function useSettings(setStatus: SetStatus) {
           maxDependencyDepth: clean.maxDependencyDepth,
           includeLightDependencies: clean.includeLightDependencies,
           maxDependencyNodes: clean.maxDependencyNodes,
+          pinnedMethods: clean.pinnedMethods,
         });
         setTokenConfigured(clean.githubTokenConfigured);
       })
@@ -134,6 +135,7 @@ export function useSettings(setStatus: SetStatus) {
         maxDependencyDepth: publicSettings.maxDependencyDepth,
         includeLightDependencies: publicSettings.includeLightDependencies,
         maxDependencyNodes: publicSettings.maxDependencyNodes,
+        pinnedMethods: publicSettings.pinnedMethods,
       });
       setShowToken(false);
       setStatus("设置已保存并立即生效");
@@ -177,6 +179,7 @@ export function useSettings(setStatus: SetStatus) {
         maxDependencyDepth: publicSettings.maxDependencyDepth,
         includeLightDependencies: publicSettings.includeLightDependencies,
         maxDependencyNodes: publicSettings.maxDependencyNodes,
+        pinnedMethods: publicSettings.pinnedMethods,
       });
       setShowToken(false);
       setStatus("已清除保存的 GitHub Token");

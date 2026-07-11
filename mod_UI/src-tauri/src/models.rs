@@ -27,6 +27,8 @@ pub struct Settings {
     pub max_dependency_depth: usize,
     pub include_light_dependencies: bool,
     pub max_dependency_nodes: usize,
+    #[serde(default = "default_pinned_methods")]
+    pub pinned_methods: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -46,6 +48,14 @@ pub struct PublicSettings {
     pub max_dependency_depth: usize,
     pub include_light_dependencies: bool,
     pub max_dependency_nodes: usize,
+    pub pinned_methods: Vec<String>,
+}
+
+fn default_pinned_methods() -> Vec<String> {
+    ["auto", "base", "biocManager", "github"]
+        .into_iter()
+        .map(str::to_string)
+        .collect()
 }
 
 impl Default for Settings {
@@ -65,6 +75,7 @@ impl Default for Settings {
             max_dependency_depth: 2,
             include_light_dependencies: false,
             max_dependency_nodes: 100,
+            pinned_methods: default_pinned_methods(),
         }
     }
 }
@@ -77,6 +88,7 @@ impl Settings {
         let max_cache_entries = self.max_cache_entries.clamp(1, 10000);
         let max_dependency_depth = self.max_dependency_depth.clamp(1, 5);
         let max_dependency_nodes = self.max_dependency_nodes.clamp(1, 500);
+        let pinned_methods = normalize_pinned_methods(&self.pinned_methods);
 
         Ok(Self {
             proxy,
@@ -93,6 +105,7 @@ impl Settings {
             max_dependency_depth,
             include_light_dependencies: self.include_light_dependencies,
             max_dependency_nodes,
+            pinned_methods,
         })
     }
 
@@ -112,6 +125,7 @@ impl Settings {
             max_dependency_depth: self.max_dependency_depth,
             include_light_dependencies: self.include_light_dependencies,
             max_dependency_nodes: self.max_dependency_nodes,
+            pinned_methods: self.pinned_methods.clone(),
         }
     }
 
@@ -121,6 +135,31 @@ impl Settings {
             normalized.github_token = existing.github_token.clone();
         }
         Ok(normalized)
+    }
+}
+
+fn normalize_pinned_methods(values: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for value in values {
+        if matches!(
+            value.as_str(),
+            "auto"
+                | "devtools"
+                | "remotes"
+                | "github"
+                | "base"
+                | "version"
+                | "biocManager"
+                | "checkSystem"
+        ) && !normalized.iter().any(|existing| existing == value)
+        {
+            normalized.push(value.clone());
+        }
+    }
+    if normalized.is_empty() {
+        default_pinned_methods()
+    } else {
+        normalized
     }
 }
 
@@ -609,6 +648,27 @@ mod tests {
         assert!(!encoded.contains("ghp_secret"));
         assert!(!encoded.contains("githubToken\":\""));
         assert!(encoded.contains("githubTokenConfigured"));
+    }
+
+    #[test]
+    fn normalizes_and_exposes_pinned_methods() {
+        let settings = Settings {
+            pinned_methods: vec![
+                "github".to_string(),
+                "invalid".to_string(),
+                "base".to_string(),
+                "github".to_string(),
+            ],
+            ..Settings::default()
+        };
+
+        let normalized = settings.normalized().expect("常用策略应可规范化");
+
+        assert_eq!(normalized.pinned_methods, vec!["github", "base"]);
+        assert_eq!(
+            normalized.public_view().pinned_methods,
+            vec!["github", "base"]
+        );
     }
 
     #[test]

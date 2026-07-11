@@ -26,6 +26,7 @@ export interface Settings {
   maxDependencyDepth: number;
   includeLightDependencies: boolean;
   maxDependencyNodes: number;
+  pinnedMethods: Method[];
 }
 
 export interface InputRules {
@@ -69,6 +70,7 @@ export const defaultSettings: Settings = {
   maxDependencyDepth: 2,
   includeLightDependencies: false,
   maxDependencyNodes: 100,
+  pinnedMethods: ["auto", "base", "biocManager", "github"],
 };
 
 export const defaultInputRules: InputRules = {
@@ -81,7 +83,7 @@ export const defaultInputRules: InputRules = {
   excludeKeywords: [],
 };
 
-export const defaultPinnedMethods: Method[] = ["auto", "base", "biocManager", "github"];
+export const defaultPinnedMethods: Method[] = [...defaultSettings.pinnedMethods];
 
 export const methods: Array<{
   id: Method;

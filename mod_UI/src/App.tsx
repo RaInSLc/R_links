@@ -20,7 +20,7 @@ import {
   dedupePackageInput, normalizePackageInputDisplay, trimTrailingBlankLines,
   type HistoryRecord, type SearchResult,
 } from "./utils";
-import { type View, type Method, type InputRules, methods, defaultInputRules, defaultSettings, defaultPinnedMethods } from "./types";
+import { type View, type Method, type InputRules, methods, defaultInputRules, defaultSettings } from "./types";
 
 function App() {
   const [view, setView] = useState<View>("workspace");
@@ -54,19 +54,6 @@ function App() {
   const [verifyInstall, setVerifyInstallState] = useState(() => {
     return localStorage.getItem("rlinks_verify_install") === "1";
   });
-  const [pinnedMethods, setPinnedMethods] = useState<Method[]>(() => {
-    try {
-      const stored = localStorage.getItem("rlinks_pinned_methods");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          const valid = parsed.filter((value): value is Method => methods.some((item) => item.id === value));
-          if (valid.length >= 1) return valid;
-        }
-      }
-    } catch {}
-    return [...defaultPinnedMethods];
-  });
   const [script, setScriptState] = useState("等待输入...");
   const [status, setStatus] = useState("就绪");
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -82,9 +69,9 @@ function App() {
     const valid = nextMethods.filter(
       (value, index) => nextMethods.indexOf(value) === index && methods.some((item) => item.id === value),
     );
-    const next = valid.length >= 1 ? valid : [...defaultPinnedMethods];
-    setPinnedMethods(next);
-    localStorage.setItem("rlinks_pinned_methods", JSON.stringify(next));
+    const next = valid.length >= 1 ? valid : [...defaultSettings.pinnedMethods];
+    updateSettingsFromUser((current) => ({ ...current, pinnedMethods: next }));
+    void persistSettings({ pinnedMethods: next });
   }
 
   const latestInputRef = useRef(localStorage.getItem("rlinks_input") || "");
@@ -104,6 +91,7 @@ function App() {
   const { settings, showToken, setShowToken,
     tokenConfigured, settingsBusy, updateSettingsFromUser,
     replaceSettingsFromUser, acceptSettingValue, persistSettings, clearSavedToken } = settingsHook;
+  const pinnedMethods = settings.pinnedMethods;
   const { history, historySearch, setHistorySearch,
     sanitizeHistoryList, enqueueHistorySave,
     copyHistoryRecord, deleteHistoryRecord, clearAllHistory } = historyHook;
@@ -157,10 +145,6 @@ function App() {
   useEffect(() => {
     localStorage.setItem("rlinks_input", input);
   }, [input]);
-
-  useEffect(() => {
-    localStorage.setItem("rlinks_pinned_methods", JSON.stringify(pinnedMethods));
-  }, [pinnedMethods]);
 
   useEffect(() => {
     localStorage.setItem("rlinks_method", method);

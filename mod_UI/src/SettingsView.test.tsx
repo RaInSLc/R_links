@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { SettingsView } from './SettingsView';
 import { vi, describe, it, expect } from 'vitest';
 import '@testing-library/jest-dom';
+import { defaultSettings } from './types';
 
 describe('SettingsView Component', () => {
   const createProps = () => ({
@@ -20,6 +21,7 @@ describe('SettingsView Component', () => {
       maxDependencyDepth: 2,
       includeLightDependencies: false,
       maxDependencyNodes: 100,
+      pinnedMethods: [...defaultSettings.pinnedMethods],
     },
     tokenConfigured: false,
     showToken: false,
