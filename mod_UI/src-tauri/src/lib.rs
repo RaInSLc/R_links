@@ -435,7 +435,12 @@ fn stop_search(state: State<'_, SearchState>, run_id: u64) -> bool {
 }
 
 #[tauri::command]
-fn export_diagnostics(app: AppHandle) -> Result<String, String> {
+fn export_diagnostics(
+    app: AppHandle,
+    search_summary: Option<serde_json::Value>,
+    failed_categories: Option<serde_json::Value>,
+    update_status: Option<String>,
+) -> Result<String, String> {
     let settings = load_existing_settings_for_runtime(&app)?;
     let public_settings = settings.public_view();
 
@@ -463,6 +468,9 @@ fn export_diagnostics(app: AppHandle) -> Result<String, String> {
         "history_entries": history_count,
         "platform": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
+        "search_summary": search_summary,
+        "failed_categories": failed_categories,
+        "update_status": update_status,
     });
 
     serde_json::to_string_pretty(&diagnostics).map_err(|e| format!("诊断信息序列化失败: {e}"))

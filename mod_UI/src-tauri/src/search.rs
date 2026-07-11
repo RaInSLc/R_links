@@ -1197,7 +1197,26 @@ fn authorized_get(
     })
 }
 
+#[cfg(test)]
+thread_local! {
+    pub static MOCK_GET_TEXT: std::cell::RefCell<Option<Box<dyn FnMut(&str) -> Result<Option<String>, String>>>> = std::cell::RefCell::new(None);
+}
+
 async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Result<Option<String>, String> {
+    #[cfg(test)]
+    {
+        let mock_result = MOCK_GET_TEXT.with(|mock| {
+            if let Some(f) = mock.borrow_mut().as_mut() {
+                Some(f(url))
+            } else {
+                None
+            }
+        });
+        if let Some(result) = mock_result {
+            return result;
+        }
+    }
+
     if context.is_stopped() {
         return Ok(None);
     }
@@ -1226,7 +1245,26 @@ async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Result<Option<S
     Ok(Some(text))
 }
 
+#[cfg(test)]
+thread_local! {
+    pub static MOCK_GET_JSON: std::cell::RefCell<Option<Box<dyn FnMut(&str) -> Result<Option<Value>, String>>>> = std::cell::RefCell::new(None);
+}
+
 async fn get_json(context: &mut SearchContext<'_>, url: &str) -> Result<Option<Value>, String> {
+    #[cfg(test)]
+    {
+        let mock_result = MOCK_GET_JSON.with(|mock| {
+            if let Some(f) = mock.borrow_mut().as_mut() {
+                Some(f(url))
+            } else {
+                None
+            }
+        });
+        if let Some(result) = mock_result {
+            return result;
+        }
+    }
+
     if context.is_stopped() {
         return Ok(None);
     }
@@ -2022,5 +2060,107 @@ mod tests {
         let fresh_budget = RequestBudget::new(1);
         cancelled.store(true, Ordering::SeqCst);
         assert!(search_stopped(&cancelled, &fresh_budget));
+    }
+
+    #[tokio::test]
+    async fn test_search_cran_mock_network() {
+        let mut logs = Vec::new();
+        let cancelled = AtomicBool::new(false);
+        let budget = RequestBudget::new(10);
+        let timed_out = AtomicBool::new(false);
+        let settings = Settings::default();
+        let client = build_client(&settings).unwrap();
+
+        let mut context = SearchContext {
+            client: &client,
+            settings: &settings,
+            cancelled: &cancelled,
+            budget: &budget,
+            deadline: Instant::now() + Duration::from_secs(10),
+            timed_out: &timed_out,
+            logs: &mut logs,
+            result_limit_reached: false,
+            github_rate_limited: false,
+        };
+
+        let package = PackageInput {
+            raw: "mockPkg".to_string(),
+            name: "mockPkg".to_string(),
+            version: "".to_string(),
+            source_hint: None,
+        };
+
+        MOCK_GET_TEXT.with(|mock| {
+            *mock.borrow_mut() = Some(Box::new(|url| {
+                if url.contains("index.html") {
+                    Ok(Some("<td>Version:</td><td>9.9.9</td>".to_string()))
+                } else {
+                    Ok(None)
+                }
+            }));
+        });
+
+        let result = search_cran(&mut context, &package).await;
+        
+        MOCK_GET_TEXT.with(|mock| *mock.borrow_mut() = None);
+
+        assert!(result.is_ok());
+        let opt = result.unwrap();
+        assert!(opt.is_some());
+        let res = opt.unwrap();
+        assert_eq!(res.latest_version, "9.9.9");
+        assert_eq!(res.source, "cran");
+    }
+
+    #[tokio::test]
+    async fn test_search_github_mock_network() {
+        let mut logs = Vec::new();
+        let cancelled = AtomicBool::new(false);
+        let budget = RequestBudget::new(10);
+        let timed_out = AtomicBool::new(false);
+        let settings = Settings::default();
+        let client = build_client(&settings).unwrap();
+
+        let mut context = SearchContext {
+            client: &client,
+            settings: &settings,
+            cancelled: &cancelled,
+            budget: &budget,
+            deadline: Instant::now() + Duration::from_secs(10),
+            timed_out: &timed_out,
+            logs: &mut logs,
+            result_limit_reached: false,
+            github_rate_limited: false,
+        };
+
+        let package = PackageInput {
+            raw: "mockRepo".to_string(),
+            name: "mockRepo".to_string(),
+            version: "".to_string(),
+            source_hint: None,
+        };
+
+        MOCK_GET_JSON.with(|mock| {
+            *mock.borrow_mut() = Some(Box::new(|url| {
+                if url.contains("r-universe.dev") {
+                    Ok(Some(serde_json::json!({
+                        "Package": "mockRepo",
+                        "Version": "1.0.0",
+                        "RemoteUrl": "https://github.com/owner/mockRepo"
+                    })))
+                } else {
+                    Ok(None)
+                }
+            }));
+        });
+
+        let result = search_github(&mut context, &package).await;
+        MOCK_GET_JSON.with(|mock| *mock.borrow_mut() = None);
+
+        assert!(result.is_ok());
+        let res = result.unwrap();
+        assert!(!res.is_empty());
+        assert_eq!(res[0].latest_version, "1.0.0");
+        assert_eq!(res[0].repository, "owner/mockRepo");
     }
 }

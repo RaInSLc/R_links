@@ -1,7 +1,9 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host "========================================="
-Write-Host "开始打包 RLinks (mod_UI) ..."
+Write-Host "开始打包 RLinks (mod_UI) 本地免安装版 ..."
+Write-Host "注：此脚本仅用于生成本地便携版，不生成自动更新清单。"
+Write-Host "正式发布请使用 GitHub Actions Release 工作流。"
 Write-Host "========================================="
 
 $scriptDir = $PSScriptRoot

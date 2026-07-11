@@ -685,7 +685,22 @@ function App() {
               }}
               onExportDiagnostics={async () => {
                 try {
-                  const diagnostics = await invoke<string>("export_diagnostics");
+                  const searchSummary = {
+                    packageCount, uniqueFoundCount, searchDuration,
+                    missingCount: results.filter(r => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").length,
+                    errorCount: results.filter(r => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")).length,
+                  };
+                  const failedCategories = {
+                    timeout: results.filter(r => !r.found && r.status === "timeout").map(r => r.package),
+                    rateLimited: results.filter(r => !r.found && r.status === "rateLimited").map(r => r.package),
+                    notFound: results.filter(r => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").map(r => r.package),
+                    error: results.filter(r => !r.found && r.status === "error").map(r => r.package),
+                  };
+                  const diagnostics = await invoke<string>("export_diagnostics", {
+                    searchSummary,
+                    failedCategories,
+                    updateStatus: updateMessage || (checkingUpdate ? "正在检查" : "未检查")
+                  });
                   const blob = new Blob([diagnostics], { type: "application/json" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
