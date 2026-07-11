@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { PanelHeader, Toggle } from "./components";
-import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, dedupePackageInput, type SmartSuggestion } from "./utils";
+import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, dedupePackageInput, normalizePackageInputDisplay, type SmartSuggestion } from "./utils";
 import type { Method, Settings } from "./types";
 import { methods, defaultPinnedMethods } from "./types";
 
@@ -142,6 +142,14 @@ export function WorkspaceView({
             onChange={(event) => onInputChange(event.currentTarget.value, "manual")}
             onPaste={(e) => {
               const text = e.clipboardData.getData("text");
+              const normalized = normalizePackageInputDisplay(text);
+              if (normalized !== text) {
+                e.preventDefault();
+                const el = e.currentTarget;
+                const nextValue = input.slice(0, el.selectionStart) + normalized + input.slice(el.selectionEnd);
+                onInputChange(nextValue, "clipboard");
+                return;
+              }
               const lines = text.split("\n").filter((l) => l.trim());
               const hasIssues = lines.length > 1 && (
                 lines.some((l) => l !== l.trim()) ||

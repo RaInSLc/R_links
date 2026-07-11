@@ -150,6 +150,9 @@ export function normalizePackageInputDisplay(value: string): string {
     changed = true;
     return markdownLine ? [markdownLine] : [];
   });
+  while (changed && normalized.length > 0 && !normalized[normalized.length - 1].trim()) {
+    normalized.pop();
+  }
   return changed ? normalized.join("\n") : value;
 }
 

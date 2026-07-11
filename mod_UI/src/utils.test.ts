@@ -408,6 +408,17 @@ describe("normalizePackageInputDisplay", () => {
       "| extraTrees        | CRAN      |",
     ].join("\n"))).toBe("DMwR\nkernelshap\nextraTrees");
   });
+
+  it("removes trailing blank lines from pasted Markdown package tables", () => {
+    expect(normalizePackageInputDisplay([
+      "| 包名 | 来源 |",
+      "| --- | --- |",
+      "| DMwR | CRAN |",
+      "| kernelshap | CRAN |",
+      "",
+      "",
+    ].join("\n"))).toBe("DMwR\nkernelshap");
+  });
 });
 
 describe("buildInputSmartSuggestions duplicates", () => {
