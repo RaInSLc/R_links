@@ -17,10 +17,10 @@ import {
   countScriptCommands, countDuplicatePackages,
   MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES,
   MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS, utf8Length,
-  dedupePackageInput, normalizePackageInputDisplay,
+  dedupePackageInput, normalizePackageInputDisplay, trimTrailingBlankLines,
   type HistoryRecord, type SearchResult,
 } from "./utils";
-import { type View, type Method, type InputRules, defaultInputRules, defaultSettings, defaultPinnedMethods } from "./types";
+import { type View, type Method, type InputRules, methods, defaultInputRules, defaultSettings, defaultPinnedMethods } from "./types";
 
 function App() {
   const [view, setView] = useState<View>("workspace");
@@ -59,7 +59,10 @@ function App() {
       const stored = localStorage.getItem("rlinks_pinned_methods");
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length >= 1) return parsed;
+        if (Array.isArray(parsed)) {
+          const valid = parsed.filter((value): value is Method => methods.some((item) => item.id === value));
+          if (valid.length >= 1) return valid;
+        }
       }
     } catch {}
     return [...defaultPinnedMethods];
@@ -75,6 +78,14 @@ function App() {
   function setInstallDependencies(v: boolean) { setInstallDependenciesState(v); localStorage.setItem("rlinks_install_deps", v ? "1" : "0"); }
   function setShowRemoteVersion(v: boolean) { setShowRemoteVersionState(v); localStorage.setItem("rlinks_show_remote_version", v ? "1" : "0"); }
   function setVerifyInstall(v: boolean) { setVerifyInstallState(v); localStorage.setItem("rlinks_verify_install", v ? "1" : "0"); }
+  function setPinnedMethodsFromUser(nextMethods: Method[]) {
+    const valid = nextMethods.filter(
+      (value, index) => nextMethods.indexOf(value) === index && methods.some((item) => item.id === value),
+    );
+    const next = valid.length >= 1 ? valid : [...defaultPinnedMethods];
+    setPinnedMethods(next);
+    localStorage.setItem("rlinks_pinned_methods", JSON.stringify(next));
+  }
 
   const latestInputRef = useRef(localStorage.getItem("rlinks_input") || "");
   const latestScriptRef = useRef("等待输入...");
@@ -191,7 +202,7 @@ function App() {
   };
 
   function acceptInputValue(value: string, source: "manual" | "clipboard") {
-    const normalizedValue = normalizePackageInputDisplay(value);
+    const normalizedValue = trimTrailingBlankLines(normalizePackageInputDisplay(value));
     if (searchingRef.current) {
       setStatus("检索期间不能修改输入，请先停止当前任务");
       return "rejected";
@@ -563,7 +574,7 @@ function App() {
               onStartSearch={handleStartSearch} onStopSearch={stopSearch}
               onMethodChange={setMethod}
               pinnedMethods={pinnedMethods}
-              onPinnedMethodsChange={setPinnedMethods}
+              onPinnedMethodsChange={setPinnedMethodsFromUser}
               onApplySmartSuggestion={(suggestion) => {
                 if (suggestion.action === "enableVerify") {
                   setVerifyInstall(true);

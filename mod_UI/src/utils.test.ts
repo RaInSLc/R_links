@@ -20,6 +20,7 @@ import {
   extractCanonicalInput,
   dedupePackageInput,
   normalizePackageInputDisplay,
+  trimTrailingBlankLines,
   countScriptCommands,
   countDuplicatePackages,
   MAX_STATUS_CHARS,
@@ -418,6 +419,13 @@ describe("normalizePackageInputDisplay", () => {
       "",
       "",
     ].join("\n"))).toBe("DMwR\nkernelshap");
+  });
+});
+
+describe("trimTrailingBlankLines", () => {
+  it("removes trailing blank lines without touching middle blank lines", () => {
+    expect(trimTrailingBlankLines("pkg1\n\npkg2\n\n\n")).toBe("pkg1\n\npkg2");
+    expect(trimTrailingBlankLines("pkg1\n  \n\t")).toBe("pkg1");
   });
 });
 

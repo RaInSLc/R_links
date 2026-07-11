@@ -156,6 +156,10 @@ export function normalizePackageInputDisplay(value: string): string {
   return changed ? normalized.join("\n") : value;
 }
 
+export function trimTrailingBlankLines(value: string): string {
+  return value.replace(/(?:\r?\n[\t ]*)+$/g, "");
+}
+
 function pushUniqueInput(items: string[], value: string) {
   const trimmed = value.trim().replace(/^["']|["']$/g, "").trim();
   if (!trimmed || items.some((item) => item.toLowerCase() === trimmed.toLowerCase())) return;

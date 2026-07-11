@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { PanelHeader, Toggle } from "./components";
-import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, dedupePackageInput, normalizePackageInputDisplay, type SmartSuggestion } from "./utils";
+import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, dedupePackageInput, normalizePackageInputDisplay, trimTrailingBlankLines, type SmartSuggestion } from "./utils";
 import type { Method, Settings } from "./types";
 import { methods, defaultPinnedMethods } from "./types";
 
@@ -146,7 +146,7 @@ export function WorkspaceView({
               if (normalized !== text) {
                 e.preventDefault();
                 const el = e.currentTarget;
-                const nextValue = input.slice(0, el.selectionStart) + normalized + input.slice(el.selectionEnd);
+                const nextValue = trimTrailingBlankLines(input.slice(0, el.selectionStart) + normalized + input.slice(el.selectionEnd));
                 onInputChange(nextValue, "clipboard");
                 return;
               }
