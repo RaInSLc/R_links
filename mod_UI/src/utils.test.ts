@@ -19,6 +19,7 @@ import {
   buildResultSmartSuggestions,
   extractCanonicalInput,
   dedupePackageInput,
+  normalizePackageInputDisplay,
   countScriptCommands,
   countDuplicatePackages,
   MAX_STATUS_CHARS,
@@ -394,6 +395,18 @@ describe("dedupePackageInput", () => {
   it("handles URL lines", () => {
     const url = "https://example.org/pkg_1.0.tar.gz";
     expect(dedupePackageInput(`${url}\n${url}`)).toBe(url);
+  });
+});
+
+describe("normalizePackageInputDisplay", () => {
+  it("converts pasted Markdown package tables into one package per line", () => {
+    expect(normalizePackageInputDisplay([
+      "| 包名                | 来源        |",
+      "| ----------------- | --------- |",
+      "| DMwR              | CRAN（已归档） |",
+      "| kernelshap        | CRAN      |",
+      "| extraTrees        | CRAN      |",
+    ].join("\n"))).toBe("DMwR\nkernelshap\nextraTrees");
   });
 });
 

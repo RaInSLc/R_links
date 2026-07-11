@@ -127,6 +127,32 @@ function splitInputLine(line: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+function normalizeMarkdownTableLine(line: string): string | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) return null;
+  const cells = trimmed
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+  if (cells.length === 0) return "";
+  if (cells.every((cell) => /^:?-{2,}:?$/.test(cell))) return "";
+  const packageName = cells[0] ?? "";
+  if (!packageName || /^(包名|package)$/i.test(packageName)) return "";
+  return packageName;
+}
+
+export function normalizePackageInputDisplay(value: string): string {
+  let changed = false;
+  const normalized = value.split(/\r?\n/).flatMap((line) => {
+    const markdownLine = normalizeMarkdownTableLine(line);
+    if (markdownLine === null) return [line];
+    changed = true;
+    return markdownLine ? [markdownLine] : [];
+  });
+  return changed ? normalized.join("\n") : value;
+}
+
 function pushUniqueInput(items: string[], value: string) {
   const trimmed = value.trim().replace(/^["']|["']$/g, "").trim();
   if (!trimmed || items.some((item) => item.toLowerCase() === trimmed.toLowerCase())) return;

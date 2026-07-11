@@ -17,7 +17,7 @@ import {
   countScriptCommands, countDuplicatePackages,
   MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES,
   MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS, utf8Length,
-  dedupePackageInput,
+  dedupePackageInput, normalizePackageInputDisplay,
   type HistoryRecord, type SearchResult,
 } from "./utils";
 import { type View, type Method, type InputRules, defaultInputRules, defaultSettings, defaultPinnedMethods } from "./types";
@@ -191,15 +191,16 @@ function App() {
   };
 
   function acceptInputValue(value: string, source: "manual" | "clipboard") {
+    const normalizedValue = normalizePackageInputDisplay(value);
     if (searchingRef.current) {
       setStatus("检索期间不能修改输入，请先停止当前任务");
       return "rejected";
     }
     if (
-      value.length > MAX_INPUT_CHARS ||
-      /[\p{C}]/u.test(value.replace(/[\r\n\t]/g, "")) ||
-      nonEmptyLineBytesExceeds(value, MAX_INPUT_LINE_BYTES) ||
-      utf8Length(value) > MAX_INPUT_CHARS
+      normalizedValue.length > MAX_INPUT_CHARS ||
+      /[\p{C}]/u.test(normalizedValue.replace(/[\r\n\t]/g, "")) ||
+      nonEmptyLineBytesExceeds(normalizedValue, MAX_INPUT_LINE_BYTES) ||
+      utf8Length(normalizedValue) > MAX_INPUT_CHARS
     ) {
       setStatus(
         `${source === "clipboard" ? "剪贴板内容" : "输入"}超出限制或包含非法字符：最多 ${MAX_PACKAGE_LINES} 行、总计 ${MAX_INPUT_CHARS} 字节、单行 ${MAX_INPUT_LINE_BYTES} 字节`,
@@ -207,13 +208,13 @@ function App() {
       return "rejected";
     }
     const clearsSearchEvidence =
-      value !== latestInputRef.current && hasSearchEvidenceRef.current;
+      normalizedValue !== latestInputRef.current && hasSearchEvidenceRef.current;
     if (clearsSearchEvidence) {
       hasSearchEvidenceRef.current = false;
       setLogs([]);
     }
-    latestInputRef.current = value;
-    setInput(value);
+    latestInputRef.current = normalizedValue;
+    setInput(normalizedValue);
     if (clearsSearchEvidence && source === "manual") {
       setStatus("输入已变更，检索日志已清除（已验证的来源信息保留）");
     }
