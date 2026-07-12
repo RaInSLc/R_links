@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import "./App.css";
@@ -24,7 +24,49 @@ import { type View, type Method, type InputRules, methods, defaultInputRules, de
 
 type UpdateState = "idle" | "checking" | "available" | "downloading" | "installing" | "readyToRestart" | "upToDate" | "error";
 
-function App() {
+class AppErrorBoundary extends Component<{ children: ReactNode }, { message: string }> {
+  state = { message: "" };
+
+  static getDerivedStateFromError(error: unknown) {
+    return { message: error instanceof Error ? error.message : String(error) };
+  }
+
+  componentDidCatch(error: unknown, info: ErrorInfo) {
+    console.error("App render failed", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.message) {
+      return (
+        <div className="app-shell" style={{ display: "grid", placeItems: "center", minHeight: "100vh", padding: "24px" }}>
+          <section className="panel" style={{ maxWidth: "640px", width: "100%" }}>
+            <header className="panel-header">
+              <span>错误</span>
+              <h2>界面渲染失败</h2>
+              <small>已阻止白屏</small>
+            </header>
+            <div style={{ padding: "16px", display: "grid", gap: "12px" }}>
+              <p>界面遇到运行时错误，建议先刷新应用；如果刚修改了缓存或设置，请导出诊断后反馈。</p>
+              <code style={{ whiteSpace: "pre-wrap" }}>{this.state.message}</code>
+              <button className="button primary" type="button" onClick={() => window.location.reload()}>刷新应用</button>
+            </div>
+          </section>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function formatUpdateError(error: unknown) {
+  const message = formatError(error);
+  if (message.includes("valid release JSON")) {
+    return "检查更新失败：GitHub Release 缺少 latest.json 自动更新清单；请先使用安装包手动更新，或重新发布包含清单的版本。";
+  }
+  return `检查更新失败: ${message}`;
+}
+
+function AppContent() {
   const [view, setView] = useState<View>("workspace");
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem("theme") || "office");
   const [currentFont, setCurrentFont] = useState(() => localStorage.getItem("fontFamily") || "modern");
@@ -265,7 +307,7 @@ function App() {
       }
     } catch (error) {
       setUpdateState("error");
-      setUpdateMessage(`检查更新失败: ${error instanceof Error ? error.message : String(error)}`);
+      setUpdateMessage(formatUpdateError(error));
     } finally {
       setCheckingUpdate(false);
     }
@@ -669,9 +711,15 @@ function App() {
               onTokenToggle={() => setShowToken((v) => !v)}
               onClearToken={clearSavedToken}
               onFullSearchChange={(v) => updateSettingsFromUser((c) => ({ ...c, fullSearch: v }))}
-              onUseCacheChange={(v) => updateSettingsFromUser((c) => ({ ...c, useCache: v }))}
+              onUseCacheChange={(v) => {
+                updateSettingsFromUser((c) => ({ ...c, useCache: v }));
+                persistSettings({ useCache: v });
+              }}
               onUseFilterChange={(v) => updateSettingsFromUser((c) => ({ ...c, useFilter: v }))}
-              onMaxCacheEntriesChange={(v) => updateSettingsFromUser((c) => ({ ...c, maxCacheEntries: v }))}
+              onMaxCacheEntriesChange={(v) => {
+                updateSettingsFromUser((c) => ({ ...c, maxCacheEntries: v }));
+                persistSettings({ maxCacheEntries: v });
+              }}
               onConditionalChange={(v) => {
                 setConditional(v);
                 updateSettingsFromUser((c) => ({ ...c, conditional: v }));
@@ -758,6 +806,14 @@ function App() {
         </section>
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AppErrorBoundary>
+      <AppContent />
+    </AppErrorBoundary>
   );
 }
 

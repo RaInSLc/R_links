@@ -3,6 +3,7 @@ import App from './App';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as tauriCore from '@tauri-apps/api/core';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+import { check } from '@tauri-apps/plugin-updater';
 import '@testing-library/jest-dom';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -11,6 +12,10 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({
   writeText: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/plugin-updater', () => ({
+  check: vi.fn(),
 }));
 
 describe('App Component Input Validation', () => {
@@ -82,6 +87,18 @@ describe('App Component Input Validation', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('复制安装指令失败: clipboard denied');
+    });
+  });
+
+  it('更新清单缺失时应显示明确提示', async () => {
+    vi.mocked(check).mockRejectedValueOnce(new Error('Could not fetch a valid release JSON from the remote'));
+    render(<App />);
+
+    fireEvent.click(screen.getByText('网络设置'));
+    fireEvent.click(screen.getByText('检查更新'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/缺少 latest\.json 自动更新清单/)).toBeInTheDocument();
     });
   });
 
