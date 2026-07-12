@@ -21,6 +21,25 @@ export function HistoryView({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [histNavIndex, setHistNavIndex] = useState(-1);
 
+  const parseCreatedAt = (value: string) => {
+    const timestamp = Number(value);
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  };
+
+  const formatHistoryDate = (value: string) => {
+    const timestamp = parseCreatedAt(value);
+    return timestamp > 0
+      ? new Date(timestamp).toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" })
+      : "未知日期";
+  };
+
+  const formatHistoryTime = (value: string) => {
+    const timestamp = parseCreatedAt(value);
+    return timestamp > 0
+      ? new Date(timestamp).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+      : "未知时间";
+  };
+
   const filtered = history
     .filter(record =>
       (record.packageName && record.packageName.toLowerCase().includes(historySearch.toLowerCase())) ||
@@ -30,7 +49,7 @@ export function HistoryView({
 
   const sorted = sortBy === "name"
     ? [...filtered].sort((a, b) => (a.packageName || "").localeCompare(b.packageName || ""))
-    : filtered;
+    : [...filtered].sort((a, b) => parseCreatedAt(b.createdAt) - parseCreatedAt(a.createdAt));
 
   useEffect(() => { setHistNavIndex(-1); }, [filtered]);
 
@@ -73,7 +92,7 @@ export function HistoryView({
   return (
     <section className="panel history-panel">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <PanelHeader step="历史" title="最近生成的命令" meta="最多保留 100 条" />
+        <PanelHeader step="历史" title="最近生成的命令" meta="最多保留 10000 条" />
         <div style={{ display: "flex", gap: "8px", alignItems: "center", marginRight: "16px" }}>
           <input
             type="text"
@@ -185,8 +204,8 @@ export function HistoryView({
             </label>
           </div>
           {sorted.map((record, idx) => {
-            const dateStr = record.createdAt ? new Date(record.createdAt).toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" }) : "未知日期";
-            const prevDate = idx > 0 && sorted[idx - 1].createdAt ? new Date(sorted[idx - 1].createdAt!).toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" }) : null;
+            const dateStr = record.createdAt ? formatHistoryDate(record.createdAt) : "未知日期";
+            const prevDate = idx > 0 && sorted[idx - 1].createdAt ? formatHistoryDate(sorted[idx - 1].createdAt!) : null;
             const showDivider = idx === 0 || dateStr !== prevDate;
             return (
               <Fragment key={record.id}>
@@ -203,7 +222,7 @@ export function HistoryView({
                   <strong>{record.packageName || "R 命令"}</strong>
                   <span>{record.toolName}{record.version ? ` · v${record.version}` : ""}</span>
                   {record.createdAt && (
-                    <span className="history-time">{new Date(record.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                    <span className="history-time">{formatHistoryTime(record.createdAt)}</span>
                   )}
                 </div>
                 <code>{record.command}</code>

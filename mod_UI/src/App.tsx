@@ -571,11 +571,26 @@ function App() {
                   setStatus(`已应用智能建议：${suggestion.title}`);
                 }
               }}
-              onConditionalChange={setConditional}
-              onInstallDependenciesChange={setInstallDependencies}
-              onShowRemoteVersionChange={setShowRemoteVersion}
+              onConditionalChange={(v) => {
+                setConditional(v);
+                updateSettingsFromUser((c) => ({ ...c, conditional: v }));
+                persistSettings({ conditional: v });
+              }}
+              onInstallDependenciesChange={(v) => {
+                setInstallDependencies(v);
+                updateSettingsFromUser((c) => ({ ...c, installDependencies: v }));
+                persistSettings({ installDependencies: v });
+              }}
+              onShowRemoteVersionChange={(v) => {
+                setShowRemoteVersion(v);
+                updateSettingsFromUser((c) => ({ ...c, showRemoteVersion: v }));
+                persistSettings({ showRemoteVersion: v });
+              }}
               onVerifyInstallChange={setVerifyInstall}
-              onFullSearchChange={(v) => updateSettingsFromUser((c) => ({ ...c, fullSearch: v }))}
+              onFullSearchChange={(v) => {
+                updateSettingsFromUser((c) => ({ ...c, fullSearch: v }));
+                persistSettings({ fullSearch: v });
+              }}
               onUseCacheChange={(v) => {
                 updateSettingsFromUser((c) => ({ ...c, useCache: v }));
                 persistSettings({ useCache: v });
@@ -667,9 +682,11 @@ function App() {
               }}
               onMaxDependencyDepthChange={(v) => {
                 updateSettingsFromUser((c) => ({ ...c, maxDependencyDepth: v }));
+                persistSettings({ maxDependencyDepth: v });
               }}
               onMaxDependencyNodesChange={(v) => {
                 updateSettingsFromUser((c) => ({ ...c, maxDependencyNodes: v }));
+                persistSettings({ maxDependencyNodes: v });
               }}
               onSaveSettings={persistSettings}
               onReplaceSettings={(next) => {

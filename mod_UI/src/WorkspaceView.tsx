@@ -255,7 +255,16 @@ export function WorkspaceView({
                 <div>
                   <strong>{suggestion.title}</strong>
                   <span>{suggestion.detail}</span>
-        </div>
+                </div>
+                {suggestion.actionLabel && (
+                  <button type="button" className="text-button" onClick={() => onApplySmartSuggestion(suggestion)} disabled={searching}>
+                    {suggestion.actionLabel}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         {pasteHint && (
           <div className="paste-hint-bar">
             <span>检测到粘贴内容可能含多余空白、空行或逗号分隔，建议清理后检索</span>
@@ -275,15 +284,6 @@ export function WorkspaceView({
                 忽略
               </button>
             </div>
-          </div>
-        )}
-                {suggestion.actionLabel && (
-                  <button type="button" className="text-button" onClick={() => onApplySmartSuggestion(suggestion)} disabled={searching}>
-                    {suggestion.actionLabel}
-                  </button>
-                )}
-              </div>
-            ))}
           </div>
         )}
         <div className="temp-filter-bar">
