@@ -22,6 +22,8 @@ import {
 } from "./utils";
 import { type View, type Method, type InputRules, methods, defaultInputRules, defaultSettings } from "./types";
 
+type UpdateState = "idle" | "checking" | "available" | "downloading" | "installing" | "readyToRestart" | "upToDate" | "error";
+
 function App() {
   const [view, setView] = useState<View>("workspace");
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem("theme") || "office");
@@ -57,7 +59,10 @@ function App() {
   const [script, setScriptState] = useState("等待输入...");
   const [status, setStatus] = useState("就绪");
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateState, setUpdateState] = useState<UpdateState>("idle");
   const [updateMessage, setUpdateMessage] = useState("");
+  const [appVersion, setAppVersion] = useState("");
+  const [updateVersion, setUpdateVersion] = useState("");
   const [inputRules, setInputRules] = useState<InputRules>(defaultInputRules);
   const [inputRulesBusy, setInputRulesBusy] = useState(false);
 
@@ -139,6 +144,13 @@ function App() {
   }, []);
 
   useEffect(() => {
+    import("@tauri-apps/api/app")
+      .then(({ getVersion }) => getVersion())
+      .then(setAppVersion)
+      .catch(() => setAppVersion("0.1.9"));
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem("rlinks_input", input);
   }, [input]);
 
@@ -214,17 +226,22 @@ function App() {
 
   async function checkForUpdates() {
     setCheckingUpdate(true);
+    setUpdateState("checking");
+    setUpdateVersion("");
     setUpdateMessage("正在检查更新...");
     try {
       const { check } = await import("@tauri-apps/plugin-updater");
       const update = await check();
       if (update) {
+        setUpdateState("available");
+        setUpdateVersion(update.version);
         setUpdateMessage(`发现新版本 ${update.version}，正在下载并安装...`);
         let downloaded = 0;
         let contentLength = 0;
         await update.downloadAndInstall((event) => {
           switch (event.event) {
             case "Started":
+              setUpdateState("downloading");
               contentLength = event.data?.contentLength || 0;
               setUpdateMessage("正在下载新版本...");
               break;
@@ -235,15 +252,19 @@ function App() {
               }
               break;
             case "Finished":
+              setUpdateState("installing");
               setUpdateMessage("下载完成，正在安装...");
               break;
           }
         });
+        setUpdateState("readyToRestart");
         setUpdateMessage("更新安装成功！请手动关闭并重启应用以生效。");
       } else {
+        setUpdateState("upToDate");
         setUpdateMessage("当前已是最新版本");
       }
     } catch (error) {
+      setUpdateState("error");
       setUpdateMessage(`检查更新失败: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setCheckingUpdate(false);
@@ -641,7 +662,8 @@ function App() {
               settings={settings} tokenConfigured={tokenConfigured}
               showToken={showToken} settingsBusy={settingsBusy}
               currentTheme={currentTheme} currentFont={currentFont}
-              checkingUpdate={checkingUpdate} updateMessage={updateMessage}
+              checkingUpdate={checkingUpdate} updateState={updateState} updateMessage={updateMessage}
+              appVersion={appVersion} updateVersion={updateVersion}
               onProxyChange={(v) => acceptSettingValue("proxy", v)}
               onTokenChange={(v) => acceptSettingValue("githubToken", v)}
               onTokenToggle={() => setShowToken((v) => !v)}

@@ -29,7 +29,10 @@ describe('SettingsView Component', () => {
     currentTheme: 'office',
     currentFont: 'modern',
     checkingUpdate: false,
+    updateState: 'idle' as const,
     updateMessage: '',
+    appVersion: '0.1.9',
+    updateVersion: '',
     onProxyChange: vi.fn(),
     onTokenChange: vi.fn(),
     onTokenToggle: vi.fn(),
@@ -87,6 +90,15 @@ describe('SettingsView Component', () => {
     expect(saveSettingsBtn).toBeInTheDocument();
     fireEvent.click(saveSettingsBtn);
     expect(props.onSaveSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('应展示当前版本和更新状态', () => {
+    const props = createProps();
+    render(<SettingsView {...props} updateState="readyToRestart" updateMessage="更新安装成功" updateVersion="0.2.0" />);
+
+    expect(screen.getByText(/当前版本 0.1.9/)).toBeInTheDocument();
+    expect(screen.getByText(/状态：待重启/)).toBeInTheDocument();
+    expect(screen.getByText(/目标版本：0.2.0/)).toBeInTheDocument();
   });
 
   it('恢复默认时应使用可选字体值并一次性替换设置', () => {

@@ -13,7 +13,10 @@ interface SettingsViewProps {
   currentTheme: string;
   currentFont: string;
   checkingUpdate: boolean;
+  updateState: "idle" | "checking" | "available" | "downloading" | "installing" | "readyToRestart" | "upToDate" | "error";
   updateMessage: string;
+  appVersion: string;
+  updateVersion: string;
   onProxyChange: (value: string) => void;
   onTokenChange: (value: string) => void;
   onTokenToggle: () => void;
@@ -120,7 +123,7 @@ function sanitizeImportedInputRules(value: unknown, current: InputRules): InputR
 
 export function SettingsView({
   settings, tokenConfigured, showToken, settingsBusy,
-  currentTheme, currentFont, checkingUpdate, updateMessage,
+  currentTheme, currentFont, checkingUpdate, updateState, updateMessage, appVersion, updateVersion,
   onProxyChange, onTokenChange, onTokenToggle, onClearToken,
   onFullSearchChange, onConditionalChange, onInstallDependenciesChange, onShowRemoteVersionChange,
   onUseCacheChange, onUseFilterChange, onMaxCacheEntriesChange,
@@ -404,12 +407,16 @@ export function SettingsView({
         <PanelHeader step="系统" title="应用更新" meta="版本维护" />
         <div className="field">
           <span>检查应用更新</span>
-          <small>检查并安装最新版本的 R Package Command Center</small>
+          <small>当前版本 {appVersion || "未知"}；检查并安装最新版本的 R Package Command Center</small>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '9px' }}>
             <button className="button primary" onClick={onCheckUpdates} disabled={checkingUpdate} style={{ marginLeft: 0 }}>
-              {checkingUpdate ? '正在处理...' : '检查更新'}
+              {checkingUpdate ? '正在处理...' : updateState === "error" ? '重试更新' : '检查更新'}
             </button>
-            {updateMessage && <span style={{fontSize: '14px', color: 'var(--muted)'}}>{updateMessage}</span>}
+            <span style={{ fontSize: '13px', color: 'var(--muted)' }}>
+              状态：{updateState === "idle" ? "未检查" : updateState === "checking" ? "检查中" : updateState === "available" ? "发现更新" : updateState === "downloading" ? "下载中" : updateState === "installing" ? "安装中" : updateState === "readyToRestart" ? "待重启" : updateState === "upToDate" ? "已是最新" : "检查失败"}
+            </span>
+            {updateVersion && <span style={{ fontSize: '13px', color: 'var(--muted)' }}>目标版本：{updateVersion}</span>}
+            {updateMessage && <span style={{fontSize: '14px', color: updateState === "error" ? 'var(--red)' : 'var(--muted)'}}>{updateMessage}</span>}
           </div>
         </div>
       </section>
