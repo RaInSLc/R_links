@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SettingsView } from './SettingsView';
 import { vi, describe, it, expect } from 'vitest';
 import '@testing-library/jest-dom';
@@ -104,5 +104,51 @@ describe('SettingsView Component', () => {
     }));
     expect(props.onFontChange).toHaveBeenCalledWith('system');
     expect(props.onSaveSettings).not.toHaveBeenCalled();
+  });
+
+  it('导入配置时应裁剪设置范围并过滤非法字段', async () => {
+    const props = createProps();
+    const { container } = render(<SettingsView {...props} />);
+    const fileInput = container.querySelector('input[type="file"][accept=".json"]') as HTMLInputElement;
+    const file = {
+      text: async () => JSON.stringify({
+        settings: {
+          fullSearch: 'yes',
+          maxCacheEntries: 20000,
+          maxDependencyDepth: 9,
+          maxDependencyNodes: 999,
+          pinnedMethods: ['github', 'invalid', 'github', 'base'],
+        },
+        theme: 'bad-theme',
+        fontFamily: 'classic',
+        fontSize: 30,
+        inputRules: {
+          separators: [',', '', '::'],
+          stripQuotes: 'bad',
+          excludeRegex: ['(', '^library\\('],
+          excludeKeywords: ['library', 'require'],
+        },
+      }),
+    };
+
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => expect(props.onReplaceSettings).toHaveBeenCalled());
+    expect(props.onReplaceSettings).toHaveBeenCalledWith(expect.objectContaining({
+      fullSearch: false,
+      maxCacheEntries: 10000,
+      maxDependencyDepth: 5,
+      maxDependencyNodes: 500,
+      pinnedMethods: ['github', 'base'],
+    }));
+    expect(props.onThemeChange).not.toHaveBeenCalled();
+    expect(props.onFontChange).toHaveBeenCalledWith('classic');
+    expect(props.onFontSizeChange).not.toHaveBeenCalled();
+    expect(props.onReplaceInputRules).toHaveBeenCalledWith(expect.objectContaining({
+      separators: [',', '::'],
+      stripQuotes: true,
+      excludeRegex: ['^library\\('],
+      excludeKeywords: ['library', 'require'],
+    }));
   });
 });

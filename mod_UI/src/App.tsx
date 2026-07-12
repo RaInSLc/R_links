@@ -89,7 +89,7 @@ function App() {
     searchDuration,
     startSearch, stopSearch, openSearchTabs } = search;
   const { settings, showToken, setShowToken,
-    tokenConfigured, settingsBusy, updateSettingsFromUser,
+    tokenConfigured, settingsBusy, settingsLoaded, updateSettingsFromUser,
     replaceSettingsFromUser, acceptSettingValue, persistSettings, clearSavedToken } = settingsHook;
   const pinnedMethods = settings.pinnedMethods;
   const { history, historySearch, setHistorySearch,
@@ -125,16 +125,12 @@ function App() {
 
   const settingsLoadedRef = useRef(false);
   useEffect(() => {
-    if (settingsLoadedRef.current) return;
-    if (settings.conditional !== defaultSettings.conditional ||
-        settings.installDependencies !== defaultSettings.installDependencies ||
-        settings.showRemoteVersion !== defaultSettings.showRemoteVersion) {
-      setConditional(settings.conditional);
-      setInstallDependencies(settings.installDependencies);
-      setShowRemoteVersion(settings.showRemoteVersion);
-      settingsLoadedRef.current = true;
-    }
-  }, [settings.conditional, settings.installDependencies, settings.showRemoteVersion]);
+    if (settingsLoadedRef.current || !settingsLoaded) return;
+    setConditional(settings.conditional);
+    setInstallDependencies(settings.installDependencies);
+    setShowRemoteVersion(settings.showRemoteVersion);
+    settingsLoadedRef.current = true;
+  }, [settingsLoaded, settings.conditional, settings.installDependencies, settings.showRemoteVersion]);
 
   useEffect(() => {
     invoke<InputRules>("load_input_rules")
@@ -244,7 +240,6 @@ function App() {
           }
         });
         setUpdateMessage("更新安装成功！请手动关闭并重启应用以生效。");
-        window.alert("更新安装成功！请手动关闭并重启应用以生效。");
       } else {
         setUpdateMessage("当前已是最新版本");
       }

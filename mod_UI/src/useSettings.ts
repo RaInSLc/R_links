@@ -19,6 +19,7 @@ export function useSettings(setStatus: SetStatus) {
   const [showToken, setShowToken] = useState(false);
   const [tokenConfigured, setTokenConfigured] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const latestSettingsRef = useRef(defaultSettings);
   const settingsActionSeq = useRef(0);
   const settingsBusyRef = useRef(false);
@@ -53,6 +54,7 @@ export function useSettings(setStatus: SetStatus) {
           pinnedMethods: clean.pinnedMethods,
         });
         setTokenConfigured(clean.githubTokenConfigured);
+        setSettingsLoaded(true);
       })
       .catch((error) => {
         if (active && loadSeq === settingsActionSeq.current) {
@@ -197,7 +199,7 @@ export function useSettings(setStatus: SetStatus) {
   return {
     settings, setSettings,
     showToken, setShowToken,
-    tokenConfigured, settingsBusy,
+    tokenConfigured, settingsBusy, settingsLoaded,
     updateSettingsFromUser,
     replaceSettingsFromUser,
     acceptSettingValue,
