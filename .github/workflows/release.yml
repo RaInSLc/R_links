@@ -1,103 +1,133 @@
 name: Release
+
 on:
   push:
     tags:
-      - 'v*'
+      - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag, for example v0.1.10"
+        required: true
+        type: string
+
+permissions:
+  contents: write
 
 jobs:
-  release:
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: 'windows-latest'
-            args: ''
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v4
+  build-windows:
+    name: Build Windows release
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
 
-      - name: setup node
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
-          cache-dependency-path: 'mod_UI/package-lock.json'
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mod_UI/package-lock.json
 
-      - name: install Rust stable
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Rust cache
+      - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: 'mod_UI/src-tauri -> target'
+          workspaces: mod_UI/src-tauri -> target
 
-      - name: install frontend dependencies
+      - name: Install frontend dependencies
         working-directory: mod_UI
         run: npm ci
 
-      - uses: tauri-apps/tauri-action@v0.5.3
-        id: tauri-build
+      - name: Validate release tag
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Release tag must match vX.Y.Z, got '$env:RELEASE_TAG'"
+          }
+          $packageVersion = (Get-Content -LiteralPath "mod_UI\package.json" -Raw | ConvertFrom-Json).version
+          if ($env:RELEASE_TAG -ne "v$packageVersion") {
+            throw "Release tag $env:RELEASE_TAG does not match package.json version v$packageVersion"
+          }
+
+      - name: Build and publish Tauri release
+        uses: tauri-apps/tauri-action@v0.5.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: mod_UI
-          tagName: v__VERSION__
-          releaseName: 'R Package Command Center v__VERSION__'
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: ${{ env.RELEASE_TAG }} - R Package Command Center
+          releaseBody: |
+            Automated Windows release for R Package Command Center.
+
+            This release must include latest.json for the Tauri updater.
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
           includeUpdaterJson: true
+          updaterJsonPreferNsis: true
 
-      - name: Rename portable exe
-        run: copy mod_UI\src-tauri\target\release\mod_ui.exe mod_UI\src-tauri\target\release\R_Package_Command_Center_Portable.exe
-
-      - name: Verify latest.json content
-        working-directory: mod_UI
+      - name: Rename portable executable
+        shell: pwsh
         run: |
-          $jsonPath = "src-tauri\target\release\bundle\windows\latest.json"
-          if (-not (Test-Path $jsonPath)) {
-            Write-Error "latest.json not found at $jsonPath"
-            exit 1
-          }
-          $pkg = (Get-Content 'package.json' -Raw | ConvertFrom-Json).version
-          $json = Get-Content $jsonPath | ConvertFrom-Json
-          if (-not $json.version -or -not $json.platforms."windows-x86_64".url -or -not $json.platforms."windows-x86_64".signature) {
-            Write-Error "latest.json is missing required fields (version, url, signature)"
-            exit 1
-          }
-          if ($json.version -ne $pkg) {
-            Write-Error "latest.json version ($($json.version)) does not match package.json version ($pkg)"
-            exit 1
-          }
-          if ($json.platforms."windows-x86_64".signature -eq "REPLACE_WITH_SIGNATURE") {
-            Write-Error "latest.json still contains REPLACE_WITH_SIGNATURE"
-            exit 1
-          }
-          if ($json.platforms."windows-x86_64".url -notmatch "^https://github\.com/RaInSLc/R_links/releases/download/v$([regex]::Escape($pkg))/") {
-            Write-Error "latest.json download URL does not point to the expected release version v$pkg"
-            exit 1
-          }
-          Write-Host "latest.json verification passed."
+          Copy-Item -LiteralPath "mod_UI\src-tauri\target\release\mod_ui.exe" -Destination "mod_UI\src-tauri\target\release\R_Package_Command_Center_Portable.exe" -Force
 
-      - name: Upload Additional Assets
+      - name: Upload portable executable
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          generate_release_notes: true
+          tag_name: ${{ env.RELEASE_TAG }}
           draft: true
           files: |
             mod_UI/src-tauri/target/release/R_Package_Command_Center_Portable.exe
-            mod_UI/src-tauri/target/release/bundle/windows/latest.json
+
+      - name: Validate updater manifest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = $env:RELEASE_TAG
+          New-Item -ItemType Directory -Path "updater-check" -Force | Out-Null
+          gh release download $tag --pattern "latest.json" --dir "updater-check" --clobber
+          $manifestPath = Join-Path "updater-check" "latest.json"
+          if (-not (Test-Path -LiteralPath $manifestPath)) {
+            throw "latest.json was not uploaded to release $tag"
+          }
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          if (-not $manifest.version) {
+            throw "latest.json is missing version"
+          }
+          $packageVersion = (Get-Content -LiteralPath "mod_UI\package.json" -Raw | ConvertFrom-Json).version
+          if ($manifest.version -ne $packageVersion) {
+            throw "latest.json version $($manifest.version) does not match package.json version $packageVersion"
+          }
+          if (-not $manifest.platforms) {
+            throw "latest.json is missing platforms"
+          }
+          $platforms = $manifest.platforms.PSObject.Properties
+          if ($platforms.Count -lt 1) {
+            throw "latest.json platforms is empty"
+          }
+          foreach ($platform in $platforms) {
+            if (-not $platform.Value.url) {
+              throw "latest.json platform $($platform.Name) is missing url"
+            }
+            if (-not $platform.Value.signature) {
+              throw "latest.json platform $($platform.Name) is missing signature"
+            }
+          }
 
       - name: Publish verified release
-        working-directory: mod_UI
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $pkg = (Get-Content 'package.json' -Raw | ConvertFrom-Json).version
-          gh release edit "v$pkg" --draft=false
+          gh release edit $env:RELEASE_TAG --draft=false
