@@ -11,6 +11,8 @@ on:
         required: true
         type: string
 
+# Requires repo Settings > Actions > General > Workflow permissions
+# set to "Read and write permissions" for GITHUB_TOKEN to create releases.
 permissions:
   contents: write
 
@@ -55,8 +57,22 @@ jobs:
             throw "Release tag $env:RELEASE_TAG does not match package.json version v$packageVersion"
           }
 
-      - name: Build and publish Tauri release
-        uses: tauri-apps/tauri-action@v0.5.3
+      - name: Pre-create draft release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }} - R Package Command Center
+          body: |
+            Automated Windows release for R Package Command Center.
+
+            This release must include latest.json for the Tauri updater.
+          draft: true
+          prerelease: false
+
+      - name: Build and upload Tauri assets
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -64,11 +80,6 @@ jobs:
         with:
           projectPath: mod_UI
           tagName: ${{ env.RELEASE_TAG }}
-          releaseName: ${{ env.RELEASE_TAG }} - R Package Command Center
-          releaseBody: |
-            Automated Windows release for R Package Command Center.
-
-            This release must include latest.json for the Tauri updater.
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true

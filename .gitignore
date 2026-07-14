@@ -26,9 +26,7 @@ scratch/
 temp_*.html
 
 # AI generated temporary code (not source)
-报告/*
-!报告/build_exe.bat
-!报告/build_exe.ps1
+报告/
 mod_UI/.vscode
 AGENTS.md
 # Node
