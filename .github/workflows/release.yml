@@ -79,7 +79,21 @@ jobs:
         run: |
           Copy-Item -LiteralPath "mod_UI\src-tauri\target\release\mod_ui.exe" -Destination "mod_UI\src-tauri\target\release\R_Package_Command_Center_Portable.exe" -Force
 
-      - name: Upload portable executable
+      - name: Stage updater manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $bundleDir = "mod_UI\src-tauri\target\release\bundle"
+          $manifest = Get-ChildItem -LiteralPath $bundleDir -Recurse -Filter "latest.json" -File -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $manifest) {
+            throw "latest.json was not generated under $bundleDir"
+          }
+          New-Item -ItemType Directory -Path "release-assets" -Force | Out-Null
+          Copy-Item -LiteralPath $manifest.FullName -Destination "release-assets\latest.json" -Force
+          Write-Host "Staged updater manifest from $($manifest.FullName)"
+
+      - name: Upload additional release assets
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -87,6 +101,7 @@ jobs:
           draft: true
           files: |
             mod_UI/src-tauri/target/release/R_Package_Command_Center_Portable.exe
+            release-assets/latest.json
 
       - name: Validate updater manifest
         shell: pwsh
