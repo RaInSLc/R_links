@@ -50,6 +50,17 @@ interface SettingsViewProps {
   inputRulesBusy: boolean;
 }
 
+type SettingsMenuKey = "network" | "strategy" | "cache" | "input" | "appearance" | "backup";
+
+const settingsMenus: Array<{ key: SettingsMenuKey; label: string; meta: string }> = [
+  { key: "network", label: "网络连接", meta: "代理、Token、CRAN 镜像" },
+  { key: "strategy", label: "检索策略", meta: "安装默认值、依赖图" },
+  { key: "cache", label: "缓存", meta: "包结果缓存、诊断" },
+  { key: "input", label: "输入过滤", meta: "分隔、注释、排除规则" },
+  { key: "appearance", label: "界面与系统", meta: "主题、字号、更新" },
+  { key: "backup", label: "配置备份", meta: "导出、导入、恢复" },
+];
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -135,6 +146,7 @@ export function SettingsView({
   onCheckUpdates, onClearCache, onExportDiagnostics,
   inputRules, onInputRulesChange, onReplaceInputRules, onSaveInputRules, inputRulesBusy,
 }: SettingsViewProps) {
+  const [activeMenu, setActiveMenu] = useState<SettingsMenuKey>("network");
   const [speedTesting, setSpeedTesting] = useState(false);
   const [speedResults, setSpeedResults] = useState<MirrorSpeedResult[]>([]);
   const fileConfigRef = useRef<HTMLInputElement>(null);
@@ -162,7 +174,24 @@ export function SettingsView({
   }
 
   return (
-    <div className="settings-layout">
+    <div className="settings-shell">
+      <aside className="settings-menu" aria-label="设置分类菜单">
+        {settingsMenus.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className={activeMenu === item.key ? "active" : ""}
+            aria-pressed={activeMenu === item.key}
+            onClick={() => setActiveMenu(item.key)}
+          >
+            <strong>{item.label}</strong>
+            <small>{item.meta}</small>
+          </button>
+        ))}
+      </aside>
+      <div className="settings-layout">
+      {activeMenu === "network" && (
+      <>
       <section className="panel settings-panel">
         <PanelHeader step="网络" title="连接设置" meta="独立配置" />
         <label className="field">
@@ -208,337 +237,6 @@ export function SettingsView({
           description="命中 CRAN 或 Bioconductor 后仍继续查询 GitHub"
           onChange={onFullSearchChange}
         />
-        <div style={{ borderTop: "1px solid var(--line)", marginTop: "20px", paddingTop: "12px" }}>
-          <div className="field" style={{ margin: "0 17px" }}>
-            <span>界面风格</span>
-            <small>选择您偏好的系统色彩，切换实时生效</small>
-            <div className="theme-selector">
-              {(["office", "green", "graphite"] as const).map((theme) => (
-                <button
-                  key={theme}
-                  type="button"
-                  className={`theme-card ${currentTheme === theme ? "selected" : ""}`}
-                  onClick={() => onThemeChange(theme)}
-                >
-                  <div className="theme-preview-dots">
-                    {theme === "office" && (<><div className="theme-dot" style={{ background: "#0f172a" }} /><div className="theme-dot" style={{ background: "#0f4c81" }} /><div className="theme-dot" style={{ background: "#e6f0fa" }} /></>)}
-                    {theme === "green" && (<><div className="theme-dot" style={{ background: "#112c24" }} /><div className="theme-dot" style={{ background: "#176b4d" }} /><div className="theme-dot" style={{ background: "#dcece4" }} /></>)}
-                    {theme === "graphite" && (<><div className="theme-dot" style={{ background: "#212529" }} /><div className="theme-dot" style={{ background: "#495057" }} /><div className="theme-dot" style={{ background: "#f1f3f5" }} /></>)}
-                  </div>
-                  <span>{theme === "office" ? "商务办公蓝" : theme === "green" ? "墨绿林野" : "石墨暗灰"}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="field" style={{ margin: "0 17px", marginTop: "24px" }}>
-            <span>字体风格</span>
-            <small>选择最适合您显示器的排版</small>
-            <div className="theme-selector">
-              {(["modern", "system", "classic"] as const).map((font) => (
-                <button
-                  key={font}
-                  type="button"
-                  className={`theme-card ${currentFont === font ? "selected" : ""}`}
-                  onClick={() => onFontChange(font)}
-                >
-                  <div className="theme-preview-dots" style={{ alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{
-                      fontFamily: font === "modern" ? "'Inter', 'Noto Sans SC', sans-serif" :
-                        font === "system" ? '"Segoe UI", "Microsoft YaHei UI", sans-serif' :
-                          '"SimSun", "宋体", serif',
-                      fontSize: '15px', fontWeight: 600, color: 'var(--ink)'
-                    }}>Aa</span>
-                  </div>
-                  <span>{font === "modern" ? "现代 (推荐)" : font === "system" ? "系统默认" : "传统宋体"}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="field" style={{ margin: "0 17px", marginTop: "24px" }}>
-            <span>界面字号</span>
-            <small>拖动滑块实时调整界面字体大小（{currentFontSize}px）</small>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "8px" }}>
-              <span style={{ fontSize: "12px", color: "var(--muted)" }}>A</span>
-              <input
-                type="range"
-                min={12}
-                max={20}
-                step={1}
-                value={currentFontSize}
-                onChange={(e) => onFontSizeChange(Number(e.currentTarget.value))}
-                style={{ flex: 1, accentColor: "var(--theme-color)" }}
-              />
-              <span style={{ fontSize: "20px", color: "var(--muted)" }}>A</span>
-              <span style={{ fontSize: "13px", color: "var(--muted)", minWidth: "32px", textAlign: "right" }}>{currentFontSize}px</span>
-            </div>
-            <div className="font-preview-box" style={{ fontSize: `${currentFontSize}px` }}>
-              安装包 Seurat · 版本 5.2.1 · 来源 CRAN — 字号预览
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="panel settings-panel">
-        <PanelHeader step="策略" title="安装策略默认值" meta="工作台初始状态" />
-        <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
-          <Toggle checked={settings.conditional} label="条件安装" description="默认开启：已安装时自动跳过" onChange={onConditionalChange} />
-          <Toggle checked={settings.installDependencies} label="安装依赖" description="默认开启：dependencies = TRUE" onChange={onInstallDependenciesChange} />
-          <Toggle checked={settings.showRemoteVersion} label="同步远程版本" description="默认开启：显示版本并生成精确版本安装" onChange={onShowRemoteVersionChange} />
-          <Toggle checked={settings.useFilter} label="启用输入过滤" description="默认开启：对输入内容应用过滤及排除规则" onChange={onUseFilterChange} />
-        </div>
-      </section>
-
-      <section className="panel settings-panel">
-        <PanelHeader step="依赖" title="依赖图扩展设置" meta="级联关系图分析" />
-        <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
-          <Toggle
-            checked={settings.resolveDependencies}
-            label="启用依赖解析"
-            description="分析包的 DESCRIPTION，并生成级联依赖拓扑图"
-            onChange={onResolveDependenciesChange}
-          />
-          <Toggle
-            checked={settings.includeLightDependencies}
-            label="解析轻度依赖"
-            description="解析并展示 Suggests 字段中的测试与可选依赖包"
-            onChange={onIncludeLightDependenciesChange}
-          />
-        </div>
-        {settings.resolveDependencies && (
-          <div style={{ paddingBottom: "16px" }}>
-            <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
-              <span>最大依赖深度</span>
-              <small>递归解析依赖的层数深度（允许 1 到 5 层，默认 2）</small>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={settings.maxDependencyDepth}
-                onChange={(event) => {
-                  let val = Number(event.currentTarget.value);
-                  if (val >= 1 && val <= 5) onMaxDependencyDepthChange(val);
-                }}
-              />
-            </div>
-            <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
-              <span>最大依赖包节点数</span>
-              <small>依赖拓扑图中最大允许构建的包节点数量（允许 1 到 500，默认 100）</small>
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={settings.maxDependencyNodes}
-                onChange={(event) => {
-                  let val = Number(event.currentTarget.value);
-                  if (val >= 1 && val <= 500) onMaxDependencyNodesChange(val);
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="panel settings-panel">
-        <PanelHeader step="过滤" title="输入过滤规则" meta="白盒化正则配置" />
-        <div className="field" style={{ margin: "0 17px" }}>
-          <span>分隔符</span>
-          <small>用于将一行拆分为多个包名（空格分隔多个值，如 `, ;`）</small>
-          <input
-            value={inputRules.separators.join(" ")}
-            onChange={(event) => onInputRulesChange({ ...inputRules, separators: event.currentTarget.value.split(" ").map(s => s.trim()).filter(Boolean) })}
-            placeholder=", ;"
-            maxLength={MAX_RESULT_FIELD_CHARS}
-          />
-        </div>
-        <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
-          <Toggle checked={inputRules.stripQuotes} label="去除引号" description="去除包名两端的 &quot; 和 '" onChange={(v) => onInputRulesChange({ ...inputRules, stripQuotes: v })} />
-          <Toggle checked={inputRules.stripCParens} label="去除 c()/list()" description="去除 R 的 c(...) 或 list(...) 包裹" onChange={(v) => onInputRulesChange({ ...inputRules, stripCParens: v })} />
-          <Toggle checked={inputRules.splitSpaces} label="空格分割" description="将空格也作为分隔符（开启后禁用版本号提取）" onChange={(v) => onInputRulesChange({ ...inputRules, splitSpaces: v })} />
-        </div>
-        <div className="field" style={{ margin: "0 17px" }}>
-          <span>注释字符</span>
-          <small>以这些字符开头的行将被忽略（空格分隔多个值）</small>
-          <input
-            value={inputRules.commentChars.join(" ")}
-            onChange={(event) => onInputRulesChange({ ...inputRules, commentChars: event.currentTarget.value.split(" ").map(s => s.trim()).filter(Boolean) })}
-            placeholder="#"
-            maxLength={MAX_RESULT_FIELD_CHARS}
-          />
-        </div>
-        <div className="field" style={{ margin: "0 17px", marginTop: "15px" }}>
-          <span>自定义排除正则</span>
-          <small>匹配这些正则表达式的行/段将被直接忽略（每行一个）</small>
-          <textarea
-            value={(inputRules.excludeRegex || []).join("\n")}
-            onChange={(event) => onInputRulesChange({ ...inputRules, excludeRegex: event.currentTarget.value.split("\n").map(s => s.trim()).filter(Boolean) })}
-            placeholder="例如: ^library\( 或 ^install\.packages\("
-            rows={3}
-            style={{ 
-              width: "100%", 
-              boxSizing: "border-box", 
-              marginTop: "5px", 
-              padding: "8px 12px", 
-              borderRadius: "6px", 
-              border: "1px solid var(--border)", 
-              background: "var(--background)", 
-              color: "var(--foreground)", 
-              fontFamily: "monospace", 
-              fontSize: "13px", 
-              resize: "vertical" 
-            }}
-          />
-        </div>
-        <div className="field" style={{ margin: "0 17px", marginTop: "15px" }}>
-          <span>自定义排除关键词</span>
-          <small>匹配这些词（不区分大小写）的包名将被忽略（空格分隔多个值）</small>
-          <input
-            value={(inputRules.excludeKeywords || []).join(" ")}
-            onChange={(event) => onInputRulesChange({ ...inputRules, excludeKeywords: event.currentTarget.value.split(" ").map(s => s.trim()).filter(Boolean) })}
-            placeholder="例如: library require if else"
-            maxLength={MAX_RESULT_FIELD_CHARS}
-          />
-        </div>
-        <button className="button primary save-button" onClick={() => onSaveInputRules()} disabled={inputRulesBusy}>
-          {inputRulesBusy ? "处理中..." : "保存过滤规则"}
-        </button>
-      </section>
-
-      <section className="panel settings-panel">
-        <PanelHeader step="系统" title="应用更新" meta="版本维护" />
-        <div className="field">
-          <span>检查应用更新</span>
-          <small>当前版本 {appVersion || "未知"}；检查并安装最新版本的 R Package Command Center</small>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '9px' }}>
-            <button className="button primary" onClick={onCheckUpdates} disabled={checkingUpdate} style={{ marginLeft: 0 }}>
-              {checkingUpdate ? '正在处理...' : updateState === "error" ? '重试更新' : '检查更新'}
-            </button>
-            <span style={{ fontSize: '13px', color: 'var(--muted)' }}>
-              状态：{updateState === "idle" ? "未检查" : updateState === "checking" ? "检查中" : updateState === "available" ? "发现更新" : updateState === "downloading" ? "下载中" : updateState === "installing" ? "安装中" : updateState === "readyToRestart" ? "待重启" : updateState === "upToDate" ? "已是最新" : "检查失败"}
-            </span>
-            {updateVersion && <span style={{ fontSize: '13px', color: 'var(--muted)' }}>目标版本：{updateVersion}</span>}
-            {updateMessage && <span style={{fontSize: '14px', color: updateState === "error" ? 'var(--red)' : 'var(--muted)'}}>{updateMessage}</span>}
-          </div>
-        </div>
-      </section>
-
-      <section className="panel settings-panel">
-        <PanelHeader step="备份" title="配置备份" meta="导出/导入" />
-        <div className="field" style={{ margin: "0 17px" }}>
-          <span>导出当前配置</span>
-          <small>将所有设置（策略、缓存、主题、字号、过滤规则等）导出为 JSON 文件，方便备份或迁移</small>
-          <div style={{ display: "flex", gap: "8px", marginTop: "9px" }}>
-            <button
-              className="button ghost"
-              style={{ marginLeft: 0 }}
-              onClick={() => {
-                const config = {
-                  exportedAt: new Date().toISOString(),
-                  settings,
-                  inputRules,
-                  theme: localStorage.getItem("theme") || "office",
-                  fontFamily: localStorage.getItem("fontFamily") || "modern",
-                  fontSize: localStorage.getItem("fontSize") || "14",
-                };
-                const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `rlinks_config_${new Date().toISOString().slice(0, 10)}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-              }}
-            >
-              导出配置
-            </button>
-            <button
-              className="button ghost"
-              onClick={() => fileConfigRef.current?.click()}
-            >
-              导入配置
-            </button>
-            <button
-              className="button ghost"
-              onClick={() => {
-                if (!window.confirm("确定恢复全部设置为默认值？此操作不可撤销。")) return;
-                onReplaceSettings({ ...defaultSettings, githubToken: settings.githubToken });
-                onThemeChange("office");
-                onFontChange("system");
-                onFontSizeChange(14);
-                onReplaceInputRules({ ...defaultInputRules });
-              }}
-            >
-              恢复默认
-            </button>
-            <input
-              ref={fileConfigRef}
-              type="file"
-              accept=".json"
-              style={{ display: "none" }}
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (!file) return;
-                try {
-                  const text = await file.text();
-                  const config = JSON.parse(text);
-                  if (config.settings) onReplaceSettings(sanitizeImportedSettings(config.settings, settings));
-                  if (["office", "green", "graphite"].includes(config.theme)) { onThemeChange(config.theme); }
-                  if (["modern", "system", "classic"].includes(config.fontFamily)) { onFontChange(config.fontFamily); }
-                  const fontSize = Number(config.fontSize);
-                  if (Number.isFinite(fontSize) && fontSize >= 12 && fontSize <= 20) { onFontSizeChange(fontSize); }
-                  if (config.inputRules) onReplaceInputRules(sanitizeImportedInputRules(config.inputRules, inputRules));
-                } catch {
-                  /* invalid file */
-                }
-              }}
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="panel settings-panel">
-        <PanelHeader step="缓存" title="包结果缓存" meta="避免重复检索" />
-        <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
-          <Toggle
-            checked={settings.useCache}
-            label="使用包结果缓存"
-            description="启用后命中缓存的包跳过在线检索；关闭后每次均在线重新检索"
-            onChange={onUseCacheChange}
-          />
-        </div>
-        <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
-          <span>最大缓存条数</span>
-          <small>缓存保留的最大条数限制，允许范围：1 至 10000 条</small>
-          <input
-            type="number"
-            min={1}
-            max={10000}
-            value={settings.maxCacheEntries}
-            onChange={(event) => {
-              const val = parseInt(event.currentTarget.value, 10);
-              onMaxCacheEntriesChange(isNaN(val) ? 1000 : val);
-            }}
-          />
-          <div className="cache-progress-bar">
-            <div
-              className="cache-progress-fill"
-              style={{ width: `${Math.min(100, (settings.maxCacheEntries / 10000) * 100)}%` }}
-            />
-            <span className="cache-progress-label">
-              {settings.maxCacheEntries} / 10000 条 · {settings.maxCacheEntries >= 5000 ? "高容量" : settings.maxCacheEntries >= 1000 ? "标准容量" : "精简容量"}
-            </span>
-          </div>
-        </div>
-        <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
-          <span>清理缓存数据</span>
-          <small>已缓存的包将跳过在线检索直接使用历史结果；清除后所有包都会重新在线检索</small>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '9px' }}>
-            <button className="button ghost" onClick={onClearCache} style={{ marginLeft: 0 }}>清除缓存</button>
-            <button className="button ghost" onClick={onExportDiagnostics}>导出诊断</button>
-          </div>
-        </div>
       </section>
 
       <section className="panel settings-panel">
@@ -635,6 +333,367 @@ export function SettingsView({
           )}
         </div>
       </section>
+      </>
+      )}
+
+      {activeMenu === "strategy" && (
+      <>
+
+      <section className="panel settings-panel">
+        <PanelHeader step="策略" title="安装策略默认值" meta="工作台初始状态" />
+        <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
+          <Toggle checked={settings.conditional} label="条件安装" description="默认开启：已安装时自动跳过" onChange={onConditionalChange} />
+          <Toggle checked={settings.installDependencies} label="安装依赖" description="默认开启：dependencies = TRUE" onChange={onInstallDependenciesChange} />
+          <Toggle checked={settings.showRemoteVersion} label="同步远程版本" description="默认开启：显示版本并生成精确版本安装" onChange={onShowRemoteVersionChange} />
+          <Toggle checked={settings.useFilter} label="启用输入过滤" description="默认开启：对输入内容应用过滤及排除规则" onChange={onUseFilterChange} />
+        </div>
+      </section>
+
+      <section className="panel settings-panel">
+        <PanelHeader step="依赖" title="依赖图扩展设置" meta="级联关系图分析" />
+        <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
+          <Toggle
+            checked={settings.resolveDependencies}
+            label="启用依赖解析"
+            description="分析包的 DESCRIPTION，并生成级联依赖拓扑图"
+            onChange={onResolveDependenciesChange}
+          />
+          <Toggle
+            checked={settings.includeLightDependencies}
+            label="解析轻度依赖"
+            description="解析并展示 Suggests 字段中的测试与可选依赖包"
+            onChange={onIncludeLightDependenciesChange}
+          />
+        </div>
+        {settings.resolveDependencies && (
+          <div style={{ paddingBottom: "16px" }}>
+            <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+              <span>最大依赖深度</span>
+              <small>递归解析依赖的层数深度（允许 1 到 5 层，默认 2）</small>
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={settings.maxDependencyDepth}
+                onChange={(event) => {
+                  let val = Number(event.currentTarget.value);
+                  if (val >= 1 && val <= 5) onMaxDependencyDepthChange(val);
+                }}
+              />
+            </div>
+            <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+              <span>最大依赖包节点数</span>
+              <small>依赖拓扑图中最大允许构建的包节点数量（允许 1 到 500，默认 100）</small>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={settings.maxDependencyNodes}
+                onChange={(event) => {
+                  let val = Number(event.currentTarget.value);
+                  if (val >= 1 && val <= 500) onMaxDependencyNodesChange(val);
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </section>
+      </>
+      )}
+
+      {activeMenu === "input" && (
+      <>
+
+      <section className="panel settings-panel">
+        <PanelHeader step="过滤" title="输入过滤规则" meta="白盒化正则配置" />
+        <div className="field" style={{ margin: "0 17px" }}>
+          <span>分隔符</span>
+          <small>用于将一行拆分为多个包名（空格分隔多个值，如 `, ;`）</small>
+          <input
+            value={inputRules.separators.join(" ")}
+            onChange={(event) => onInputRulesChange({ ...inputRules, separators: event.currentTarget.value.split(" ").map(s => s.trim()).filter(Boolean) })}
+            placeholder=", ;"
+            maxLength={MAX_RESULT_FIELD_CHARS}
+          />
+        </div>
+        <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
+          <Toggle checked={inputRules.stripQuotes} label="去除引号" description="去除包名两端的 &quot; 和 '" onChange={(v) => onInputRulesChange({ ...inputRules, stripQuotes: v })} />
+          <Toggle checked={inputRules.stripCParens} label="去除 c()/list()" description="去除 R 的 c(...) 或 list(...) 包裹" onChange={(v) => onInputRulesChange({ ...inputRules, stripCParens: v })} />
+          <Toggle checked={inputRules.splitSpaces} label="空格分割" description="将空格也作为分隔符（开启后禁用版本号提取）" onChange={(v) => onInputRulesChange({ ...inputRules, splitSpaces: v })} />
+        </div>
+        <div className="field" style={{ margin: "0 17px" }}>
+          <span>注释字符</span>
+          <small>以这些字符开头的行将被忽略（空格分隔多个值）</small>
+          <input
+            value={inputRules.commentChars.join(" ")}
+            onChange={(event) => onInputRulesChange({ ...inputRules, commentChars: event.currentTarget.value.split(" ").map(s => s.trim()).filter(Boolean) })}
+            placeholder="#"
+            maxLength={MAX_RESULT_FIELD_CHARS}
+          />
+        </div>
+        <div className="field" style={{ margin: "0 17px", marginTop: "15px" }}>
+          <span>自定义排除正则</span>
+          <small>匹配这些正则表达式的行/段将被直接忽略（每行一个）</small>
+          <textarea
+            value={(inputRules.excludeRegex || []).join("\n")}
+            onChange={(event) => onInputRulesChange({ ...inputRules, excludeRegex: event.currentTarget.value.split("\n").map(s => s.trim()).filter(Boolean) })}
+            placeholder="例如: ^library\( 或 ^install\.packages\("
+            rows={3}
+            style={{ 
+              width: "100%", 
+              boxSizing: "border-box", 
+              marginTop: "5px", 
+              padding: "8px 12px", 
+              borderRadius: "6px", 
+              border: "1px solid var(--border)", 
+              background: "var(--background)", 
+              color: "var(--foreground)", 
+              fontFamily: "monospace", 
+              fontSize: "13px", 
+              resize: "vertical" 
+            }}
+          />
+        </div>
+        <div className="field" style={{ margin: "0 17px", marginTop: "15px" }}>
+          <span>自定义排除关键词</span>
+          <small>匹配这些词（不区分大小写）的包名将被忽略（空格分隔多个值）</small>
+          <input
+            value={(inputRules.excludeKeywords || []).join(" ")}
+            onChange={(event) => onInputRulesChange({ ...inputRules, excludeKeywords: event.currentTarget.value.split(" ").map(s => s.trim()).filter(Boolean) })}
+            placeholder="例如: library require if else"
+            maxLength={MAX_RESULT_FIELD_CHARS}
+          />
+        </div>
+        <button className="button primary save-button" onClick={() => onSaveInputRules()} disabled={inputRulesBusy}>
+          {inputRulesBusy ? "处理中..." : "保存过滤规则"}
+        </button>
+      </section>
+      </>
+      )}
+
+      {activeMenu === "appearance" && (
+      <>
+
+      <section className="panel settings-panel">
+        <PanelHeader step="界面" title="显示偏好" meta="主题与字号" />
+        <div className="field" style={{ margin: "0 17px" }}>
+          <span>界面风格</span>
+          <small>选择您偏好的系统色彩，切换实时生效</small>
+          <div className="theme-selector">
+            {(["office", "green", "graphite"] as const).map((theme) => (
+              <button
+                key={theme}
+                type="button"
+                className={`theme-card ${currentTheme === theme ? "selected" : ""}`}
+                onClick={() => onThemeChange(theme)}
+              >
+                <div className="theme-preview-dots">
+                  {theme === "office" && (<><div className="theme-dot" style={{ background: "#0f172a" }} /><div className="theme-dot" style={{ background: "#0f4c81" }} /><div className="theme-dot" style={{ background: "#e6f0fa" }} /></>)}
+                  {theme === "green" && (<><div className="theme-dot" style={{ background: "#112c24" }} /><div className="theme-dot" style={{ background: "#176b4d" }} /><div className="theme-dot" style={{ background: "#dcece4" }} /></>)}
+                  {theme === "graphite" && (<><div className="theme-dot" style={{ background: "#212529" }} /><div className="theme-dot" style={{ background: "#495057" }} /><div className="theme-dot" style={{ background: "#f1f3f5" }} /></>)}
+                </div>
+                <span>{theme === "office" ? "商务办公蓝" : theme === "green" ? "墨绿林野" : "石墨暗灰"}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="field" style={{ margin: "0 17px", marginTop: "24px" }}>
+          <span>字体风格</span>
+          <small>选择最适合您显示器的排版</small>
+          <div className="theme-selector">
+            {(["modern", "system", "classic"] as const).map((font) => (
+              <button
+                key={font}
+                type="button"
+                className={`theme-card ${currentFont === font ? "selected" : ""}`}
+                onClick={() => onFontChange(font)}
+              >
+                <div className="theme-preview-dots" style={{ alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{
+                    fontFamily: font === "modern" ? "'Inter', 'Noto Sans SC', sans-serif" :
+                      font === "system" ? '"Segoe UI", "Microsoft YaHei UI", sans-serif' :
+                        '"SimSun", "宋体", serif',
+                    fontSize: '15px', fontWeight: 600, color: 'var(--ink)'
+                  }}>Aa</span>
+                </div>
+                <span>{font === "modern" ? "现代 (推荐)" : font === "system" ? "系统默认" : "传统宋体"}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="field" style={{ margin: "0 17px", marginTop: "24px" }}>
+          <span>界面字号</span>
+          <small>拖动滑块实时调整界面字体大小（{currentFontSize}px）</small>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "8px" }}>
+            <span style={{ fontSize: "12px", color: "var(--muted)" }}>A</span>
+            <input
+              type="range"
+              min={12}
+              max={20}
+              step={1}
+              value={currentFontSize}
+              onChange={(e) => onFontSizeChange(Number(e.currentTarget.value))}
+              style={{ flex: 1, accentColor: "var(--theme-color)" }}
+            />
+            <span style={{ fontSize: "20px", color: "var(--muted)" }}>A</span>
+            <span style={{ fontSize: "13px", color: "var(--muted)", minWidth: "32px", textAlign: "right" }}>{currentFontSize}px</span>
+          </div>
+          <div className="font-preview-box" style={{ fontSize: `${currentFontSize}px` }}>
+            安装包 Seurat · 版本 5.2.1 · 来源 CRAN — 字号预览
+          </div>
+        </div>
+      </section>
+
+      <section className="panel settings-panel">
+        <PanelHeader step="系统" title="应用更新" meta="版本维护" />
+        <div className="field">
+          <span>检查应用更新</span>
+          <small>当前版本 {appVersion || "未知"}；检查并安装最新版本的 R Package Command Center</small>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '9px' }}>
+            <button className="button primary" onClick={onCheckUpdates} disabled={checkingUpdate} style={{ marginLeft: 0 }}>
+              {checkingUpdate ? '正在处理...' : updateState === "error" ? '重试更新' : '检查更新'}
+            </button>
+            <span style={{ fontSize: '13px', color: 'var(--muted)' }}>
+              状态：{updateState === "idle" ? "未检查" : updateState === "checking" ? "检查中" : updateState === "available" ? "发现更新" : updateState === "downloading" ? "下载中" : updateState === "installing" ? "安装中" : updateState === "readyToRestart" ? "待重启" : updateState === "upToDate" ? "已是最新" : "检查失败"}
+            </span>
+            {updateVersion && <span style={{ fontSize: '13px', color: 'var(--muted)' }}>目标版本：{updateVersion}</span>}
+            {updateMessage && <span style={{fontSize: '14px', color: updateState === "error" ? 'var(--red)' : 'var(--muted)'}}>{updateMessage}</span>}
+          </div>
+        </div>
+      </section>
+      </>
+      )}
+
+      {activeMenu === "backup" && (
+      <>
+
+      <section className="panel settings-panel">
+        <PanelHeader step="备份" title="配置备份" meta="导出/导入" />
+        <div className="field" style={{ margin: "0 17px" }}>
+          <span>导出当前配置</span>
+          <small>将所有设置（策略、缓存、主题、字号、过滤规则等）导出为 JSON 文件，方便备份或迁移</small>
+          <div style={{ display: "flex", gap: "8px", marginTop: "9px" }}>
+            <button
+              className="button ghost"
+              style={{ marginLeft: 0 }}
+              onClick={() => {
+                const config = {
+                  exportedAt: new Date().toISOString(),
+                  settings,
+                  inputRules,
+                  theme: localStorage.getItem("theme") || "office",
+                  fontFamily: localStorage.getItem("fontFamily") || "modern",
+                  fontSize: localStorage.getItem("fontSize") || "14",
+                };
+                const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `rlinks_config_${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }}
+            >
+              导出配置
+            </button>
+            <button
+              className="button ghost"
+              onClick={() => fileConfigRef.current?.click()}
+            >
+              导入配置
+            </button>
+            <button
+              className="button ghost"
+              onClick={() => {
+                if (!window.confirm("确定恢复全部设置为默认值？此操作不可撤销。")) return;
+                onReplaceSettings({ ...defaultSettings, githubToken: settings.githubToken });
+                onThemeChange("office");
+                onFontChange("system");
+                onFontSizeChange(14);
+                onReplaceInputRules({ ...defaultInputRules });
+              }}
+            >
+              恢复默认
+            </button>
+            <input
+              ref={fileConfigRef}
+              type="file"
+              accept=".json"
+              style={{ display: "none" }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const config = JSON.parse(text);
+                  if (config.settings) onReplaceSettings(sanitizeImportedSettings(config.settings, settings));
+                  if (["office", "green", "graphite"].includes(config.theme)) { onThemeChange(config.theme); }
+                  if (["modern", "system", "classic"].includes(config.fontFamily)) { onFontChange(config.fontFamily); }
+                  const fontSize = Number(config.fontSize);
+                  if (Number.isFinite(fontSize) && fontSize >= 12 && fontSize <= 20) { onFontSizeChange(fontSize); }
+                  if (config.inputRules) onReplaceInputRules(sanitizeImportedInputRules(config.inputRules, inputRules));
+                } catch {
+                  /* invalid file */
+                }
+              }}
+            />
+          </div>
+        </div>
+      </section>
+      </>
+      )}
+
+      {activeMenu === "cache" && (
+      <>
+
+      <section className="panel settings-panel">
+        <PanelHeader step="缓存" title="包结果缓存" meta="避免重复检索" />
+        <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
+          <Toggle
+            checked={settings.useCache}
+            label="使用包结果缓存"
+            description="启用后命中缓存的包跳过在线检索；关闭后每次均在线重新检索"
+            onChange={onUseCacheChange}
+          />
+        </div>
+        <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+          <span>最大缓存条数</span>
+          <small>缓存保留的最大条数限制，允许范围：1 至 10000 条</small>
+          <input
+            type="number"
+            min={1}
+            max={10000}
+            value={settings.maxCacheEntries}
+            onChange={(event) => {
+              const val = parseInt(event.currentTarget.value, 10);
+              onMaxCacheEntriesChange(isNaN(val) ? 1000 : val);
+            }}
+          />
+          <div className="cache-progress-bar">
+            <div
+              className="cache-progress-fill"
+              style={{ width: `${Math.min(100, (settings.maxCacheEntries / 10000) * 100)}%` }}
+            />
+            <span className="cache-progress-label">
+              {settings.maxCacheEntries} / 10000 条 · {settings.maxCacheEntries >= 5000 ? "高容量" : settings.maxCacheEntries >= 1000 ? "标准容量" : "精简容量"}
+            </span>
+          </div>
+        </div>
+        <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+          <span>清理缓存数据</span>
+          <small>已缓存的包将跳过在线检索直接使用历史结果；清除后所有包都会重新在线检索</small>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '9px' }}>
+            <button className="button ghost" onClick={onClearCache} style={{ marginLeft: 0 }}>清除缓存</button>
+            <button className="button ghost" onClick={onExportDiagnostics}>导出诊断</button>
+          </div>
+        </div>
+      </section>
+      </>
+      )}
+      </div>
     </div>
   );
 }

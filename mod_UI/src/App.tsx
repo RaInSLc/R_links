@@ -20,7 +20,7 @@ import {
   dedupePackageInput, normalizePackageInputDisplay, trimTrailingBlankLines,
   type HistoryRecord, type SearchResult,
 } from "./utils";
-import { type View, type Method, type InputRules, methods, defaultInputRules, defaultSettings } from "./types";
+import { type View, type Method, type InputRules, type Settings, methods, defaultInputRules, defaultSettings } from "./types";
 
 type UpdateState = "idle" | "checking" | "available" | "downloading" | "installing" | "readyToRestart" | "upToDate" | "error";
 
@@ -117,8 +117,16 @@ function AppContent() {
       (value, index) => nextMethods.indexOf(value) === index && methods.some((item) => item.id === value),
     );
     const next = valid.length >= 1 ? valid : [...defaultSettings.pinnedMethods];
-    updateSettingsFromUser((current) => ({ ...current, pinnedMethods: next }));
-    void persistSettings({ pinnedMethods: next });
+    updateAndPersistSettings((current) => ({ ...current, pinnedMethods: next }));
+  }
+
+  function updateAndPersistSettings(update: (current: Settings) => Settings) {
+    let nextSettings: Settings | undefined;
+    updateSettingsFromUser((current) => {
+      nextSettings = update(current);
+      return nextSettings;
+    });
+    if (nextSettings) void persistSettings(nextSettings);
   }
 
   const latestInputRef = useRef(localStorage.getItem("rlinks_input") || "");
@@ -631,28 +639,19 @@ function AppContent() {
               }}
               onConditionalChange={(v) => {
                 setConditional(v);
-                updateSettingsFromUser((c) => ({ ...c, conditional: v }));
-                persistSettings({ conditional: v });
+                updateAndPersistSettings((c) => ({ ...c, conditional: v }));
               }}
               onInstallDependenciesChange={(v) => {
                 setInstallDependencies(v);
-                updateSettingsFromUser((c) => ({ ...c, installDependencies: v }));
-                persistSettings({ installDependencies: v });
+                updateAndPersistSettings((c) => ({ ...c, installDependencies: v }));
               }}
               onShowRemoteVersionChange={(v) => {
                 setShowRemoteVersion(v);
-                updateSettingsFromUser((c) => ({ ...c, showRemoteVersion: v }));
-                persistSettings({ showRemoteVersion: v });
+                updateAndPersistSettings((c) => ({ ...c, showRemoteVersion: v }));
               }}
               onVerifyInstallChange={setVerifyInstall}
-              onFullSearchChange={(v) => {
-                updateSettingsFromUser((c) => ({ ...c, fullSearch: v }));
-                persistSettings({ fullSearch: v });
-              }}
-              onUseCacheChange={(v) => {
-                updateSettingsFromUser((c) => ({ ...c, useCache: v }));
-                persistSettings({ useCache: v });
-              }}
+              onFullSearchChange={(v) => updateAndPersistSettings((c) => ({ ...c, fullSearch: v }))}
+              onUseCacheChange={(v) => updateAndPersistSettings((c) => ({ ...c, useCache: v }))}
               onTempFilter={handleTempFilter}
               onCopyScript={copyScript} onCleanComments={cleanComments}
               copyWithLineNumbers={copyWithLineNumbers}
@@ -674,8 +673,7 @@ function AppContent() {
                   setView("settings");
                   setStatus(`已应用智能建议：${suggestion.title}`);
                 } else if (suggestion.action === "enableFullSearch") {
-                  updateSettingsFromUser((current) => ({ ...current, fullSearch: true }));
-                  persistSettings({ fullSearch: true });
+                  updateAndPersistSettings((current) => ({ ...current, fullSearch: true }));
                   setStatus(`已应用智能建议：${suggestion.title}`);
                 } else if (suggestion.action === "retrySearch") {
                   setStatus(`已应用智能建议：${suggestion.title}`);
@@ -710,53 +708,32 @@ function AppContent() {
               onTokenChange={(v) => acceptSettingValue("githubToken", v)}
               onTokenToggle={() => setShowToken((v) => !v)}
               onClearToken={clearSavedToken}
-              onFullSearchChange={(v) => updateSettingsFromUser((c) => ({ ...c, fullSearch: v }))}
-              onUseCacheChange={(v) => {
-                updateSettingsFromUser((c) => ({ ...c, useCache: v }));
-                persistSettings({ useCache: v });
-              }}
-              onUseFilterChange={(v) => updateSettingsFromUser((c) => ({ ...c, useFilter: v }))}
-              onMaxCacheEntriesChange={(v) => {
-                updateSettingsFromUser((c) => ({ ...c, maxCacheEntries: v }));
-                persistSettings({ maxCacheEntries: v });
-              }}
+              onFullSearchChange={(v) => updateAndPersistSettings((c) => ({ ...c, fullSearch: v }))}
+              onUseCacheChange={(v) => updateAndPersistSettings((c) => ({ ...c, useCache: v }))}
+              onUseFilterChange={(v) => updateAndPersistSettings((c) => ({ ...c, useFilter: v }))}
+              onMaxCacheEntriesChange={(v) => updateAndPersistSettings((c) => ({ ...c, maxCacheEntries: v }))}
               onConditionalChange={(v) => {
                 setConditional(v);
-                updateSettingsFromUser((c) => ({ ...c, conditional: v }));
-                persistSettings({ conditional: v });
+                updateAndPersistSettings((c) => ({ ...c, conditional: v }));
               }}
               onInstallDependenciesChange={(v) => {
                 setInstallDependencies(v);
-                updateSettingsFromUser((c) => ({ ...c, installDependencies: v }));
-                persistSettings({ installDependencies: v });
+                updateAndPersistSettings((c) => ({ ...c, installDependencies: v }));
               }}
               onShowRemoteVersionChange={(v) => {
                 setShowRemoteVersion(v);
-                updateSettingsFromUser((c) => ({ ...c, showRemoteVersion: v }));
-                persistSettings({ showRemoteVersion: v });
+                updateAndPersistSettings((c) => ({ ...c, showRemoteVersion: v }));
               }}
               onCranMirrorChange={(v) => acceptSettingValue("cranMirror", v)}
-              onMirrorSelect={(v) => updateSettingsFromUser((c) => ({ ...c, cranMirror: v }))}
-              onResolveDependenciesChange={(v) => {
-                updateSettingsFromUser((c) => ({ ...c, resolveDependencies: v }));
-                persistSettings({ resolveDependencies: v });
-              }}
-              onIncludeLightDependenciesChange={(v) => {
-                updateSettingsFromUser((c) => ({ ...c, includeLightDependencies: v }));
-                persistSettings({ includeLightDependencies: v });
-              }}
-              onMaxDependencyDepthChange={(v) => {
-                updateSettingsFromUser((c) => ({ ...c, maxDependencyDepth: v }));
-                persistSettings({ maxDependencyDepth: v });
-              }}
-              onMaxDependencyNodesChange={(v) => {
-                updateSettingsFromUser((c) => ({ ...c, maxDependencyNodes: v }));
-                persistSettings({ maxDependencyNodes: v });
-              }}
+              onMirrorSelect={(v) => updateAndPersistSettings((c) => ({ ...c, cranMirror: v }))}
+              onResolveDependenciesChange={(v) => updateAndPersistSettings((c) => ({ ...c, resolveDependencies: v }))}
+              onIncludeLightDependenciesChange={(v) => updateAndPersistSettings((c) => ({ ...c, includeLightDependencies: v }))}
+              onMaxDependencyDepthChange={(v) => updateAndPersistSettings((c) => ({ ...c, maxDependencyDepth: v }))}
+              onMaxDependencyNodesChange={(v) => updateAndPersistSettings((c) => ({ ...c, maxDependencyNodes: v }))}
               onSaveSettings={persistSettings}
               onReplaceSettings={(next) => {
                 replaceSettingsFromUser(next);
-                persistSettings(next);
+                void persistSettings(next);
               }}
               onThemeChange={handleThemeChange} onFontChange={handleFontChange}
               currentFontSize={currentFontSize} onFontSizeChange={handleFontSizeChange}

@@ -77,6 +77,7 @@ describe('SettingsView Component', () => {
   it('点击“保存过滤规则”按钮时，应触发 onSaveInputRules 回调', () => {
     const props = createProps();
     render(<SettingsView {...props} />);
+    fireEvent.click(screen.getByText('输入过滤'));
     const saveRulesBtn = screen.getByText('保存过滤规则');
     expect(saveRulesBtn).toBeInTheDocument();
     fireEvent.click(saveRulesBtn);
@@ -86,6 +87,7 @@ describe('SettingsView Component', () => {
   it('点击“保存设置”按钮时，应触发 onSaveSettings 回调', () => {
     const props = createProps();
     render(<SettingsView {...props} />);
+    fireEvent.click(screen.getByText('网络连接'));
     const saveSettingsBtn = screen.getByText('保存设置');
     expect(saveSettingsBtn).toBeInTheDocument();
     fireEvent.click(saveSettingsBtn);
@@ -95,6 +97,7 @@ describe('SettingsView Component', () => {
   it('应展示当前版本和更新状态', () => {
     const props = createProps();
     render(<SettingsView {...props} updateState="readyToRestart" updateMessage="更新安装成功" updateVersion="0.2.0" />);
+    fireEvent.click(screen.getByText('界面与系统'));
 
     expect(screen.getByText(/当前版本 0.1.9/)).toBeInTheDocument();
     expect(screen.getByText(/状态：待重启/)).toBeInTheDocument();
@@ -105,6 +108,7 @@ describe('SettingsView Component', () => {
     const props = createProps();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<SettingsView {...props} />);
+    fireEvent.click(screen.getByText('配置备份'));
 
     fireEvent.click(screen.getByText('恢复默认'));
 
@@ -121,7 +125,6 @@ describe('SettingsView Component', () => {
   it('导入配置时应裁剪设置范围并过滤非法字段', async () => {
     const props = createProps();
     const { container } = render(<SettingsView {...props} />);
-    const fileInput = container.querySelector('input[type="file"][accept=".json"]') as HTMLInputElement;
     const file = {
       text: async () => JSON.stringify({
         settings: {
@@ -143,6 +146,8 @@ describe('SettingsView Component', () => {
       }),
     };
 
+    fireEvent.click(screen.getByText('配置备份'));
+    const fileInput = container.querySelector('input[type="file"][accept=".json"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     await waitFor(() => expect(props.onReplaceSettings).toHaveBeenCalled());
@@ -162,5 +167,16 @@ describe('SettingsView Component', () => {
       excludeRegex: ['^library\\('],
       excludeKeywords: ['library', 'require'],
     }));
+  });
+
+  it('缓存菜单中切换包结果缓存时应触发回调且不白屏', () => {
+    const props = createProps();
+    render(<SettingsView {...props} />);
+
+    fireEvent.click(screen.getByText('缓存'));
+    fireEvent.click(screen.getByText('使用包结果缓存'));
+
+    expect(props.onUseCacheChange).toHaveBeenCalledWith(false);
+    expect(screen.getByText('包结果缓存')).toBeInTheDocument();
   });
 });

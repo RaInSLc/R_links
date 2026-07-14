@@ -500,12 +500,15 @@ input:focus-visible,
 }
 
 .textarea-with-gutter {
-  display: flex;
+  position: relative;
   border-bottom: 1px solid var(--line);
 }
 
 .line-gutter {
-  flex-shrink: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
   width: 40px;
   padding: 18px 6px 18px 0;
   text-align: right;
@@ -525,7 +528,8 @@ input:focus-visible,
 
 .input-panel textarea {
   display: block;
-  width: 100%;
+  width: calc(100% - 40px);
+  margin-left: 40px;
   height: 180px;
   min-height: 120px;
   padding: 18px;
@@ -1974,6 +1978,48 @@ input:focus-visible,
   color: var(--red);
 }
 
+.settings-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.settings-menu {
+  display: grid;
+  gap: 8px;
+  position: sticky;
+  top: 16px;
+}
+
+.settings-menu button {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  text-align: left;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font-base);
+}
+
+.settings-menu button.active,
+.settings-menu button:hover {
+  background: var(--theme-color-soft);
+  border-color: var(--theme-border-selected);
+}
+
+.settings-menu strong {
+  font-size: 15px;
+}
+
+.settings-menu small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .settings-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2152,6 +2198,7 @@ input:focus-visible,
 }
 
 @media (max-width: 1200px) {
+  .settings-shell,
   .workspace-grid,
   .settings-layout,
   .report-layout,
@@ -2162,6 +2209,11 @@ input:focus-visible,
   .script-panel,
   .metric-row {
     grid-column: 1;
+  }
+
+  .settings-menu {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

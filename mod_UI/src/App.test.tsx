@@ -95,6 +95,7 @@ describe('App Component Input Validation', () => {
     render(<App />);
 
     fireEvent.click(screen.getByText('网络设置'));
+    fireEvent.click(screen.getByText('界面与系统'));
     fireEvent.click(screen.getByText('检查更新'));
 
     await waitFor(() => {
@@ -154,6 +155,26 @@ describe('App Component Input Validation', () => {
       expect(tauriCore.invoke).toHaveBeenCalledWith('save_settings', expect.objectContaining({
         settings: expect.objectContaining({
           pinnedMethods: expect.arrayContaining(['remotes']),
+        }),
+      }));
+    });
+  });
+
+  it('设置页策略开关应保存完整最新设置快照', async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByText('网络设置'));
+    fireEvent.click(screen.getByText('检索策略'));
+    fireEvent.click(screen.getByText('条件安装'));
+
+    await waitFor(() => {
+      expect(tauriCore.invoke).toHaveBeenCalledWith('save_settings', expect.objectContaining({
+        settings: expect.objectContaining({
+          conditional: false,
+          installDependencies: true,
+          showRemoteVersion: true,
+          useCache: true,
+          maxCacheEntries: 1000,
         }),
       }));
     });
