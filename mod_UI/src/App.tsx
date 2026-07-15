@@ -24,6 +24,8 @@ import { type View, type Method, type InputRules, type Settings, methods, defaul
 
 type UpdateState = "idle" | "checking" | "available" | "downloading" | "installing" | "readyToRestart" | "upToDate" | "error";
 
+const UPDATE_CHECK_TIMEOUT_MS = 20_000;
+
 class AppErrorBoundary extends Component<{ children: ReactNode }, { message: string }> {
   state = { message: "" };
 
@@ -62,6 +64,15 @@ function formatUpdateError(error: unknown) {
   const message = formatError(error);
   if (message.includes("valid release JSON")) {
     return "检查更新失败：GitHub Release 缺少 latest.json 自动更新清单；请先使用安装包手动更新，或重新发布包含清单的版本。";
+  }
+  if (
+    message.includes("error sending request") ||
+    message.includes("Network Error") ||
+    message.includes("Failed to fetch") ||
+    message.includes("timed out") ||
+    message.includes("timeout")
+  ) {
+    return "检查更新失败：无法连接 GitHub 更新清单。请确认网络可访问 GitHub，或在网络设置中配置代理后重试；也可以前往 GitHub Releases 手动下载安装包。";
   }
   return `检查更新失败: ${message}`;
 }
@@ -281,7 +292,10 @@ function AppContent() {
     setUpdateMessage("正在检查更新...");
     try {
       const { check } = await import("@tauri-apps/plugin-updater");
-      const update = await check();
+      const update = await check({
+        timeout: UPDATE_CHECK_TIMEOUT_MS,
+        proxy: settings.proxy.trim() || undefined,
+      });
       if (update) {
         setUpdateState("available");
         setUpdateVersion(update.version);
@@ -306,7 +320,7 @@ function AppContent() {
               setUpdateMessage("下载完成，正在安装...");
               break;
           }
-        });
+        }, { timeout: UPDATE_CHECK_TIMEOUT_MS });
         setUpdateState("readyToRestart");
         setUpdateMessage("更新安装成功！请手动关闭并重启应用以生效。");
       } else {
