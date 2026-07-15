@@ -36,6 +36,39 @@ describe("ReportView", () => {
       message: "所有来源均未找到",
       status: "notFound",
     },
+    {
+      package: "slowpkg",
+      requestedVersion: "",
+      latestVersion: "",
+      repository: "",
+      realName: "slowpkg",
+      source: "unknown",
+      found: false,
+      message: "请求超时",
+      status: "timeout",
+    },
+    {
+      package: "limitedpkg",
+      requestedVersion: "",
+      latestVersion: "",
+      repository: "",
+      realName: "limitedpkg",
+      source: "github",
+      found: false,
+      message: "频率限制",
+      status: "rateLimited",
+    },
+    {
+      package: "brokenpkg",
+      requestedVersion: "",
+      latestVersion: "",
+      repository: "",
+      realName: "brokenpkg",
+      source: "unknown",
+      found: false,
+      message: "检索异常",
+      status: "error",
+    },
   ];
 
   it("renders report overview correctly", () => {
@@ -44,7 +77,7 @@ describe("ReportView", () => {
         results={mockResults}
         logs={["log1", "log2"]}
         dependencyGraph={null}
-        packageCount={2}
+        packageCount={5}
         uniqueFoundCount={1}
         smartSuggestions={[]}
         searching={false}
@@ -106,10 +139,33 @@ describe("ReportView", () => {
       />
     );
 
-    const retryBtns = screen.queryAllByText("重试");
-    if (retryBtns.length > 0) {
-      fireEvent.click(retryBtns[0]);
-      expect(handleRetry).toHaveBeenCalledWith(["nonexist"]);
-    }
+    fireEvent.click(screen.getByRole("button", { name: "重试全部失败" }));
+    expect(handleRetry).toHaveBeenCalledWith(["nonexist", "slowpkg", "limitedpkg", "brokenpkg"]);
+  });
+
+  it("retries a specific failure category from failure breakdown", () => {
+    const handleRetry = vi.fn();
+    const handleStatus = vi.fn();
+    render(
+      <ReportView
+        results={mockResults}
+        logs={[]}
+        dependencyGraph={null}
+        packageCount={5}
+        uniqueFoundCount={1}
+        smartSuggestions={[]}
+        searching={false}
+        searchDuration={1200}
+        onClearLogs={() => {}}
+        onStatusChange={handleStatus}
+        onApplySmartSuggestion={() => {}}
+        onRetryMissing={handleRetry}
+      />
+    );
+
+    expect(screen.getByLabelText("失败分类摘要")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /超时 1/ }));
+    expect(handleRetry).toHaveBeenCalledWith(["slowpkg"]);
+    expect(handleStatus).toHaveBeenCalledWith("已回填 1 个超时包，可重新检索");
   });
 });

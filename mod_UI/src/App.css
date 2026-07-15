@@ -1215,6 +1215,59 @@ input:focus-visible,
   font-weight: 600;
 }
 
+.failure-breakdown {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 14px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--theme-color-soft);
+}
+
+.failure-breakdown-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.failure-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--input-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.failure-chip:hover:not(:disabled) {
+  border-color: var(--theme-border-selected);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.failure-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.failure-chip strong {
+  color: var(--red);
+}
+
+.failure-chip small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .result-search-input {
   flex: 1;
   min-width: 120px;

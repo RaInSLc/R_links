@@ -7,6 +7,18 @@ import type { SearchResult, DependencyGraph, DependencyNode, ReverseDependencies
 
 const CACHE_FEEDBACK_SOURCES = new Set(["cran", "bioc", "biocGit", "github", "r-forge"]);
 
+function isPlainMissingResult(result: SearchResult) {
+  return !result.found && result.status !== "timeout" && result.status !== "rateLimited" && result.status !== "error";
+}
+
+function isErrorResult(result: SearchResult) {
+  return !result.found && (result.status === "timeout" || result.status === "rateLimited" || result.status === "error");
+}
+
+function uniquePackages(results: SearchResult[]) {
+  return [...new Set(results.map((result) => result.package))];
+}
+
 interface ReportViewProps {
   results: SearchResult[];
   logs: string[];
@@ -573,8 +585,8 @@ export function ReportView({
   const filteredResults = useMemo(() => {
     let list = results;
     if (resultFilter === "found") list = list.filter((r) => r.found);
-    else if (resultFilter === "missing") list = list.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error");
-    else if (resultFilter === "error") list = list.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error"));
+    else if (resultFilter === "missing") list = list.filter(isPlainMissingResult);
+    else if (resultFilter === "error") list = list.filter(isErrorResult);
     if (sourceFilter) list = list.filter((r) => r.source === sourceFilter);
     const q = debouncedSearch.trim().toLowerCase();
     if (q) list = list.filter((r) => r.package.toLowerCase().includes(q) || (r.repository && r.repository.toLowerCase().includes(q)));
@@ -582,13 +594,27 @@ export function ReportView({
   }, [results, resultFilter, debouncedSearch, sourceFilter]);
 
   const missingCount = useMemo(
-    () => new Set(results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").map((r) => r.package)).size,
+    () => new Set(results.filter(isPlainMissingResult).map((r) => r.package)).size,
     [results],
   );
   const errorCount = useMemo(
-    () => new Set(results.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")).map((r) => r.package)).size,
+    () => new Set(results.filter(isErrorResult).map((r) => r.package)).size,
     [results],
   );
+
+  const failureGroups = useMemo(() => {
+    const missing = uniquePackages(results.filter(isPlainMissingResult));
+    const timeout = uniquePackages(results.filter((r) => !r.found && r.status === "timeout"));
+    const rateLimited = uniquePackages(results.filter((r) => !r.found && r.status === "rateLimited"));
+    const error = uniquePackages(results.filter((r) => !r.found && r.status === "error"));
+    return { missing, timeout, rateLimited, error };
+  }, [results]);
+
+  const retryFailureGroup = useCallback((label: string, packages: string[]) => {
+    if (packages.length === 0 || searching) return;
+    onRetryMissing(packages);
+    onStatusChange(`已回填 ${packages.length} 个${label}包，可重新检索`);
+  }, [onRetryMissing, onStatusChange, searching]);
 
   const toggleFilter = useCallback((filter: "found" | "missing" | "error") => {
     setResultFilter((prev) => (prev === filter ? "all" : filter));
@@ -824,12 +850,12 @@ export function ReportView({
           />
           {results.length > 0 && (
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-              {results.some((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error") && (
+              {results.some(isPlainMissingResult) && (
                 <button
                   type="button"
                   className="button ghost compact-btn"
                   onClick={() => {
-                    const missing = new Set(results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").map((r) => r.package));
+                    const missing = new Set(results.filter(isPlainMissingResult).map((r) => r.package));
                     setSelectedResults(missing);
                   }}
                   title="选中所有未找到的包"
@@ -837,12 +863,12 @@ export function ReportView({
                   选未找到
                 </button>
               )}
-              {results.some((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")) && (
+              {results.some(isErrorResult) && (
                 <button
                   type="button"
                   className="button ghost compact-btn"
                   onClick={() => {
-                    const errored = new Set(results.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")).map((r) => r.package));
+                    const errored = new Set(results.filter(isErrorResult).map((r) => r.package));
                     setSelectedResults(errored);
                   }}
                   title="选中所有异常的包"
@@ -1061,9 +1087,9 @@ export function ReportView({
                       onRetryMissing(missing);
                     }}
                   >
-                    重试未找到
+                    重试全部失败
                   </button>
-                  {results.some((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")) && (
+                  {results.some(isErrorResult) && (
                     <button
                       type="button"
                       className="button ghost compact-btn"
@@ -1071,7 +1097,7 @@ export function ReportView({
                       onClick={() => {
                         const errorPkgs = [...new Set(
                           results
-                            .filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error"))
+                            .filter(isErrorResult)
                             .map((r) => r.package),
                         )];
                         onRetryMissing(errorPkgs);
@@ -1188,8 +1214,8 @@ export function ReportView({
                 onClick={() => {
                   const now = new Date();
                   const found = results.filter((r) => r.found);
-                  const missing = results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error");
-                  const errors = results.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error"));
+                  const missing = results.filter(isPlainMissingResult);
+                  const errors = results.filter(isErrorResult);
                   const md: string[] = [
                     `# R 包检索报告`,
                     ``,
@@ -1227,8 +1253,8 @@ export function ReportView({
                 className="button ghost compact-btn"
                 onClick={async () => {
                   const found = results.filter((r) => r.found);
-                  const missing = results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error");
-                  const errors = results.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error"));
+                  const missing = results.filter(isPlainMissingResult);
+                  const errors = results.filter(isErrorResult);
                   const foundPkgs = [...new Set(found.map((r) => r.package))];
                   const missingPkgs = [...new Set(missing.map((r) => r.package))];
                   const errorPkgs = [...new Set(errors.map((r) => r.package))];
@@ -1283,6 +1309,29 @@ export function ReportView({
             ))}
           </div>
         )}
+        {(failureGroups.missing.length > 0 || failureGroups.timeout.length > 0 || failureGroups.rateLimited.length > 0 || failureGroups.error.length > 0) && (
+          <div className="failure-breakdown" aria-label="失败分类摘要">
+            <span className="failure-breakdown-title">失败分类</span>
+            {[
+              { key: "missing", label: "未找到", packages: failureGroups.missing },
+              { key: "timeout", label: "超时", packages: failureGroups.timeout },
+              { key: "rateLimited", label: "限流", packages: failureGroups.rateLimited },
+              { key: "error", label: "错误", packages: failureGroups.error },
+            ].filter((item) => item.packages.length > 0).map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className="failure-chip"
+                disabled={searching}
+                onClick={() => retryFailureGroup(item.label, item.packages)}
+                title={`重试${item.label}包：${item.packages.join(", ")}`}
+              >
+                {item.label} <strong>{item.packages.length}</strong>
+                <small>{searching ? "检索中" : "重试"}</small>
+              </button>
+            ))}
+          </div>
+        )}
         {results.length === 0 ? (
           <EmptyState
             text={searching ? "正在等待首条检索结果" : "尚未执行检索"}
@@ -1295,8 +1344,8 @@ export function ReportView({
                 {([
                   { key: "all", label: `全部 ${results.length}` },
                   { key: "found", label: `已验证 ${results.filter((r) => r.found).length}` },
-                  { key: "missing", label: `未找到 ${results.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").length}` },
-                  { key: "error", label: `异常 ${results.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")).length}` },
+                  { key: "missing", label: `未找到 ${results.filter(isPlainMissingResult).length}` },
+                  { key: "error", label: `异常 ${results.filter(isErrorResult).length}` },
                 ] as const).map((tab) => (
                   <button
                     key={tab.key}
@@ -1621,7 +1670,7 @@ export function ReportView({
                         <div><span className="detail-label">检索状态</span><span>{result.found ? "已验证" : result.status === "timeout" ? "超时" : result.status === "rateLimited" ? "频率限制" : result.status === "error" ? "检索异常" : "未找到"}</span></div>
                 </div>
                 <div className="result-table-footer">
-                  共 {filteredResults.length} 条 · 已验证 {filteredResults.filter((r) => r.found).length} · 未找到 {filteredResults.filter((r) => !r.found && r.status !== "timeout" && r.status !== "rateLimited" && r.status !== "error").length} · 异常 {filteredResults.filter((r) => !r.found && (r.status === "timeout" || r.status === "rateLimited" || r.status === "error")).length}
+                  共 {filteredResults.length} 条 · 已验证 {filteredResults.filter((r) => r.found).length} · 未找到 {filteredResults.filter(isPlainMissingResult).length} · 异常 {filteredResults.filter(isErrorResult).length}
                   {selectedResults.size > 0 && <span className="footer-selected"> · 已选中 {selectedResults.size}</span>}
                 </div>
               </div>
