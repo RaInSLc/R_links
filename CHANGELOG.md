@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-16 00:05:00 +08:00]
+
+### Added
+- **搜索计划预览**：工作台新增搜索计划预览，按输入来源估算 CRAN/Bioc、GitHub、URL 分布、预计请求量、搜索强度和建议策略。
+
+### Tests
+- **搜索计划回归验证**：补充搜索计划纯函数测试与工作台渲染测试，并通过 `npm test -- WorkspaceView.test.tsx utils.test.ts` 与 `npm run build`。
+
 ## [2026-07-15 23:25:00 +08:00]
 
 ### Docs

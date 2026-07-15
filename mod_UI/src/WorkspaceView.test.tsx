@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { WorkspaceView } from "./WorkspaceView";
 import { defaultSettings, type Method } from "./types";
 
@@ -81,6 +81,32 @@ describe("WorkspaceView", () => {
     const { container } = render(<WorkspaceView {...defaultProps} />);
     expect(container.textContent).toContain("install.packages");
     expect(container.textContent).toContain("'dplyr'");
+  });
+
+  it("renders search plan preview for current input", () => {
+    render(<WorkspaceView {...defaultProps} />);
+    const plan = screen.getByLabelText("搜索计划预览");
+
+    expect(plan).toBeInTheDocument();
+    expect(within(plan).getByText(/2 个输入/)).toBeInTheDocument();
+    expect(within(plan).getByText(/预计/)).toBeInTheDocument();
+    expect(within(plan).getByText("快速检索")).toBeInTheDocument();
+  });
+
+  it("marks large full searches as high intensity", () => {
+    render(
+      <WorkspaceView
+        {...defaultProps}
+        input={Array.from({ length: 90 }, (_, i) => `pkg${i}`).join("\n")}
+        inputProfile={{ total: 90, archiveUrls: 0, repositories: 0 }}
+        settings={{ ...defaultProps.settings, fullSearch: true, useCache: true }}
+      />,
+    );
+
+    const plan = screen.getByLabelText("搜索计划预览");
+    expect(within(plan).getByText("全量检索")).toBeInTheDocument();
+    expect(within(plan).getByText("高")).toBeInTheDocument();
+    expect(within(plan).getByText(/GitHub Token/)).toBeInTheDocument();
   });
 
   it("triggers copy script callback", () => {

@@ -111,6 +111,18 @@ export interface SmartSuggestion {
   value?: string;
 }
 
+export interface SearchPlanPreview {
+  total: number;
+  cranLike: number;
+  repositories: number;
+  archiveUrls: number;
+  estimatedRequests: number;
+  level: "idle" | "light" | "medium" | "heavy";
+  recommendedMode: string;
+  summary: string;
+  advice: string;
+}
+
 export const MAX_PACKAGE_LINES = 500;
 export const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
 export const MAX_SEARCH_RESULT_SCAN = MAX_SEARCH_RESULTS * 2;
@@ -624,6 +636,50 @@ export function methodSupportsInput(method: string, profile: { total: number; ar
     return profile.repositories === profile.total;
   }
   return profile.archiveUrls === 0 && profile.repositories === 0;
+}
+
+export function buildSearchPlanPreview(
+  profile: { total: number; archiveUrls: number; repositories: number },
+  options: { fullSearch?: boolean; useCache?: boolean; duplicateCount?: number } = {},
+): SearchPlanPreview {
+  const total = Math.max(0, profile.total);
+  const archiveUrls = Math.max(0, Math.min(profile.archiveUrls, total));
+  const repositories = Math.max(0, Math.min(profile.repositories, total - archiveUrls));
+  const cranLike = Math.max(0, total - archiveUrls - repositories);
+  const baseRequests = cranLike * (options.fullSearch ? 4 : 2) + repositories * 2 + archiveUrls;
+  const estimatedRequests = options.useCache ? Math.ceil(baseRequests * 0.6) : baseRequests;
+  const level: SearchPlanPreview["level"] = total === 0
+    ? "idle"
+    : estimatedRequests >= 160 || total >= 80
+    ? "heavy"
+    : estimatedRequests >= 60 || total >= 30
+    ? "medium"
+    : "light";
+  const recommendedMode = repositories > 0 && repositories === total
+    ? "GitHub 优先"
+    : archiveUrls > 0 && archiveUrls === total
+    ? "URL 安装"
+    : options.fullSearch
+    ? "全量检索"
+    : "快速检索";
+  const sourceParts = [
+    cranLike > 0 ? `CRAN/Bioc ${cranLike}` : "",
+    repositories > 0 ? `GitHub ${repositories}` : "",
+    archiveUrls > 0 ? `URL ${archiveUrls}` : "",
+  ].filter(Boolean);
+  const summary = total === 0
+    ? "等待输入包名"
+    : `${total} 个输入 · ${sourceParts.join(" · ") || "待识别来源"} · 预计 ${estimatedRequests} 次请求`;
+  const advice = total === 0
+    ? "输入包名后将生成搜索计划。"
+    : level === "heavy"
+    ? "建议开启缓存、配置 GitHub Token，并优先按失败分类重试。"
+    : level === "medium"
+    ? "建议保持缓存开启；如出现限流，可先重试超时或错误分组。"
+    : options.duplicateCount && options.duplicateCount > 0
+    ? "检测到重复输入，建议先去重再开始检索。"
+    : "当前规模适合直接检索。";
+  return { total, cranLike, repositories, archiveUrls, estimatedRequests, level, recommendedMode, summary, advice };
 }
 
 export function dedupePackageInput(value: string): string {

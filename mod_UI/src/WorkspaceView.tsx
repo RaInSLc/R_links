@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { PanelHeader, Toggle } from "./components";
-import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, dedupePackageInput, normalizePackageInputDisplay, trimTrailingBlankLines, type SmartSuggestion } from "./utils";
+import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, buildSearchPlanPreview, dedupePackageInput, normalizePackageInputDisplay, trimTrailingBlankLines, type SmartSuggestion } from "./utils";
 import type { Method, Settings } from "./types";
 import { methods, defaultPinnedMethods } from "./types";
 
@@ -69,6 +69,11 @@ export function WorkspaceView({
   const [fileLoadHint, setFileLoadHint] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineGutterRef = useRef<HTMLDivElement>(null);
+  const searchPlan = buildSearchPlanPreview(inputProfile, {
+    fullSearch: settings.fullSearch,
+    useCache: settings.useCache,
+    duplicateCount,
+  });
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -246,6 +251,20 @@ export function WorkspaceView({
                 重复 <strong>{duplicateCount}</strong> · 去重
               </button>
             )}
+          </div>
+        )}
+        {inputProfile.total > 0 && (
+          <div className={`search-plan-preview ${searchPlan.level}`} aria-label="搜索计划预览">
+            <div>
+              <span className="search-plan-eyebrow">搜索计划</span>
+              <strong>{searchPlan.summary}</strong>
+              <small>{searchPlan.advice}</small>
+            </div>
+            <div className="search-plan-metrics">
+              <span>模式 <strong>{searchPlan.recommendedMode}</strong></span>
+              <span>缓存 <strong>{settings.useCache ? "开启" : "关闭"}</strong></span>
+              <span>强度 <strong>{searchPlan.level === "heavy" ? "高" : searchPlan.level === "medium" ? "中" : "低"}</strong></span>
+            </div>
           </div>
         )}
         {smartSuggestions.length > 0 && (

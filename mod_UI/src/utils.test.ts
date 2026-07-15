@@ -16,6 +16,7 @@ import {
   dedupeBoundedResults,
   resultIdentityKey,
   buildInputSmartSuggestions,
+  buildSearchPlanPreview,
   buildResultSmartSuggestions,
   extractCanonicalInput,
   dedupePackageInput,
@@ -295,6 +296,34 @@ describe("resultIdentityKey", () => {
       realName: "DPLYR",
     } as never;
     expect(resultIdentityKey(a)).toBe(resultIdentityKey(b));
+  });
+});
+
+describe("buildSearchPlanPreview", () => {
+  it("summarizes mixed input sources and estimates request scale", () => {
+    const plan = buildSearchPlanPreview(
+      { total: 10, archiveUrls: 1, repositories: 2 },
+      { fullSearch: false, useCache: true },
+    );
+
+    expect(plan.cranLike).toBe(7);
+    expect(plan.repositories).toBe(2);
+    expect(plan.archiveUrls).toBe(1);
+    expect(plan.estimatedRequests).toBe(12);
+    expect(plan.level).toBe("light");
+    expect(plan.summary).toContain("10 个输入");
+    expect(plan.summary).toContain("GitHub 2");
+  });
+
+  it("marks large full searches as heavy and recommends safeguards", () => {
+    const plan = buildSearchPlanPreview(
+      { total: 90, archiveUrls: 0, repositories: 5 },
+      { fullSearch: true, useCache: false },
+    );
+
+    expect(plan.level).toBe("heavy");
+    expect(plan.recommendedMode).toBe("全量检索");
+    expect(plan.advice).toContain("GitHub Token");
   });
 });
 
