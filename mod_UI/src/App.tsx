@@ -723,6 +723,7 @@ function AppContent() {
               onTokenToggle={() => setShowToken((v) => !v)}
               onClearToken={clearSavedToken}
               onFullSearchChange={(v) => updateAndPersistSettings((c) => ({ ...c, fullSearch: v }))}
+              onSearchConcurrencyChange={(v) => updateAndPersistSettings((c) => ({ ...c, searchConcurrency: v }))}
               onUseCacheChange={(v) => updateAndPersistSettings((c) => ({ ...c, useCache: v }))}
               onUseFilterChange={(v) => updateAndPersistSettings((c) => ({ ...c, useFilter: v }))}
               onMaxCacheEntriesChange={(v) => updateAndPersistSettings((c) => ({ ...c, maxCacheEntries: v }))}

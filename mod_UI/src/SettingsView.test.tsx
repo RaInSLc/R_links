@@ -11,6 +11,7 @@ describe('SettingsView Component', () => {
       githubToken: '',
       cranMirror: 'https://cloud.r-project.org',
       fullSearch: false,
+      searchConcurrency: 6,
       conditional: true,
       installDependencies: true,
       showRemoteVersion: true,
@@ -38,6 +39,7 @@ describe('SettingsView Component', () => {
     onTokenToggle: vi.fn(),
     onClearToken: vi.fn(),
     onFullSearchChange: vi.fn(),
+    onSearchConcurrencyChange: vi.fn(),
     onConditionalChange: vi.fn(),
     onInstallDependenciesChange: vi.fn(),
     onShowRemoteVersionChange: vi.fn(),
@@ -117,6 +119,7 @@ describe('SettingsView Component', () => {
       maxDependencyDepth: 2,
       includeLightDependencies: false,
       maxDependencyNodes: 100,
+      searchConcurrency: 6,
     }));
     expect(props.onFontChange).toHaveBeenCalledWith('system');
     expect(props.onSaveSettings).not.toHaveBeenCalled();
@@ -129,6 +132,7 @@ describe('SettingsView Component', () => {
       text: async () => JSON.stringify({
         settings: {
           fullSearch: 'yes',
+          searchConcurrency: 99,
           maxCacheEntries: 20000,
           maxDependencyDepth: 9,
           maxDependencyNodes: 999,
@@ -153,6 +157,7 @@ describe('SettingsView Component', () => {
     await waitFor(() => expect(props.onReplaceSettings).toHaveBeenCalled());
     expect(props.onReplaceSettings).toHaveBeenCalledWith(expect.objectContaining({
       fullSearch: false,
+      searchConcurrency: 12,
       maxCacheEntries: 10000,
       maxDependencyDepth: 5,
       maxDependencyNodes: 500,
@@ -178,5 +183,16 @@ describe('SettingsView Component', () => {
 
     expect(props.onUseCacheChange).toHaveBeenCalledWith(false);
     expect(screen.getByText('包结果缓存')).toBeInTheDocument();
+  });
+
+  it('网络设置中调整搜索并发上限时应触发回调', () => {
+    const props = createProps();
+    render(<SettingsView {...props} />);
+    fireEvent.click(screen.getByText('网络连接'));
+
+    const concurrencyInput = screen.getByLabelText('搜索并发上限');
+    fireEvent.change(concurrencyInput, { target: { value: '8' } });
+
+    expect(props.onSearchConcurrencyChange).toHaveBeenCalledWith(8);
   });
 });

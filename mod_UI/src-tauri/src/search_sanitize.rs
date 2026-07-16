@@ -189,6 +189,7 @@ mod tests {
             found: true,
             message: format!("ok\n{}", "x".repeat(MAX_RESULT_MESSAGE_CHARS + 20)),
             status: "found".to_string(),
+            stage: "final".to_string(),
         });
         assert!(!result.message.contains('\n'));
         assert!(result.message.len() <= MAX_RESULT_MESSAGE_CHARS);
@@ -206,6 +207,7 @@ mod tests {
             found: true,
             message: "ok".to_string(),
             status: "found".to_string(),
+            stage: "final".to_string(),
         });
         assert!(!result.found);
         assert_eq!(result.source, "none");
@@ -223,6 +225,7 @@ mod tests {
             found: true,
             message: "ok".to_string(),
             status: "found".to_string(),
+            stage: "final".to_string(),
         });
         assert!(!result.found);
     }

@@ -33,7 +33,6 @@ const MAX_GITHUB_SEARCH_ITEMS: usize = 10;
 const MAX_GITHUB_REPOSITORY_CHARS: usize = 200;
 const MAX_SEARCH_HTTP_REQUESTS: usize = 200;
 const MAX_SEARCH_DURATION: Duration = Duration::from_secs(300);
-const MAX_CONCURRENT_PACKAGES: usize = 6;
 const MAX_SEARCH_RESULTS: usize = MAX_PACKAGE_LINES * 16;
 const MAX_SEARCH_LOGS: usize = 1_000;
 const SEARCH_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100);
@@ -268,7 +267,7 @@ pub async fn search_packages(
         &format!(
             "开始多源检索（超时 {} 秒，最大并发 {}）",
             MAX_SEARCH_DURATION.as_secs(),
-            MAX_CONCURRENT_PACKAGES
+            settings.search_concurrency
         ),
     );
 
@@ -285,7 +284,7 @@ pub async fn search_packages(
             break;
         }
 
-        let batch_size = MAX_CONCURRENT_PACKAGES.min(packages.len() - processed);
+        let batch_size = settings.search_concurrency.min(packages.len() - processed);
         let batch = &packages[processed..processed + batch_size];
         let batch_start = processed;
 
@@ -1843,6 +1842,7 @@ mod tests {
             found: true,
             message: format!("ok\n{}", "x".repeat(MAX_RESULT_MESSAGE_CHARS + 20)),
             status: "found".to_string(),
+            stage: "final".to_string(),
         });
 
         assert_eq!(result.package, "demo");
@@ -1867,6 +1867,7 @@ mod tests {
             found: true,
             message: "验证成功".to_string(),
             status: "found".to_string(),
+            stage: "final".to_string(),
         });
 
         assert!(!result.found);
@@ -1888,6 +1889,7 @@ mod tests {
             found: true,
             message: "验证成功".to_string(),
             status: "found".to_string(),
+            stage: "final".to_string(),
         });
 
         assert!(result.found);
@@ -1909,6 +1911,7 @@ mod tests {
                 found: false,
                 message: "未找到".to_string(),
                 status: "found".to_string(),
+                stage: "final".to_string(),
             },
             SearchResult {
                 package: "other".to_string(),
@@ -1920,6 +1923,7 @@ mod tests {
                 found: true,
                 message: "验证成功".to_string(),
                 status: "found".to_string(),
+                stage: "final".to_string(),
             },
         ];
 
@@ -1939,6 +1943,7 @@ mod tests {
             found: true,
             message: "验证成功".to_string(),
             status: "found".to_string(),
+            stage: "final".to_string(),
         }];
 
         assert!(has_found_result_for_package(&results, "Owner/Repo"));

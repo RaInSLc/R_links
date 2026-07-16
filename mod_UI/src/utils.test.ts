@@ -23,6 +23,7 @@ import {
   dedupePackageInput,
   normalizePackageInputDisplay,
   trimTrailingBlankLines,
+  sanitizePublicSettings,
   countScriptCommands,
   countDuplicatePackages,
   MAX_STATUS_CHARS,
@@ -176,6 +177,18 @@ describe("sanitizeSearchResult", () => {
     const result = sanitizeSearchResult("not an object");
     expect(result.package).toBe("");
     expect(result.source).toBe("none");
+  });
+});
+
+describe("sanitizePublicSettings", () => {
+  it("keeps explicit search concurrency within range", () => {
+    const settings = sanitizePublicSettings({ searchConcurrency: 8, pinnedMethods: ["auto"] });
+    expect(settings.searchConcurrency).toBe(8);
+  });
+
+  it("defaults invalid search concurrency", () => {
+    expect(sanitizePublicSettings({ searchConcurrency: 0 }).searchConcurrency).toBe(6);
+    expect(sanitizePublicSettings({ searchConcurrency: 99 }).searchConcurrency).toBe(6);
   });
 });
 

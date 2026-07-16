@@ -16,6 +16,7 @@ export interface Settings {
   githubToken: string;
   cranMirror: string;
   fullSearch: boolean;
+  searchConcurrency: number;
   conditional: boolean;
   installDependencies: boolean;
   showRemoteVersion: boolean;
@@ -60,6 +61,7 @@ export const defaultSettings: Settings = {
   githubToken: "",
   cranMirror: "https://cloud.r-project.org",
   fullSearch: false,
+  searchConcurrency: 6,
   conditional: true,
   installDependencies: true,
   showRemoteVersion: true,

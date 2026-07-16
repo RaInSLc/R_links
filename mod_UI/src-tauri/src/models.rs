@@ -17,6 +17,7 @@ pub struct Settings {
     pub github_token: String,
     pub cran_mirror: String,
     pub full_search: bool,
+    pub search_concurrency: usize,
     pub conditional: bool,
     pub install_dependencies: bool,
     pub show_remote_version: bool,
@@ -38,6 +39,7 @@ pub struct PublicSettings {
     pub github_token_configured: bool,
     pub cran_mirror: String,
     pub full_search: bool,
+    pub search_concurrency: usize,
     pub conditional: bool,
     pub install_dependencies: bool,
     pub show_remote_version: bool,
@@ -65,6 +67,7 @@ impl Default for Settings {
             github_token: String::new(),
             cran_mirror: "https://cloud.r-project.org".to_string(),
             full_search: false,
+            search_concurrency: 6,
             conditional: true,
             install_dependencies: true,
             show_remote_version: true,
@@ -85,6 +88,7 @@ impl Settings {
         let proxy = normalize_proxy(&self.proxy)?;
         let github_token = normalize_token(&self.github_token)?;
         let cran_mirror = normalize_cran_mirror_url(&self.cran_mirror)?;
+        let search_concurrency = self.search_concurrency.clamp(1, 12);
         let max_cache_entries = self.max_cache_entries.clamp(1, 10000);
         let max_dependency_depth = self.max_dependency_depth.clamp(1, 5);
         let max_dependency_nodes = self.max_dependency_nodes.clamp(1, 500);
@@ -95,6 +99,7 @@ impl Settings {
             github_token,
             cran_mirror,
             full_search: self.full_search,
+            search_concurrency,
             conditional: self.conditional,
             install_dependencies: self.install_dependencies,
             show_remote_version: self.show_remote_version,
@@ -115,6 +120,7 @@ impl Settings {
             github_token_configured: !self.github_token.trim().is_empty(),
             cran_mirror: self.cran_mirror.clone(),
             full_search: self.full_search,
+            search_concurrency: self.search_concurrency,
             conditional: self.conditional,
             install_dependencies: self.install_dependencies,
             show_remote_version: self.show_remote_version,
@@ -735,6 +741,27 @@ mod tests {
         assert_eq!(
             settings.normalized().expect("应能规范化").max_cache_entries,
             10000
+        );
+    }
+
+    #[test]
+    fn normalizes_search_concurrency_limit() {
+        let settings = Settings {
+            search_concurrency: 0,
+            ..Settings::default()
+        };
+        assert_eq!(
+            settings.normalized().expect("应能规范化").search_concurrency,
+            1
+        );
+
+        let settings = Settings {
+            search_concurrency: 99,
+            ..Settings::default()
+        };
+        assert_eq!(
+            settings.normalized().expect("应能规范化").search_concurrency,
+            12
         );
     }
 }

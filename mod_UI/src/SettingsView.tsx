@@ -22,6 +22,7 @@ interface SettingsViewProps {
   onTokenToggle: () => void;
   onClearToken: () => void;
   onFullSearchChange: (v: boolean) => void;
+  onSearchConcurrencyChange: (value: number) => void;
   onConditionalChange: (v: boolean) => void;
   onInstallDependenciesChange: (v: boolean) => void;
   onShowRemoteVersionChange: (v: boolean) => void;
@@ -101,6 +102,7 @@ function sanitizeImportedSettings(value: unknown, current: Settings): Settings {
     githubToken: stringValue(raw.githubToken, current.githubToken, MAX_TOKEN_CHARS),
     cranMirror: stringValue(raw.cranMirror, current.cranMirror),
     fullSearch: booleanValue(raw.fullSearch, current.fullSearch),
+    searchConcurrency: numberValue(raw.searchConcurrency, current.searchConcurrency, 1, 12),
     conditional: booleanValue(raw.conditional, current.conditional),
     installDependencies: booleanValue(raw.installDependencies, current.installDependencies),
     showRemoteVersion: booleanValue(raw.showRemoteVersion, current.showRemoteVersion),
@@ -136,7 +138,7 @@ export function SettingsView({
   settings, tokenConfigured, showToken, settingsBusy,
   currentTheme, currentFont, checkingUpdate, updateState, updateMessage, appVersion, updateVersion,
   onProxyChange, onTokenChange, onTokenToggle, onClearToken,
-  onFullSearchChange, onConditionalChange, onInstallDependenciesChange, onShowRemoteVersionChange,
+  onFullSearchChange, onSearchConcurrencyChange, onConditionalChange, onInstallDependenciesChange, onShowRemoteVersionChange,
   onUseCacheChange, onUseFilterChange, onMaxCacheEntriesChange,
   onCranMirrorChange, onMirrorSelect,
   onResolveDependenciesChange, onMaxDependencyDepthChange,
@@ -237,6 +239,21 @@ export function SettingsView({
           description="命中 CRAN 或 Bioconductor 后仍继续查询 GitHub"
           onChange={onFullSearchChange}
         />
+        <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+          <span>搜索并发上限</span>
+          <small>同时检索的包数量（允许 1 到 12，默认 6；较高值更快但更容易触发限流）</small>
+          <input
+            type="number"
+            aria-label="搜索并发上限"
+            min={1}
+            max={12}
+            value={settings.searchConcurrency}
+            onChange={(event) => {
+              const val = Number(event.currentTarget.value);
+              if (Number.isFinite(val) && val >= 1 && val <= 12) onSearchConcurrencyChange(Math.floor(val));
+            }}
+          />
+        </div>
       </section>
 
       <section className="panel settings-panel">

@@ -46,6 +46,10 @@ fn default_max_cache_entries() -> usize {
     1000
 }
 
+fn default_search_concurrency() -> usize {
+    6
+}
+
 fn default_max_dependency_depth() -> usize {
     2
 }
@@ -60,6 +64,8 @@ struct StoredSettings {
     proxy: String,
     cran_mirror: String,
     full_search: bool,
+    #[serde(default = "default_search_concurrency")]
+    search_concurrency: usize,
     #[serde(default = "default_true")]
     conditional: bool,
     #[serde(default = "default_true")]
@@ -103,6 +109,7 @@ impl StoredSettings {
             github_token,
             cran_mirror: self.cran_mirror,
             full_search: self.full_search,
+            search_concurrency: self.search_concurrency,
             conditional: self.conditional,
             install_dependencies: self.install_dependencies,
             show_remote_version: self.show_remote_version,
@@ -126,6 +133,7 @@ impl StoredSettings {
             github_token_protected: secrets::protect_string(&settings.github_token)?,
             cran_mirror: settings.cran_mirror,
             full_search: settings.full_search,
+            search_concurrency: settings.search_concurrency,
             conditional: settings.conditional,
             install_dependencies: settings.install_dependencies,
             show_remote_version: settings.show_remote_version,
@@ -932,6 +940,7 @@ mod tests {
             .into_settings()
             .expect("旧 Token 应可迁移读取");
         assert_eq!(settings.github_token, "legacy-token");
+        assert_eq!(settings.search_concurrency, 6);
     }
 
     #[test]
