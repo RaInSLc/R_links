@@ -481,7 +481,9 @@ fn generate_script_inner(
             .then(|| choose_best_result(&package.name, &results, package.source_hint.as_deref()))
             .flatten()
         {
-            is_cran_archive = best.source == "cran" && best.repository == "archive";
+            is_cran_archive = best.source == "cran"
+                && (best.repository == "archive"
+                    || best.repository.starts_with("https://cran.r-project.org/src/contrib/Archive/"));
             let source_label = source_label(&best.source);
             let remote_version = if show_remote_version {
                 format!(": v{}", best.latest_version)
@@ -537,6 +539,11 @@ fn generate_script_inner(
                         }
                     }
                     "r-forge" => method = "rForge".to_string(),
+                    "cran" if is_cran_archive && best.repository.starts_with("https://") => {
+                        method = "remotes".to_string();
+                        value = best.repository.clone();
+                        version.clear();
+                    }
                     _ => method = "remotesVersion".to_string(),
                 }
             }
@@ -552,7 +559,7 @@ fn generate_script_inner(
             && !is_archive_url
             && !matches!(
                 method.as_str(),
-                "github" | "biocManager" | "biocGit" | "rForge"
+                "github" | "biocManager" | "biocGit" | "rForge" | "remotes"
             )
         {
             method = if package.name.contains('/')
@@ -861,6 +868,17 @@ fn clean_result_repository(source: &str, value: &str) -> Option<String> {
         }
         "r-forge" => {
             if trimmed.is_empty() || trimmed == "http://R-Forge.R-project.org" {
+                Some(trimmed.to_string())
+            } else {
+                None
+            }
+        }
+        "cran" => {
+            if trimmed.is_empty()
+                || trimmed == "archive"
+                || (trimmed.starts_with("https://cran.r-project.org/src/contrib/Archive/")
+                    && trimmed.ends_with(".tar.gz"))
+            {
                 Some(trimmed.to_string())
             } else {
                 None
@@ -1785,6 +1803,35 @@ mod tests {
 
         assert!(script.contains("# [CRAN 已下架并归档: v0.2.0 | 自动同步]"));
         assert!(script.contains("remotes::install_version(\"oncoPredict\", version = \"0.2.0\", repos = \"https://cloud.r-project.org\", upgrade = \"never\", dependencies = FALSE)"));
+    }
+
+    #[test]
+    fn generate_script_for_cran_archive_tarball_url() {
+        let options = GenerateOptions {
+            method: "auto".to_string(),
+            conditional: false,
+            install_dependencies: false,
+            mirror: "https://mirrors.tuna.tsinghua.edu.cn/CRAN/".to_string(),
+            ..Default::default()
+        };
+        let results = vec![SearchResult {
+            package: "fastshap".to_string(),
+            requested_version: String::new(),
+            latest_version: "0.1.1".to_string(),
+            repository: "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz".to_string(),
+            real_name: "fastshap".to_string(),
+            source: "cran".to_string(),
+            found: true,
+            message: "在 Archive 归档区中找到".to_string(),
+            status: "found".to_string(),
+            stage: "final".to_string(),
+        }];
+
+        let script = generate_script("fastshap", &options, &results).expect("生成脚本成功");
+
+        assert!(script.contains("# [CRAN 已下架并归档: v0.1.1 | 自动同步]"));
+        assert!(script.contains("remotes::install_url(\"https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz\", dependencies = FALSE)"));
+        assert!(!script.contains("install.packages(\"fastshap\""));
     }
 
     #[test]

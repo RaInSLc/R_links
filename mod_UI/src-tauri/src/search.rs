@@ -721,6 +721,15 @@ fn extract_archive_versions(html: &str, package_name: &str) -> Vec<String> {
     versions
 }
 
+fn cran_archive_tarball_url(package_name: &str, version: &str) -> String {
+    format!(
+        "https://cran.r-project.org/src/contrib/Archive/{}/{}_{}.tar.gz",
+        urlencoding::encode(package_name),
+        urlencoding::encode(package_name),
+        urlencoding::encode(version)
+    )
+}
+
 async fn search_cran(
     context: &mut SearchContext<'_>,
     package: &PackageInput,
@@ -784,10 +793,11 @@ async fn search_cran(
             };
 
             context.log(&format!("CRAN Archive 命中归档版本 {target_version}"));
+            let archive_url = cran_archive_tarball_url(&package.name, &target_version);
             Ok(Some(found_result(
                 package,
                 &target_version,
-                "archive",
+                &archive_url,
                 &package.name,
                 "cran",
             )))
@@ -2131,6 +2141,60 @@ mod tests {
         let res = opt.unwrap();
         assert_eq!(res.latest_version, "9.9.9");
         assert_eq!(res.source, "cran");
+    }
+
+    #[tokio::test]
+    async fn search_cran_archive_uses_tarball_repository_url() {
+        let mut logs = Vec::new();
+        let cancelled = AtomicBool::new(false);
+        let budget = RequestBudget::new(10);
+        let timed_out = AtomicBool::new(false);
+        let settings = Settings::default();
+        let client = build_client(&settings).unwrap();
+
+        let mut context = SearchContext {
+            log_emitter: None,
+            client: &client,
+            settings: &settings,
+            cancelled: &cancelled,
+            budget: &budget,
+            deadline: Instant::now() + Duration::from_secs(10),
+            timed_out: &timed_out,
+            logs: &mut logs,
+            result_limit_reached: false,
+            github_rate_limited: false,
+        };
+
+        let package = PackageInput {
+            raw: "fastshap".to_string(),
+            name: "fastshap".to_string(),
+            version: String::new(),
+            source_hint: None,
+        };
+
+        MOCK_GET_TEXT.with(|mock| {
+            *mock.borrow_mut() = Some(Box::new(|url| {
+                if url.contains("/web/packages/fastshap/index.html") {
+                    Ok(None)
+                } else if url.contains("/src/contrib/Archive/fastshap/") {
+                    Ok(Some(r#"<a href="fastshap_0.1.1.tar.gz">fastshap_0.1.1.tar.gz</a>"#.to_string()))
+                } else {
+                    Ok(None)
+                }
+            }));
+        });
+
+        let result = search_cran(&mut context, &package).await;
+
+        MOCK_GET_TEXT.with(|mock| *mock.borrow_mut() = None);
+
+        let result = result.expect("Archive 检索不应报错").expect("应命中 Archive");
+        assert_eq!(result.latest_version, "0.1.1");
+        assert_eq!(result.source, "cran");
+        assert_eq!(
+            result.repository,
+            "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz"
+        );
     }
 
     #[tokio::test]

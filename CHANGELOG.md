@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [2026-07-16 12:20:00 +08:00]
+
+### Fixed
+- **CRAN Archive 下架包安装命令**：修复 `fastshap` 等主路径下架但 Archive 存在的包被误生成为 `install.packages()` 的问题，Archive 命中结果现在携带明确的 `.tar.gz` 地址并生成 `remotes::install_url()`。
+
+### Changed
+- **Archive 结果语义增强**：CRAN Archive 检索结果的 `repository` 从模糊标记升级为实际 tarball URL，脚本生成端兼容旧 `archive` 标记并优先使用明确 URL。
+
+### Tests
+- **Archive 回归验证**：补充 `fastshap_0.1.1.tar.gz` 检索与脚本生成测试，并通过 Rust、前端和 Tauri 完整构建验证。
+
 ## [2026-07-16 11:55:00 +08:00]
 
 ### Fixed
