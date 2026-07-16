@@ -1835,6 +1835,49 @@ mod tests {
     }
 
     #[test]
+    fn cran_archive_tarball_takes_priority_over_github() {
+        let options = GenerateOptions {
+            method: "auto".to_string(),
+            conditional: false,
+            install_dependencies: false,
+            mirror: "https://mirrors.tuna.tsinghua.edu.cn/CRAN/".to_string(),
+            ..Default::default()
+        };
+        let results = vec![
+            SearchResult {
+                package: "fastshap".to_string(),
+                requested_version: String::new(),
+                latest_version: "0.1.1".to_string(),
+                repository: "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz".to_string(),
+                real_name: "fastshap".to_string(),
+                source: "cran".to_string(),
+                found: true,
+                message: "在 Archive 归档区中找到".to_string(),
+                status: "found".to_string(),
+                stage: "final".to_string(),
+            },
+            SearchResult {
+                package: "fastshap".to_string(),
+                requested_version: String::new(),
+                latest_version: "1.0.0".to_string(),
+                repository: "bgreenwell/fastshap".to_string(),
+                real_name: "fastshap".to_string(),
+                source: "github".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+                status: "found".to_string(),
+                stage: "final".to_string(),
+            },
+        ];
+
+        let script = generate_script("fastshap", &options, &results).expect("生成脚本成功");
+
+        assert!(script.contains("# [CRAN 已下架并归档: v0.1.1 | 自动同步]"));
+        assert!(script.contains("remotes::install_url(\"https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz\", dependencies = FALSE)"));
+        assert!(!script.contains("install_github"));
+    }
+
+    #[test]
     fn builds_history_from_supported_conditional_command_body() {
         let script = generate_script(
             "dplyr",

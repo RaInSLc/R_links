@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [2026-07-16 12:35:00 +08:00]
+
+### Fixed
+- **Archive 结果优先级闭环**：修复 CRAN Archive 已命中但进度结果发给前端前被降级，导致最终脚本仍选择 GitHub 的问题。
+
+### Changed
+- **CRAN Archive 可信校验**：进度事件清洗允许安全的 `https://cran.r-project.org/src/contrib/Archive/...tar.gz` 作为可信 CRAN repository，Archive 结果可与 GitHub 结果共同参与自动路由，并优先作为实际归档安装结果。
+
+### Tests
+- **Archive 与 GitHub 并存回归验证**：补充 Archive tarball 进度清洗测试，以及 `fastshap` 同时存在 Archive 和 GitHub 结果时优先生成 `remotes::install_url()` 的测试。
+
 ## [2026-07-16 12:20:00 +08:00]
 
 ### Fixed

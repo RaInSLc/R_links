@@ -136,7 +136,12 @@ fn is_trusted_emit_result(result: &SearchResult) -> bool {
     }
 
     match result.source.as_str() {
-        "cran" | "bioc" => result.repository.is_empty(),
+        "cran" => {
+            result.repository.is_empty()
+                || (result.repository.starts_with("https://cran.r-project.org/src/contrib/Archive/")
+                    && result.repository.ends_with(".tar.gz"))
+        }
+        "bioc" => result.repository.is_empty(),
         "biocGit" => !result.repository.is_empty(),
         "github" => github_emit_identity_matches(result),
         "r-forge" => result.repository == "http://R-Forge.R-project.org",
@@ -221,6 +226,29 @@ mod tests {
         });
         assert!(!result.found);
         assert_eq!(result.source, "none");
+    }
+
+    #[test]
+    fn sanitize_search_result_for_emit_keeps_cran_archive_tarball() {
+        let result = sanitize_search_result_for_emit(SearchResult {
+            package: "fastshap".to_string(),
+            requested_version: String::new(),
+            latest_version: "0.1.1".to_string(),
+            repository: "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz".to_string(),
+            real_name: "fastshap".to_string(),
+            source: "cran".to_string(),
+            found: true,
+            message: "Archive".to_string(),
+            status: "found".to_string(),
+            stage: "final".to_string(),
+        });
+
+        assert!(result.found);
+        assert_eq!(result.source, "cran");
+        assert_eq!(
+            result.repository,
+            "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz"
+        );
     }
 
     #[test]
