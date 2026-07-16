@@ -12,6 +12,7 @@ describe('SettingsView Component', () => {
       cranMirror: 'https://cloud.r-project.org',
       fullSearch: false,
       searchConcurrency: 6,
+      archiveGithubMajorGap: 1,
       conditional: true,
       installDependencies: true,
       showRemoteVersion: true,
@@ -40,6 +41,7 @@ describe('SettingsView Component', () => {
     onClearToken: vi.fn(),
     onFullSearchChange: vi.fn(),
     onSearchConcurrencyChange: vi.fn(),
+    onArchiveGithubMajorGapChange: vi.fn(),
     onConditionalChange: vi.fn(),
     onInstallDependenciesChange: vi.fn(),
     onShowRemoteVersionChange: vi.fn(),
@@ -120,6 +122,7 @@ describe('SettingsView Component', () => {
       includeLightDependencies: false,
       maxDependencyNodes: 100,
       searchConcurrency: 6,
+      archiveGithubMajorGap: 1,
     }));
     expect(props.onFontChange).toHaveBeenCalledWith('system');
     expect(props.onSaveSettings).not.toHaveBeenCalled();
@@ -133,6 +136,7 @@ describe('SettingsView Component', () => {
         settings: {
           fullSearch: 'yes',
           searchConcurrency: 99,
+          archiveGithubMajorGap: 99,
           maxCacheEntries: 20000,
           maxDependencyDepth: 9,
           maxDependencyNodes: 999,
@@ -158,6 +162,7 @@ describe('SettingsView Component', () => {
     expect(props.onReplaceSettings).toHaveBeenCalledWith(expect.objectContaining({
       fullSearch: false,
       searchConcurrency: 12,
+      archiveGithubMajorGap: 10,
       maxCacheEntries: 10000,
       maxDependencyDepth: 5,
       maxDependencyNodes: 500,
@@ -194,5 +199,16 @@ describe('SettingsView Component', () => {
     fireEvent.change(concurrencyInput, { target: { value: '8' } });
 
     expect(props.onSearchConcurrencyChange).toHaveBeenCalledWith(8);
+  });
+
+  it('策略设置中调整 Archive 转 GitHub 阈值时应触发回调', () => {
+    const props = createProps();
+    render(<SettingsView {...props} />);
+    fireEvent.click(screen.getByText('检索策略'));
+
+    const gapInput = screen.getByLabelText('Archive 转 GitHub 主版本差阈值');
+    fireEvent.change(gapInput, { target: { value: '2' } });
+
+    expect(props.onArchiveGithubMajorGapChange).toHaveBeenCalledWith(2);
   });
 });

@@ -18,6 +18,7 @@ pub struct Settings {
     pub cran_mirror: String,
     pub full_search: bool,
     pub search_concurrency: usize,
+    pub archive_github_major_gap: usize,
     pub conditional: bool,
     pub install_dependencies: bool,
     pub show_remote_version: bool,
@@ -40,6 +41,7 @@ pub struct PublicSettings {
     pub cran_mirror: String,
     pub full_search: bool,
     pub search_concurrency: usize,
+    pub archive_github_major_gap: usize,
     pub conditional: bool,
     pub install_dependencies: bool,
     pub show_remote_version: bool,
@@ -68,6 +70,7 @@ impl Default for Settings {
             cran_mirror: "https://cloud.r-project.org".to_string(),
             full_search: false,
             search_concurrency: 6,
+            archive_github_major_gap: 1,
             conditional: true,
             install_dependencies: true,
             show_remote_version: true,
@@ -89,6 +92,7 @@ impl Settings {
         let github_token = normalize_token(&self.github_token)?;
         let cran_mirror = normalize_cran_mirror_url(&self.cran_mirror)?;
         let search_concurrency = self.search_concurrency.clamp(1, 12);
+        let archive_github_major_gap = self.archive_github_major_gap.clamp(0, 10);
         let max_cache_entries = self.max_cache_entries.clamp(1, 10000);
         let max_dependency_depth = self.max_dependency_depth.clamp(1, 5);
         let max_dependency_nodes = self.max_dependency_nodes.clamp(1, 500);
@@ -100,6 +104,7 @@ impl Settings {
             cran_mirror,
             full_search: self.full_search,
             search_concurrency,
+            archive_github_major_gap,
             conditional: self.conditional,
             install_dependencies: self.install_dependencies,
             show_remote_version: self.show_remote_version,
@@ -121,6 +126,7 @@ impl Settings {
             cran_mirror: self.cran_mirror.clone(),
             full_search: self.full_search,
             search_concurrency: self.search_concurrency,
+            archive_github_major_gap: self.archive_github_major_gap,
             conditional: self.conditional,
             install_dependencies: self.install_dependencies,
             show_remote_version: self.show_remote_version,
@@ -169,15 +175,34 @@ fn normalize_pinned_methods(values: &[String]) -> Vec<String> {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerateOptions {
     pub method: String,
     pub conditional: bool,
     pub install_dependencies: bool,
     pub mirror: String,
+    #[serde(default = "default_archive_github_major_gap")]
+    pub archive_github_major_gap: usize,
     #[serde(default)]
     pub append_verify: bool,
+}
+
+pub fn default_archive_github_major_gap() -> usize {
+    1
+}
+
+impl Default for GenerateOptions {
+    fn default() -> Self {
+        Self {
+            method: String::new(),
+            conditional: false,
+            install_dependencies: false,
+            mirror: String::new(),
+            archive_github_major_gap: default_archive_github_major_gap(),
+            append_verify: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -763,5 +788,22 @@ mod tests {
             settings.normalized().expect("应能规范化").search_concurrency,
             12
         );
+    }
+
+    #[test]
+    fn normalizes_archive_github_major_gap_limit() {
+        let settings = Settings {
+            archive_github_major_gap: 99,
+            ..Settings::default()
+        };
+        assert_eq!(
+            settings
+                .normalized()
+                .expect("应能规范化")
+                .archive_github_major_gap,
+            10
+        );
+
+        assert_eq!(GenerateOptions::default().archive_github_major_gap, 1);
     }
 }

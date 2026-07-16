@@ -10,7 +10,7 @@ import type { Settings } from "./types";
 import { defaultSettings } from "./types";
 
 type SettingsBoolField = "fullSearch" | "conditional" | "installDependencies" | "showRemoteVersion" | "useCache" | "useFilter" | "resolveDependencies" | "includeLightDependencies";
-type SettingsPersistOverrides = Partial<Pick<Settings, SettingsBoolField | "searchConcurrency" | "maxCacheEntries" | "maxDependencyDepth" | "maxDependencyNodes" | "proxy" | "githubToken" | "cranMirror" | "pinnedMethods">>;
+type SettingsPersistOverrides = Partial<Pick<Settings, SettingsBoolField | "searchConcurrency" | "archiveGithubMajorGap" | "maxCacheEntries" | "maxDependencyDepth" | "maxDependencyNodes" | "proxy" | "githubToken" | "cranMirror" | "pinnedMethods">>;
 
 type SetStatus = (s: string) => void;
 
@@ -42,6 +42,7 @@ export function useSettings(setStatus: SetStatus) {
           cranMirror: clean.cranMirror,
           fullSearch: clean.fullSearch,
           searchConcurrency: clean.searchConcurrency,
+          archiveGithubMajorGap: clean.archiveGithubMajorGap,
           conditional: clean.conditional,
           installDependencies: clean.installDependencies,
           showRemoteVersion: clean.showRemoteVersion,
@@ -129,6 +130,7 @@ export function useSettings(setStatus: SetStatus) {
         cranMirror: publicSettings.cranMirror,
         fullSearch: publicSettings.fullSearch,
         searchConcurrency: publicSettings.searchConcurrency,
+        archiveGithubMajorGap: publicSettings.archiveGithubMajorGap,
         conditional: publicSettings.conditional,
         installDependencies: publicSettings.installDependencies,
         showRemoteVersion: publicSettings.showRemoteVersion,
@@ -174,6 +176,7 @@ export function useSettings(setStatus: SetStatus) {
         cranMirror: publicSettings.cranMirror,
         fullSearch: publicSettings.fullSearch,
         searchConcurrency: publicSettings.searchConcurrency,
+        archiveGithubMajorGap: publicSettings.archiveGithubMajorGap,
         conditional: publicSettings.conditional,
         installDependencies: publicSettings.installDependencies,
         showRemoteVersion: publicSettings.showRemoteVersion,

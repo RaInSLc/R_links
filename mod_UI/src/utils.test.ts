@@ -190,6 +190,16 @@ describe("sanitizePublicSettings", () => {
     expect(sanitizePublicSettings({ searchConcurrency: 0 }).searchConcurrency).toBe(6);
     expect(sanitizePublicSettings({ searchConcurrency: 99 }).searchConcurrency).toBe(6);
   });
+
+  it("keeps explicit archive GitHub major gap within range", () => {
+    const settings = sanitizePublicSettings({ archiveGithubMajorGap: 2, pinnedMethods: ["auto"] });
+    expect(settings.archiveGithubMajorGap).toBe(2);
+  });
+
+  it("defaults invalid archive GitHub major gap", () => {
+    expect(sanitizePublicSettings({ archiveGithubMajorGap: -1 }).archiveGithubMajorGap).toBe(1);
+    expect(sanitizePublicSettings({ archiveGithubMajorGap: 99 }).archiveGithubMajorGap).toBe(1);
+  });
 });
 
 describe("sanitizeSearchResponse", () => {

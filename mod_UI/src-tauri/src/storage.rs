@@ -50,6 +50,10 @@ fn default_search_concurrency() -> usize {
     6
 }
 
+fn default_archive_github_major_gap() -> usize {
+    1
+}
+
 fn default_max_dependency_depth() -> usize {
     2
 }
@@ -66,6 +70,8 @@ struct StoredSettings {
     full_search: bool,
     #[serde(default = "default_search_concurrency")]
     search_concurrency: usize,
+    #[serde(default = "default_archive_github_major_gap")]
+    archive_github_major_gap: usize,
     #[serde(default = "default_true")]
     conditional: bool,
     #[serde(default = "default_true")]
@@ -110,6 +116,7 @@ impl StoredSettings {
             cran_mirror: self.cran_mirror,
             full_search: self.full_search,
             search_concurrency: self.search_concurrency,
+            archive_github_major_gap: self.archive_github_major_gap,
             conditional: self.conditional,
             install_dependencies: self.install_dependencies,
             show_remote_version: self.show_remote_version,
@@ -134,6 +141,7 @@ impl StoredSettings {
             cran_mirror: settings.cran_mirror,
             full_search: settings.full_search,
             search_concurrency: settings.search_concurrency,
+            archive_github_major_gap: settings.archive_github_major_gap,
             conditional: settings.conditional,
             install_dependencies: settings.install_dependencies,
             show_remote_version: settings.show_remote_version,

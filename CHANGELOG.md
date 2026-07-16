@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [2026-07-16 22:20:00 +08:00]
+
+### Added
+- **Archive 与 GitHub 版本差策略**：新增 `archiveGithubMajorGap` 配置，默认值为 1；优先使用 CRAN Archive，当 GitHub 主版本号比 Archive 主版本号至少高出该阈值时自动改用 GitHub。
+
+### Changed
+- **策略参数外显**：设置页“检索策略”中新增“Archive 转 GitHub 主版本差阈值”，允许在 0 到 10 之间明确调整，避免自动路由规则黑盒化。
+
+### Tests
+- **版本差回归验证**：补充 GitHub 版本接近时继续使用 Archive、GitHub 主版本明显更高时改用 GitHub 的后端测试，并补充前端设置清洗和设置页回调测试。
+
 ## [2026-07-16 12:35:00 +08:00]
 
 ### Fixed

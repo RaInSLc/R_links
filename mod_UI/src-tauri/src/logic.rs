@@ -481,9 +481,14 @@ fn generate_script_inner(
             .then(|| choose_best_result(&package.name, &results, package.source_hint.as_deref()))
             .flatten()
         {
-            is_cran_archive = best.source == "cran"
-                && (best.repository == "archive"
-                    || best.repository.starts_with("https://cran.r-project.org/src/contrib/Archive/"));
+            let best = archive_github_override(
+                &package.name,
+                best,
+                &results,
+                options.archive_github_major_gap,
+            )
+            .unwrap_or(best);
+            is_cran_archive = best.source == "cran" && is_cran_archive_result(best);
             let source_label = source_label(&best.source);
             let remote_version = if show_remote_version {
                 format!(": v{}", best.latest_version)
@@ -733,6 +738,43 @@ fn choose_best_result<'a>(
         )
     });
     candidates.into_iter().next()
+}
+
+fn archive_github_override<'a>(
+    package: &str,
+    archive: &SearchResult,
+    results: &'a [SearchResult],
+    major_gap: usize,
+) -> Option<&'a SearchResult> {
+    if archive.source != "cran" || !is_cran_archive_result(archive) {
+        return None;
+    }
+    let archive_major = major_version(&archive.latest_version)?;
+    results
+        .iter()
+        .filter(|result| result.found && result.source == "github")
+        .filter(|result| result.package.eq_ignore_ascii_case(package))
+        .filter(|result| result_identity_matches_package(result, package))
+        .filter_map(|result| {
+            let github_major = major_version(&result.latest_version)?;
+            (github_major >= archive_major.saturating_add(major_gap)).then_some((github_major, result))
+        })
+        .max_by_key(|(github_major, _)| *github_major)
+        .map(|(_, result)| result)
+}
+
+fn major_version(version: &str) -> Option<usize> {
+    version
+        .split(|character: char| !character.is_ascii_digit())
+        .find(|segment| !segment.is_empty())
+        .and_then(|segment| segment.parse::<usize>().ok())
+}
+
+fn is_cran_archive_result(result: &SearchResult) -> bool {
+    result.repository == "archive"
+        || result
+            .repository
+            .starts_with("https://cran.r-project.org/src/contrib/Archive/")
 }
 
 fn result_identity_matches_package(result: &SearchResult, package: &str) -> bool {
@@ -1835,12 +1877,56 @@ mod tests {
     }
 
     #[test]
-    fn cran_archive_tarball_takes_priority_over_github() {
+    fn cran_archive_tarball_takes_priority_over_close_github_version() {
         let options = GenerateOptions {
             method: "auto".to_string(),
             conditional: false,
             install_dependencies: false,
             mirror: "https://mirrors.tuna.tsinghua.edu.cn/CRAN/".to_string(),
+            ..Default::default()
+        };
+        let results = vec![
+            SearchResult {
+                package: "fastshap".to_string(),
+                requested_version: String::new(),
+                latest_version: "0.1.1".to_string(),
+                repository: "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz".to_string(),
+                real_name: "fastshap".to_string(),
+                source: "cran".to_string(),
+                found: true,
+                message: "在 Archive 归档区中找到".to_string(),
+                status: "found".to_string(),
+                stage: "final".to_string(),
+            },
+            SearchResult {
+                package: "fastshap".to_string(),
+                requested_version: String::new(),
+                latest_version: "0.2.0".to_string(),
+                repository: "bgreenwell/fastshap".to_string(),
+                real_name: "fastshap".to_string(),
+                source: "github".to_string(),
+                found: true,
+                message: "验证成功".to_string(),
+                status: "found".to_string(),
+                stage: "final".to_string(),
+            },
+        ];
+
+        let script = generate_script("fastshap", &options, &results).expect("生成脚本成功");
+
+        assert!(script.contains("# [CRAN 已下架并归档: v0.1.1 | 自动同步]"));
+        assert!(script.contains("remotes::install_url(\"https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz\", dependencies = FALSE)"));
+        assert!(!script.contains("install_github"));
+    }
+
+    #[test]
+    fn github_replaces_archive_when_major_gap_reaches_threshold() {
+        let options = GenerateOptions {
+            method: "auto".to_string(),
+            conditional: false,
+            install_dependencies: false,
+            mirror: "https://mirrors.tuna.tsinghua.edu.cn/CRAN/".to_string(),
+            archive_github_major_gap: 1,
             ..Default::default()
         };
         let results = vec![
@@ -1872,9 +1958,9 @@ mod tests {
 
         let script = generate_script("fastshap", &options, &results).expect("生成脚本成功");
 
-        assert!(script.contains("# [CRAN 已下架并归档: v0.1.1 | 自动同步]"));
-        assert!(script.contains("remotes::install_url(\"https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz\", dependencies = FALSE)"));
-        assert!(!script.contains("install_github"));
+        assert!(script.contains("# [GitHub 已验证: v1.0.0 | 自动同步]"));
+        assert!(script.contains("remotes::install_github(\"bgreenwell/fastshap\", upgrade = \"never\", dependencies = FALSE)"));
+        assert!(!script.contains("install_url"));
     }
 
     #[test]
@@ -2945,6 +3031,7 @@ mod tests {
                 install_dependencies: true,
                 mirror: "https://cloud.r-project.org".to_string(),
                 append_verify: true,
+                ..Default::default()
             },
             &[],
         )

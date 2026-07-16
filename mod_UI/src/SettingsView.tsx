@@ -23,6 +23,7 @@ interface SettingsViewProps {
   onClearToken: () => void;
   onFullSearchChange: (v: boolean) => void;
   onSearchConcurrencyChange: (value: number) => void;
+  onArchiveGithubMajorGapChange: (value: number) => void;
   onConditionalChange: (v: boolean) => void;
   onInstallDependenciesChange: (v: boolean) => void;
   onShowRemoteVersionChange: (v: boolean) => void;
@@ -103,6 +104,7 @@ function sanitizeImportedSettings(value: unknown, current: Settings): Settings {
     cranMirror: stringValue(raw.cranMirror, current.cranMirror),
     fullSearch: booleanValue(raw.fullSearch, current.fullSearch),
     searchConcurrency: numberValue(raw.searchConcurrency, current.searchConcurrency, 1, 12),
+    archiveGithubMajorGap: numberValue(raw.archiveGithubMajorGap, current.archiveGithubMajorGap, 0, 10),
     conditional: booleanValue(raw.conditional, current.conditional),
     installDependencies: booleanValue(raw.installDependencies, current.installDependencies),
     showRemoteVersion: booleanValue(raw.showRemoteVersion, current.showRemoteVersion),
@@ -138,7 +140,7 @@ export function SettingsView({
   settings, tokenConfigured, showToken, settingsBusy,
   currentTheme, currentFont, checkingUpdate, updateState, updateMessage, appVersion, updateVersion,
   onProxyChange, onTokenChange, onTokenToggle, onClearToken,
-  onFullSearchChange, onSearchConcurrencyChange, onConditionalChange, onInstallDependenciesChange, onShowRemoteVersionChange,
+  onFullSearchChange, onSearchConcurrencyChange, onArchiveGithubMajorGapChange, onConditionalChange, onInstallDependenciesChange, onShowRemoteVersionChange,
   onUseCacheChange, onUseFilterChange, onMaxCacheEntriesChange,
   onCranMirrorChange, onMirrorSelect,
   onResolveDependenciesChange, onMaxDependencyDepthChange,
@@ -363,6 +365,21 @@ export function SettingsView({
           <Toggle checked={settings.installDependencies} label="安装依赖" description="默认开启：dependencies = TRUE" onChange={onInstallDependenciesChange} />
           <Toggle checked={settings.showRemoteVersion} label="同步远程版本" description="默认开启：显示版本并生成精确版本安装" onChange={onShowRemoteVersionChange} />
           <Toggle checked={settings.useFilter} label="启用输入过滤" description="默认开启：对输入内容应用过滤及排除规则" onChange={onUseFilterChange} />
+        </div>
+        <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+          <span>Archive 转 GitHub 主版本差阈值</span>
+          <small>默认 1：优先 CRAN Archive；当 GitHub 主版本号比 Archive 至少高此数值时改用 GitHub。设为 0 表示 GitHub 版本更高即使用 GitHub。</small>
+          <input
+            type="number"
+            aria-label="Archive 转 GitHub 主版本差阈值"
+            min={0}
+            max={10}
+            value={settings.archiveGithubMajorGap}
+            onChange={(event) => {
+              const val = Number(event.currentTarget.value);
+              if (Number.isFinite(val) && val >= 0 && val <= 10) onArchiveGithubMajorGapChange(Math.floor(val));
+            }}
+          />
         </div>
       </section>
 

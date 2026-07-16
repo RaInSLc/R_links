@@ -17,6 +17,7 @@ export interface Settings {
   cranMirror: string;
   fullSearch: boolean;
   searchConcurrency: number;
+  archiveGithubMajorGap: number;
   conditional: boolean;
   installDependencies: boolean;
   showRemoteVersion: boolean;
@@ -62,6 +63,7 @@ export const defaultSettings: Settings = {
   cranMirror: "https://cloud.r-project.org",
   fullSearch: false,
   searchConcurrency: 6,
+  archiveGithubMajorGap: 1,
   conditional: true,
   installDependencies: true,
   showRemoteVersion: true,

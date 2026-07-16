@@ -360,7 +360,7 @@ function AppContent() {
       }
       invoke<string>("generate_script", {
         input,
-        options: { method, conditional, installDependencies, mirror: settings.cranMirror, appendVerify: verifyInstall },
+        options: { method, conditional, installDependencies, mirror: settings.cranMirror, archiveGithubMajorGap: settings.archiveGithubMajorGap, appendVerify: verifyInstall },
         results,
         showRemoteVersion,
       })
@@ -724,6 +724,7 @@ function AppContent() {
               onClearToken={clearSavedToken}
               onFullSearchChange={(v) => updateAndPersistSettings((c) => ({ ...c, fullSearch: v }))}
               onSearchConcurrencyChange={(v) => updateAndPersistSettings((c) => ({ ...c, searchConcurrency: v }))}
+              onArchiveGithubMajorGapChange={(v) => updateAndPersistSettings((c) => ({ ...c, archiveGithubMajorGap: v }))}
               onUseCacheChange={(v) => updateAndPersistSettings((c) => ({ ...c, useCache: v }))}
               onUseFilterChange={(v) => updateAndPersistSettings((c) => ({ ...c, useFilter: v }))}
               onMaxCacheEntriesChange={(v) => updateAndPersistSettings((c) => ({ ...c, maxCacheEntries: v }))}

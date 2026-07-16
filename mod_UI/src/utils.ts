@@ -65,6 +65,7 @@ export interface PublicSettings {
   cranMirror: string;
   fullSearch: boolean;
   searchConcurrency: number;
+  archiveGithubMajorGap: number;
   conditional: boolean;
   installDependencies: boolean;
   showRemoteVersion: boolean;
@@ -551,6 +552,7 @@ export function sanitizePublicSettings(value: unknown): PublicSettings {
     cranMirror: safeText(s.cranMirror, MAX_RESULT_FIELD_CHARS) || "https://cloud.r-project.org",
     fullSearch: safeBoolean(s.fullSearch),
     searchConcurrency: typeof s.searchConcurrency === "number" && Number.isSafeInteger(s.searchConcurrency) && s.searchConcurrency >= 1 && s.searchConcurrency <= 12 ? s.searchConcurrency : 6,
+    archiveGithubMajorGap: typeof s.archiveGithubMajorGap === "number" && Number.isSafeInteger(s.archiveGithubMajorGap) && s.archiveGithubMajorGap >= 0 && s.archiveGithubMajorGap <= 10 ? s.archiveGithubMajorGap : 1,
     conditional: safeBoolean(s.conditional),
     installDependencies: safeBoolean(s.installDependencies),
     showRemoteVersion: safeBoolean(s.showRemoteVersion),
