@@ -82,6 +82,7 @@ describe("ReportView", () => {
       found: true,
       message: "缓存命中",
       status: "found",
+      stage: "cacheHit",
     },
     {
       package: "limitedpkg",

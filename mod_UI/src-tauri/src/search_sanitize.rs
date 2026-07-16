@@ -105,6 +105,10 @@ pub(crate) fn sanitize_search_result_for_emit(mut result: SearchResult) -> Searc
         };
     }
     result.status = sanitize_log_message(&result.status);
+    result.stage = match result.stage.as_str() {
+        "queued" | "cacheHit" | "searching" | "retrying" | "final" => result.stage,
+        _ => "final".to_string(),
+    };
     if result.found && !is_trusted_emit_result(&result) {
         result.found = false;
         result.latest_version.clear();

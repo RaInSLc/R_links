@@ -218,6 +218,7 @@ fn build_offline_results(
                 found: true,
                 message: "离线缓存命中".to_string(),
                 status: "found".to_string(),
+                stage: "cacheHit".to_string(),
             });
             continue;
         }
@@ -263,6 +264,7 @@ fn build_offline_results(
                 found: true,
                 message: "历史记录命中".to_string(),
                 status: "found".to_string(),
+                stage: "final".to_string(),
             });
         }
     }

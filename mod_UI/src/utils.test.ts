@@ -6,6 +6,7 @@ import {
   safeSource,
   safeStatusText,
   sanitizeStatus,
+  sanitizeSearchStage,
   sanitizeSearchResult,
   sanitizeSearchResponse,
   formatError,
@@ -124,6 +125,23 @@ describe("sanitizeStatus", () => {
   });
 });
 
+describe("sanitizeSearchStage", () => {
+  it("accepts valid stage values", () => {
+    expect(sanitizeSearchStage("queued")).toBe("queued");
+    expect(sanitizeSearchStage("cacheHit")).toBe("cacheHit");
+    expect(sanitizeSearchStage("searching")).toBe("searching");
+    expect(sanitizeSearchStage("retrying")).toBe("retrying");
+    expect(sanitizeSearchStage("final")).toBe("final");
+  });
+
+  it("defaults to final for invalid values", () => {
+    expect(sanitizeSearchStage("")).toBe("final");
+    expect(sanitizeSearchStage("invalid")).toBe("final");
+    expect(sanitizeSearchStage(null)).toBe("final");
+    expect(sanitizeSearchStage(undefined)).toBe("final");
+  });
+});
+
 describe("sanitizeSearchResult", () => {
   it("sanitizes a valid result", () => {
     const result = sanitizeSearchResult({
@@ -136,11 +154,13 @@ describe("sanitizeSearchResult", () => {
       found: true,
       message: "ok",
       status: "found",
+      stage: "cacheHit",
     });
     expect(result.package).toBe("dplyr");
     expect(result.source).toBe("cran");
     expect(result.found).toBe(true);
     expect(result.status).toBe("found");
+    expect(result.stage).toBe("cacheHit");
   });
 
   it("handles missing/null fields gracefully", () => {
@@ -149,6 +169,7 @@ describe("sanitizeSearchResult", () => {
     expect(result.source).toBe("none");
     expect(result.found).toBe(false);
     expect(result.status).toBe("notFound");
+    expect(result.stage).toBe("final");
   });
 
   it("rejects non-record input", () => {

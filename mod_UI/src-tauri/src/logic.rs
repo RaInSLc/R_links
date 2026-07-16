@@ -783,6 +783,11 @@ fn sanitize_search_result(result: &SearchResult) -> Option<SearchResult> {
         } else {
             "notFound".to_string()
         },
+        stage: if result.stage.is_empty() {
+            "final".to_string()
+        } else {
+            result.stage.clone()
+        },
     })
 }
 

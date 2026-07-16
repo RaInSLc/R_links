@@ -10,6 +10,7 @@ export interface SearchResult {
   found: boolean;
   message: string;
   status?: string;
+  stage?: string;
   verifiedCount?: number;
   upVotes?: number;
   downVotes?: number;
@@ -281,6 +282,11 @@ export function sanitizeStatus(value: unknown): string {
   return ["found", "notFound", "timeout", "rateLimited", "error"].includes(raw) ? raw : "notFound";
 }
 
+export function sanitizeSearchStage(value: unknown): string {
+  const raw = typeof value === "string" ? value : "";
+  return ["queued", "cacheHit", "searching", "retrying", "final"].includes(raw) ? raw : "final";
+}
+
 export function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -303,6 +309,7 @@ export function sanitizeSearchResult(value: unknown): SearchResult {
     found: safeBoolean(result.found),
     message: safeStatusText(result.message),
     status: sanitizeStatus(result.status),
+    stage: sanitizeSearchStage(result.stage),
   };
 }
 

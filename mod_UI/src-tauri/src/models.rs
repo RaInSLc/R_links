@@ -207,6 +207,8 @@ pub struct SearchResult {
     pub message: String,
     #[serde(default)]
     pub status: String,
+    #[serde(default)]
+    pub stage: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

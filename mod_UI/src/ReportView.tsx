@@ -20,7 +20,7 @@ function uniquePackages(results: SearchResult[]) {
 }
 
 function isCacheHitResult(result: SearchResult) {
-  return result.message.includes("缓存命中");
+  return result.stage === "cacheHit";
 }
 
 interface ReportViewProps {

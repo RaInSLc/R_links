@@ -311,6 +311,7 @@ pub async fn search_packages(
                     found: true,
                     message: "缓存命中".to_string(),
                     status: "found".to_string(),
+                    stage: "cacheHit".to_string(),
                 });
                 let _ = app.emit(
                     "search-progress",
@@ -631,6 +632,7 @@ async fn search_one_package(
                 found: false,
                 message,
                 status: status.to_string(),
+                stage: "final".to_string(),
             });
         }
 
@@ -1486,6 +1488,7 @@ fn found_result(
             found: false,
             message: "结果真实包名无效，已忽略".to_string(),
             status: "notFound".to_string(),
+            stage: "final".to_string(),
         };
     };
     SearchResult {
@@ -1498,6 +1501,7 @@ fn found_result(
         found: true,
         message: "验证成功".to_string(),
         status: "found".to_string(),
+        stage: "final".to_string(),
     }
 }
 
