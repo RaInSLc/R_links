@@ -118,6 +118,7 @@ impl RequestBudget {
 }
 
 struct SearchContext<'a> {
+    log_emitter: Option<(&'a AppHandle, u64)>,
     client: &'a Client,
     settings: &'a Settings,
     cancelled: &'a AtomicBool,
@@ -150,9 +151,10 @@ impl SearchContext<'_> {
     }
 
     fn log(&mut self, message: &str) {
-        if append_search_log(self.logs, message).is_some() {
-            // Note: We don't emit immediately here to avoid duplicate/frequent emits.
-            // They will be collected and emitted as a batch in `search_packages`.
+        if let Some((app, run_id)) = self.log_emitter {
+            log(app, run_id, self.logs, message);
+        } else {
+            let _ = append_search_log(self.logs, message);
         }
     }
 
@@ -351,6 +353,7 @@ pub async fn search_packages(
                     let mut task_logs = Vec::new();
                     let mut task_results = Vec::new();
                     let mut context = SearchContext {
+                        log_emitter: Some((app, run_id)),
                         client: client_ref,
                         settings: settings_ref,
                         cancelled: cancelled_ref,
@@ -367,12 +370,9 @@ pub async fn search_packages(
             })
             .collect();
 
-        let mut batch_new_logs = Vec::new();
         while let Some((task_results_inner, task_logs)) = futures.next().await {
             for msg in &task_logs {
-                if let Some(msg) = append_search_log(&mut logs, msg) {
-                    batch_new_logs.push(msg);
-                }
+                let _ = append_search_log(&mut logs, msg);
             }
 
             for result in &task_results_inner {
@@ -411,16 +411,6 @@ pub async fn search_packages(
                 );
                 sleep(STREAM_RESULT_PAUSE).await;
             }
-        }
-
-        if !batch_new_logs.is_empty() {
-            let _ = app.emit(
-                "search-log-batch",
-                SearchLogBatchEvent {
-                    run_id,
-                    messages: batch_new_logs,
-                },
-            );
         }
 
         processed += batch_size;
@@ -2065,6 +2055,33 @@ mod tests {
         assert!(search_stopped(&cancelled, &fresh_budget));
     }
 
+    #[test]
+    fn search_context_log_appends_without_emitter() {
+        let mut logs = Vec::new();
+        let cancelled = AtomicBool::new(false);
+        let budget = RequestBudget::new(1);
+        let timed_out = AtomicBool::new(false);
+        let settings = Settings::default();
+        let client = build_client(&settings).unwrap();
+
+        let mut context = SearchContext {
+            log_emitter: None,
+            client: &client,
+            settings: &settings,
+            cancelled: &cancelled,
+            budget: &budget,
+            deadline: Instant::now() + Duration::from_secs(10),
+            timed_out: &timed_out,
+            logs: &mut logs,
+            result_limit_reached: false,
+            github_rate_limited: false,
+        };
+
+        context.log("流式日志测试");
+
+        assert_eq!(logs, vec!["流式日志测试"]);
+    }
+
     #[tokio::test]
     async fn test_search_cran_mock_network() {
         let mut logs = Vec::new();
@@ -2075,6 +2092,7 @@ mod tests {
         let client = build_client(&settings).unwrap();
 
         let mut context = SearchContext {
+            log_emitter: None,
             client: &client,
             settings: &settings,
             cancelled: &cancelled,
@@ -2125,6 +2143,7 @@ mod tests {
         let client = build_client(&settings).unwrap();
 
         let mut context = SearchContext {
+            log_emitter: None,
             client: &client,
             settings: &settings,
             cancelled: &cancelled,

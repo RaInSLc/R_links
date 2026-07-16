@@ -20,6 +20,17 @@ function mergeSearchResults(current: SearchResult[], incoming: SearchResult[]) {
   return next;
 }
 
+export function mergeSearchLogs(current: string[], incoming: string[]) {
+  if (incoming.length === 0) return current;
+  let next = current;
+  const streamed = current.length;
+  const tail = incoming.slice(streamed);
+  for (const msg of tail) {
+    next = appendBounded(next, msg, MAX_SEARCH_LOGS);
+  }
+  return next;
+}
+
 export function useSearch(setStatus: SetStatus) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
@@ -106,13 +117,7 @@ export function useSearch(setStatus: SetStatus) {
       if (clean.runId !== activeSearchRunId.current) return;
       hasSearchEvidenceRef.current = clean.results.length > 0 || clean.logs.length > 0;
       setResults((current) => mergeSearchResults(current, clean.results));
-      setLogs((current) => {
-        let next = current;
-        for (const msg of clean.logs) {
-          next = appendBounded(next, msg, MAX_SEARCH_LOGS);
-        }
-        return next;
-      });
+      setLogs((current) => mergeSearchLogs(current, clean.logs));
       setDependencyGraph(clean.dependencyGraph || null);
       setStatus(clean.stopped ? "检索任务已停止" : "检索完成，脚本已自动刷新");
       if (!clean.stopped) onSetMethodAuto();

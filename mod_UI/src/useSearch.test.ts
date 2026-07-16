@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { useSearch } from './useSearch';
+import { mergeSearchLogs, useSearch } from './useSearch';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as tauriCore from '@tauri-apps/api/core';
 import * as tauriEvent from '@tauri-apps/api/event';
@@ -23,6 +23,14 @@ describe('useSearch Hook', () => {
       }
       return () => undefined;
     });
+  });
+
+  it('合并最终响应日志时不重复追加已流式显示的日志', () => {
+    expect(mergeSearchLogs(['开始', 'CRAN 命中'], ['开始', 'CRAN 命中'])).toEqual(['开始', 'CRAN 命中']);
+  });
+
+  it('合并最终响应日志时会补齐未通过事件到达的尾部日志', () => {
+    expect(mergeSearchLogs(['开始'], ['开始', 'CRAN 命中', '检索完成'])).toEqual(['开始', 'CRAN 命中', '检索完成']);
   });
 
   it('在收到具有匹配 runId 的 search-log-batch 事件时，应收集并拼接日志消息', async () => {
