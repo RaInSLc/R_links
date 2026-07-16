@@ -71,6 +71,31 @@ describe("ReportView", () => {
     },
   ];
 
+  const cachedResults: SearchResult[] = [
+    {
+      package: "ggplot2",
+      requestedVersion: "",
+      latestVersion: "3.5.0",
+      repository: "",
+      realName: "ggplot2",
+      source: "cran",
+      found: true,
+      message: "缓存命中",
+      status: "found",
+    },
+    {
+      package: "limitedpkg",
+      requestedVersion: "",
+      latestVersion: "",
+      repository: "",
+      realName: "limitedpkg",
+      source: "github",
+      found: false,
+      message: "频率限制",
+      status: "rateLimited",
+    },
+  ];
+
   it("renders report overview correctly", () => {
     render(
       <ReportView
@@ -167,5 +192,32 @@ describe("ReportView", () => {
     fireEvent.click(screen.getByRole("button", { name: /超时 1/ }));
     expect(handleRetry).toHaveBeenCalledWith(["slowpkg"]);
     expect(handleStatus).toHaveBeenCalledWith("已回填 1 个超时包，可重新检索");
+  });
+
+  it("renders task summary with cache hits and next action", () => {
+    render(
+      <ReportView
+        results={cachedResults}
+        logs={[]}
+        dependencyGraph={null}
+        packageCount={2}
+        uniqueFoundCount={1}
+        smartSuggestions={[]}
+        searching={false}
+        searchDuration={1500}
+        onClearLogs={() => {}}
+        onStatusChange={() => {}}
+        onApplySmartSuggestion={() => {}}
+        onRetryMissing={() => {}}
+      />
+    );
+
+    const summary = screen.getByLabelText("任务摘要");
+    expect(summary).toHaveTextContent("2/2 个包已返回结果");
+    expect(summary).toHaveTextContent("验证率 50%");
+    expect(summary).toHaveTextContent("缓存命中 1");
+    expect(summary).toHaveTextContent("限流 1");
+    expect(summary).toHaveTextContent("1.5s");
+    expect(summary).toHaveTextContent("建议配置 GitHub Token");
   });
 });

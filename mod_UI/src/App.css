@@ -1296,6 +1296,64 @@ input:focus-visible,
   letter-spacing: 0.04em;
 }
 
+.task-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--row-hover);
+}
+
+.task-summary-main {
+  display: grid;
+  gap: 3px;
+  min-width: 220px;
+}
+
+.task-summary-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.task-summary-main strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.task-summary-main small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.task-summary-grid {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-summary-grid span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.task-summary-grid strong {
+  color: var(--ink);
+}
+
 .failure-chip {
   display: inline-flex;
   align-items: center;

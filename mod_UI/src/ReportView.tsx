@@ -19,6 +19,10 @@ function uniquePackages(results: SearchResult[]) {
   return [...new Set(results.map((result) => result.package))];
 }
 
+function isCacheHitResult(result: SearchResult) {
+  return result.message.includes("缓存命中");
+}
+
 interface ReportViewProps {
   results: SearchResult[];
   logs: string[];
@@ -609,6 +613,25 @@ export function ReportView({
     const error = uniquePackages(results.filter((r) => !r.found && r.status === "error"));
     return { missing, timeout, rateLimited, error };
   }, [results]);
+
+  const taskSummary = useMemo(() => {
+    const uniqueResultPackages = new Set(results.map((r) => r.package)).size;
+    const cacheHits = new Set(results.filter(isCacheHitResult).map((r) => r.package)).size;
+    const failureTotal = failureGroups.missing.length + failureGroups.timeout.length + failureGroups.rateLimited.length + failureGroups.error.length;
+    const verifiedRate = packageCount > 0 ? Math.round((uniqueFoundCount / packageCount) * 100) : 0;
+    const nextAction = failureGroups.rateLimited.length > 0
+      ? "检测到限流，建议配置 GitHub Token 或稍后重试限流分组。"
+      : failureGroups.timeout.length > 0
+      ? "存在超时包，建议优先重试超时分组。"
+      : failureGroups.error.length > 0
+      ? "存在检索错误，建议检查代理或网络后重试错误分组。"
+      : failureGroups.missing.length > 0
+      ? "存在未找到包，建议开启全量检索或检查包名。"
+      : results.length > 0
+      ? "当前结果稳定，可复制脚本或导出报告。"
+      : "开始检索后将展示任务摘要。";
+    return { uniqueResultPackages, cacheHits, failureTotal, verifiedRate, nextAction };
+  }, [results, failureGroups, packageCount, uniqueFoundCount]);
 
   const retryFailureGroup = useCallback((label: string, packages: string[]) => {
     if (packages.length === 0 || searching) return;
@@ -1292,6 +1315,22 @@ export function ReportView({
             </div>
           )}
         </div>
+        {results.length > 0 && (
+          <div className="task-summary" aria-label="任务摘要">
+            <div className="task-summary-main">
+              <span className="task-summary-eyebrow">任务摘要</span>
+              <strong>{taskSummary.uniqueResultPackages}/{packageCount || taskSummary.uniqueResultPackages} 个包已返回结果 · 验证率 {taskSummary.verifiedRate}%</strong>
+              <small>{taskSummary.nextAction}</small>
+            </div>
+            <div className="task-summary-grid">
+              <span>缓存命中 <strong>{taskSummary.cacheHits}</strong></span>
+              <span>失败合计 <strong>{taskSummary.failureTotal}</strong></span>
+              <span>超时 <strong>{failureGroups.timeout.length}</strong></span>
+              <span>限流 <strong>{failureGroups.rateLimited.length}</strong></span>
+              <span>耗时 <strong>{searchDuration != null ? `${(searchDuration / 1000).toFixed(1)}s` : searching ? "进行中" : "-"}</strong></span>
+            </div>
+          </div>
+        )}
         {smartSuggestions.length > 0 && (
           <div className="smart-suggestion-list report-suggestions" aria-label="检索智能建议">
             {smartSuggestions.map((suggestion) => (
