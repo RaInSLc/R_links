@@ -481,13 +481,17 @@ fn generate_script_inner(
             .then(|| choose_best_result(&package.name, &results, package.source_hint.as_deref()))
             .flatten()
         {
-            let best = archive_github_override(
+            let archive_github_decision = archive_github_decision(
                 &package.name,
                 best,
                 &results,
                 options.archive_github_major_gap,
-            )
-            .unwrap_or(best);
+            );
+            let best = archive_github_decision
+                .as_ref()
+                .filter(|decision| decision.use_github)
+                .map(|decision| decision.github)
+                .unwrap_or(best);
             is_cran_archive = best.source == "cran" && is_cran_archive_result(best);
             let source_label = source_label(&best.source);
             let remote_version = if show_remote_version {
@@ -502,6 +506,9 @@ fn generate_script_inner(
                     format!("已验证{remote_version}")
                 };
                 output.push(format!("# [{source_label} {status_text} | 自动同步]"));
+                if let Some(decision) = archive_github_decision.as_ref() {
+                    output.push(decision.comment());
+                }
                 if (show_remote_version || is_cran_archive)
                     && is_clean_version(&best.latest_version)
                     && best.source != "github"
@@ -515,6 +522,9 @@ fn generate_script_inner(
                     format!("最新版本{remote_version}")
                 };
                 output.push(format!("# [{source_label} {status_text} | 保留指定版本]"));
+                if let Some(decision) = archive_github_decision.as_ref() {
+                    output.push(decision.comment());
+                }
                 if best.source == "bioc"
                     && !best.latest_version.is_empty()
                     && best.latest_version != version
@@ -740,12 +750,38 @@ fn choose_best_result<'a>(
     candidates.into_iter().next()
 }
 
-fn archive_github_override<'a>(
+struct ArchiveGithubDecision<'a> {
+    archive: &'a SearchResult,
+    github: &'a SearchResult,
+    archive_major: usize,
+    github_major: usize,
+    major_gap: usize,
+    use_github: bool,
+}
+
+impl ArchiveGithubDecision<'_> {
+    fn comment(&self) -> String {
+        let diff = self.github_major.saturating_sub(self.archive_major);
+        if self.use_github {
+            format!(
+                "# [Archive/GitHub 决策: GitHub v{} 主版本比 Archive v{} 高 {diff}，达到阈值 {}，使用 GitHub]",
+                self.github.latest_version, self.archive.latest_version, self.major_gap
+            )
+        } else {
+            format!(
+                "# [Archive/GitHub 决策: Archive v{}，GitHub v{}，主版本差 {diff} 未达到阈值 {}，保留 Archive]",
+                self.archive.latest_version, self.github.latest_version, self.major_gap
+            )
+        }
+    }
+}
+
+fn archive_github_decision<'a>(
     package: &str,
-    archive: &SearchResult,
+    archive: &'a SearchResult,
     results: &'a [SearchResult],
     major_gap: usize,
-) -> Option<&'a SearchResult> {
+) -> Option<ArchiveGithubDecision<'a>> {
     if archive.source != "cran" || !is_cran_archive_result(archive) {
         return None;
     }
@@ -757,10 +793,17 @@ fn archive_github_override<'a>(
         .filter(|result| result_identity_matches_package(result, package))
         .filter_map(|result| {
             let github_major = major_version(&result.latest_version)?;
-            (github_major >= archive_major.saturating_add(major_gap)).then_some((github_major, result))
+            Some((github_major, result))
         })
         .max_by_key(|(github_major, _)| *github_major)
-        .map(|(_, result)| result)
+        .map(|(github_major, github)| ArchiveGithubDecision {
+            archive,
+            github,
+            archive_major,
+            github_major,
+            major_gap,
+            use_github: github_major >= archive_major.saturating_add(major_gap),
+        })
 }
 
 fn major_version(version: &str) -> Option<usize> {
@@ -1915,6 +1958,7 @@ mod tests {
         let script = generate_script("fastshap", &options, &results).expect("生成脚本成功");
 
         assert!(script.contains("# [CRAN 已下架并归档: v0.1.1 | 自动同步]"));
+        assert!(script.contains("# [Archive/GitHub 决策: Archive v0.1.1，GitHub v0.2.0，主版本差 0 未达到阈值 1，保留 Archive]"));
         assert!(script.contains("remotes::install_url(\"https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz\", dependencies = FALSE)"));
         assert!(!script.contains("install_github"));
     }
@@ -1959,6 +2003,7 @@ mod tests {
         let script = generate_script("fastshap", &options, &results).expect("生成脚本成功");
 
         assert!(script.contains("# [GitHub 已验证: v1.0.0 | 自动同步]"));
+        assert!(script.contains("# [Archive/GitHub 决策: GitHub v1.0.0 主版本比 Archive v0.1.1 高 1，达到阈值 1，使用 GitHub]"));
         assert!(script.contains("remotes::install_github(\"bgreenwell/fastshap\", upgrade = \"never\", dependencies = FALSE)"));
         assert!(!script.contains("install_url"));
     }
