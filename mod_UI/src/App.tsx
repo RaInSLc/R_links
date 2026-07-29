@@ -255,7 +255,10 @@ function AppContent() {
   };
 
   function acceptInputValue(value: string, source: "manual" | "clipboard") {
-    const normalizedValue = trimTrailingBlankLines(normalizePackageInputDisplay(value));
+    const normalizedDisplayValue = normalizePackageInputDisplay(value);
+    const normalizedValue = source === "clipboard"
+      ? trimTrailingBlankLines(normalizedDisplayValue)
+      : normalizedDisplayValue;
     if (searchingRef.current) {
       setStatus("检索期间不能修改输入，请先停止当前任务");
       return "rejected";

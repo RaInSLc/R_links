@@ -67,6 +67,24 @@ describe('App Component Input Validation', () => {
     expect(textarea).toHaveValue('');
   });
 
+  it('手动输入时应保留换行，允许连续输入多行包名', async () => {
+    render(<App />);
+
+    const textarea = screen.getByLabelText('R 包输入列表');
+    fireEvent.change(textarea, { target: { value: 'scTenifoldKnk_1.0.3.tar.gz\n' } });
+    fireEvent.change(textarea, {
+      target: {
+        value: 'http://192.168.5.250:8011/softs/Rpackages/scTenifoldKnk_1.0.3.tar.gz\nscTenifoldNet',
+      },
+    });
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue(
+        'http://192.168.5.250:8011/softs/Rpackages/scTenifoldKnk_1.0.3.tar.gz\nscTenifoldNet',
+      );
+    });
+  });
+
   it('报告页复制安装指令失败时，应当显示状态提示', async () => {
     localStorage.setItem('rlinks_input', 'ggplot2');
     vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
