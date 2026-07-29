@@ -101,6 +101,20 @@ describe('SettingsView Component', () => {
     }));
   });
 
+  it('编辑空格分隔规则时应保留当前尾随空格', () => {
+    const props = createProps();
+    render(<SettingsView {...props} />);
+    fireEvent.click(screen.getByText('输入过滤'));
+
+    fireEvent.change(screen.getByPlaceholderText(', ;'), { target: { value: ', ' } });
+    fireEvent.change(screen.getByPlaceholderText('#'), { target: { value: '# ' } });
+    fireEvent.change(screen.getByPlaceholderText('例如: library require if else'), { target: { value: 'library ' } });
+
+    expect(props.onInputRulesChange).toHaveBeenNthCalledWith(1, expect.objectContaining({ separators: [',', ''] }));
+    expect(props.onInputRulesChange).toHaveBeenNthCalledWith(2, expect.objectContaining({ commentChars: ['#', ''] }));
+    expect(props.onInputRulesChange).toHaveBeenNthCalledWith(3, expect.objectContaining({ excludeKeywords: ['library', ''] }));
+  });
+
   it('点击“保存设置”按钮时，应触发 onSaveSettings 回调', () => {
     const props = createProps();
     render(<SettingsView {...props} />);

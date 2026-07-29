@@ -445,7 +445,10 @@ export function SettingsView({
           <small>用于将一行拆分为多个包名（空格分隔多个值，如 `, ;`）</small>
           <input
             value={inputRules.separators.join(" ")}
-            onChange={(event) => onInputRulesChange({ ...inputRules, separators: event.currentTarget.value.split(" ").map(s => s.trim()).filter(Boolean) })}
+            onChange={(event) => onInputRulesChange({
+              ...inputRules,
+              separators: event.currentTarget.value.split(" ").map((s) => s.trim()),
+            })}
             placeholder=", ;"
             maxLength={MAX_RESULT_FIELD_CHARS}
           />
@@ -460,7 +463,10 @@ export function SettingsView({
           <small>以这些字符开头的行将被忽略（空格分隔多个值）</small>
           <input
             value={inputRules.commentChars.join(" ")}
-            onChange={(event) => onInputRulesChange({ ...inputRules, commentChars: event.currentTarget.value.split(" ").map(s => s.trim()).filter(Boolean) })}
+            onChange={(event) => onInputRulesChange({
+              ...inputRules,
+              commentChars: event.currentTarget.value.split(" ").map((s) => s.trim()),
+            })}
             placeholder="#"
             maxLength={MAX_RESULT_FIELD_CHARS}
           />
@@ -496,7 +502,10 @@ export function SettingsView({
           <small>匹配这些词（不区分大小写）的包名将被忽略（空格分隔多个值）</small>
           <input
             value={(inputRules.excludeKeywords || []).join(" ")}
-            onChange={(event) => onInputRulesChange({ ...inputRules, excludeKeywords: event.currentTarget.value.split(" ").map(s => s.trim()).filter(Boolean) })}
+            onChange={(event) => onInputRulesChange({
+              ...inputRules,
+              excludeKeywords: event.currentTarget.value.split(" ").map((s) => s.trim()),
+            })}
             placeholder="例如: library require if else"
             maxLength={MAX_RESULT_FIELD_CHARS}
           />
