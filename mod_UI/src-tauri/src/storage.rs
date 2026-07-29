@@ -885,6 +885,10 @@ pub struct DependencyCacheEntry {
     pub heavy_deps: Vec<String>,
     pub light_deps: Vec<String>,
     pub version: String,
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub repository: String,
 }
 
 pub fn load_dependency_cache(

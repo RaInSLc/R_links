@@ -98,4 +98,26 @@ describe('useSettings', () => {
     expect(result.current.settings.includeLightDependencies).toBe(true);
     expect(result.current.settings.maxDependencyNodes).toBe(250);
   });
+
+  it('should queue a save requested while another save is pending', async () => {
+    let resolveFirst: ((value: any) => void) | undefined;
+    const saved = { proxy: '', githubTokenConfigured: false, cranMirror: 'https://cloud.r-project.org/', fullSearch: false, searchConcurrency: 6, archiveGithubMajorGap: 1, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100, pinnedMethods: ['auto', 'base', 'biocManager', 'github'] };
+    vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
+      if (cmd === 'save_settings') {
+        if (!resolveFirst) return new Promise((resolve) => { resolveFirst = resolve; });
+        return saved;
+      }
+      return saved;
+    });
+    const { result } = renderHook(() => useSettings(vi.fn()));
+    let first: Promise<void> | undefined;
+    act(() => { first = result.current.persistSettings({ fullSearch: true }); });
+    act(() => {
+      result.current.updateSettingsFromUser((current) => ({ ...current, fullSearch: false }));
+      void result.current.persistSettings();
+    });
+    resolveFirst?.(saved);
+    await act(async () => { await first; await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(vi.mocked(tauriCore.invoke).mock.calls.filter(([cmd]) => cmd === 'save_settings')).toHaveLength(2);
+  });
 });

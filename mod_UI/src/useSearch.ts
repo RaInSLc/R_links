@@ -43,6 +43,7 @@ export function useSearch(setStatus: SetStatus) {
   const hasSearchEvidenceRef = useRef(false);
   const browserOpenInProgress = useRef(false);
   const searchStartTime = useRef(0);
+  const listenerReadyRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     let active = true;
@@ -79,6 +80,7 @@ export function useSearch(setStatus: SetStatus) {
       if (active) setStatus(`检索进度监听失败: ${formatError(error)}`);
       return () => undefined;
     });
+    listenerReadyRef.current = Promise.all([unlistenLog, unlistenProgress]).then(() => undefined);
     return () => {
       active = false;
       void unlistenLog.then((u) => u());
@@ -99,13 +101,20 @@ export function useSearch(setStatus: SetStatus) {
       }
       return;
     }
+    const runId = nextSearchRunId();
+    activeSearchRunId.current = runId;
+    hasSearchEvidenceRef.current = false;
+    try {
+      await listenerReadyRef.current;
+    } catch (error) {
+      activeSearchRunId.current = 0;
+      setStatus(`检索监听初始化失败: ${formatError(error)}`);
+      return;
+    }
     searchingRef.current = true;
     setSearching(true);
     setSearchDuration(null);
     searchStartTime.current = Date.now();
-    const runId = nextSearchRunId();
-    activeSearchRunId.current = runId;
-    hasSearchEvidenceRef.current = false;
     setResults([]);
     setLogs([]);
     setDependencyGraph(null);

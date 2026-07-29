@@ -37,6 +37,15 @@ struct DependencyRequest {
     repository: String,
 }
 
+fn dependency_cache_key(package: &str, source: &str, repository: &str) -> String {
+    format!(
+        "{}\u{1f}{}\u{1f}{}",
+        package.to_ascii_lowercase(),
+        source.to_ascii_lowercase(),
+        repository.to_ascii_lowercase(),
+    )
+}
+
 fn merge_roots(target: &mut Vec<String>, roots: Vec<String>) {
     for root in roots {
         if !target.contains(&root) {
@@ -353,14 +362,23 @@ pub async fn resolve_dependencies(
             .map(|request| {
                 let client_clone = client.clone();
                 let mirror = settings.cran_mirror.clone();
-                let cache_entry = dep_cache.get(&request.package).cloned();
+                let cache_key = dependency_cache_key(
+                    &request.package,
+                    &request.source,
+                    &request.repository,
+                );
+                let cache_entry = dep_cache.get(&cache_key).cloned();
                 async move {
-                    if let Some(entry) = cache_entry {
+                    if let Some(entry) = cache_entry.filter(|entry| {
+                        request.version.is_empty() || entry.version == request.version
+                    }) {
                         return (
                             request.package,
                             request.depth,
                             request.path_roots,
                             request.source,
+                            request.version,
+                            request.repository,
                             Ok((entry.heavy_deps, entry.light_deps, entry.version)),
                         );
                     }
@@ -380,6 +398,8 @@ pub async fn resolve_dependencies(
                         request.depth,
                         request.path_roots,
                         request.source,
+                        request.version,
+                        request.repository,
                         parsed,
                     )
                 }
@@ -389,7 +409,7 @@ pub async fn resolve_dependencies(
         let results = join_all(futures).await;
         let mut new_cache_entries = HashMap::new();
 
-        for (pkg, depth, path_roots, source, parsed_res) in results {
+        for (pkg, depth, path_roots, source, _requested_version, repository, parsed_res) in results {
             if cancelled.load(Ordering::SeqCst) {
                 break;
             }
@@ -404,13 +424,16 @@ pub async fn resolve_dependencies(
 
             match parsed_res {
                 Ok((heavy_deps, light_deps, version)) => {
-                    if !dep_cache.contains_key(&pkg) {
+                    let cache_key = dependency_cache_key(&pkg, &source, &repository);
+                    if !dep_cache.contains_key(&cache_key) {
                         new_cache_entries.insert(
-                            pkg.clone(),
+                            cache_key,
                             storage::DependencyCacheEntry {
                                 heavy_deps: heavy_deps.clone(),
                                 light_deps: light_deps.clone(),
                                 version: version.clone(),
+                                source: source.clone(),
+                                repository: repository.clone(),
                             },
                         );
                     }

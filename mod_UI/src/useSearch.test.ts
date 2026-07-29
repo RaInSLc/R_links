@@ -68,6 +68,10 @@ describe('useSearch Hook', () => {
       );
     });
 
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
     // 触发一个匹配当前 runId 的日志消息
     await act(async () => {
       logCallback({
@@ -84,6 +88,26 @@ describe('useSearch Hook', () => {
     await act(async () => {
       if (searchPromise) await searchPromise;
     });
+  });
+
+  it('启动检索前应等待日志和进度监听注册完成', async () => {
+    const resolveListeners: Array<() => void> = [];
+    vi.mocked(tauriEvent.listen).mockImplementation(async (event, callback) => {
+      if (event === 'search-log-batch') logCallback = callback;
+      await new Promise<void>((resolve) => { resolveListeners.push(resolve); });
+      return () => undefined;
+    });
+    vi.mocked(tauriCore.invoke).mockResolvedValue({ runId: 1, results: [], logs: [], stopped: false } as any);
+    const { result } = renderHook(() => useSearch(vi.fn()));
+    let searchPromise: Promise<void> | undefined;
+    act(() => {
+      searchPromise = result.current.startSearch('ggplot2', {} as any, false, vi.fn(), vi.fn());
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(tauriCore.invoke).not.toHaveBeenCalledWith('start_search', expect.anything());
+    resolveListeners.forEach((resolve) => resolve());
+    await act(async () => { await searchPromise; });
+    expect(tauriCore.invoke).toHaveBeenCalledWith('start_search', expect.anything());
   });
 
   it('在收到不匹配的 runId 时，应过滤并忽略该日志', async () => {

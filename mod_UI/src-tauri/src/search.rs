@@ -295,7 +295,13 @@ pub async fn search_packages(
             let index = batch_start + offset;
             let cache_key = package.name.to_ascii_lowercase();
 
-            if let Some(cached_entry) = cache.get(&cache_key).filter(|entry| entry.is_trusted()) {
+            if let Some(cached_entry) = cache
+                .get(&cache_key)
+                .filter(|entry| entry.is_trusted())
+                .filter(|entry| {
+                    package.version.is_empty() || version_compatible(&entry.version, &package.version)
+                })
+            {
                 log(
                     app,
                     run_id,
@@ -1462,6 +1468,18 @@ fn version_compatible(found: &str, requested: &str) -> bool {
             && found
                 .strip_prefix(requested)
                 .is_some_and(|suffix| suffix.starts_with('.')))
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::version_compatible;
+
+    #[test]
+    fn cache_version_must_match_requested_version() {
+        assert!(version_compatible("1.2.3", "1.2.3"));
+        assert!(version_compatible("1.2.3", "1.2"));
+        assert!(!version_compatible("1.3.0", "1.2"));
+    }
 }
 
 fn found_result(

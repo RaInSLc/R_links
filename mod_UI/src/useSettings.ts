@@ -23,6 +23,7 @@ export function useSettings(setStatus: SetStatus) {
   const latestSettingsRef = useRef(defaultSettings);
   const settingsActionSeq = useRef(0);
   const settingsBusyRef = useRef(false);
+  const pendingSettingsSaveRef = useRef(false);
 
   function applySettings(next: Settings) {
     latestSettingsRef.current = next;
@@ -111,6 +112,10 @@ export function useSettings(setStatus: SetStatus) {
   }
 
   async function persistSettings(overrides?: SettingsPersistOverrides) {
+    if (settingsBusyRef.current) {
+      pendingSettingsSaveRef.current = true;
+      return;
+    }
     if (!beginSettingsOperation()) return;
     const actionSeq = settingsActionSeq.current + 1;
     settingsActionSeq.current = actionSeq;
@@ -152,7 +157,10 @@ export function useSettings(setStatus: SetStatus) {
           : `先前设置保存失败，当前修改尚未保存: ${formatError(error)}`,
       );
     } finally {
+      const shouldFlush = pendingSettingsSaveRef.current;
+      pendingSettingsSaveRef.current = false;
       endSettingsOperation();
+      if (shouldFlush) void persistSettings();
     }
   }
 
