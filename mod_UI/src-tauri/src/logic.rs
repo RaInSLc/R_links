@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 
 use crate::models::{
-    normalize_cran_mirror_url, normalize_https_url, url_has_explicit_port, GenerateOptions,
+    normalize_cran_mirror_url, url_has_explicit_port, GenerateOptions,
     HistoryRecord, InputRules, PackageInput, ReverseDependenciesInfo, SearchResult,
     MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS,
     MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
@@ -1351,8 +1351,24 @@ fn is_clean_version(version: &str) -> bool {
 }
 
 fn normalize_install_archive_url(value: &str) -> Result<String, String> {
-    let normalized = normalize_https_url(value, "安装 URL")?;
-    let parsed = Url::parse(&normalized).map_err(|_| "安装 URL 必须是有效 URL".to_string())?;
+    let trimmed = value.trim();
+    if trimmed.is_empty()
+        || trimmed.len() > MAX_FIELD_CHARS
+        || trimmed.chars().any(|character| character.is_control())
+    {
+        return Err("安装 URL 包含非法字符或长度过长".to_string());
+    }
+    let parsed = Url::parse(trimmed).map_err(|_| "安装 URL 必须是有效 URL".to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("安装 URL 仅支持 http 或 https".to_string());
+    }
+    if parsed.host_str().is_none() {
+        return Err("安装 URL 缺少主机名".to_string());
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("安装 URL 不允许包含用户名或密码".to_string());
+    }
+    let normalized = parsed.to_string();
     if parsed.query().is_some() || parsed.fragment().is_some() {
         return Err("安装 URL 不允许包含查询参数或片段".to_string());
     }
@@ -1695,6 +1711,28 @@ mod tests {
             extract_package_name("https://example.org/src/contrib/demo.package.zip"),
             "demo.package"
         );
+    }
+
+    #[test]
+    fn accepts_http_archive_url_with_explicit_port() {
+        let value = parse_input_line(
+            "http://192.168.5.250:8011/softs/Rpackages/scTenifoldNet_1.3.tar.gz",
+        )
+        .expect("本地 HTTP R 包归档 URL 应可解析");
+        assert_eq!(value.name, "scTenifoldNet");
+        assert_eq!(value.version, "");
+    }
+
+    #[test]
+    fn rejects_archive_url_with_query_or_fragment() {
+        assert!(parse_input_line(
+            "http://192.168.5.250:8011/scTenifoldNet_1.3.tar.gz?download=1"
+        )
+        .is_none());
+        assert!(parse_input_line(
+            "http://192.168.5.250:8011/scTenifoldNet_1.3.tar.gz#download"
+        )
+        .is_none());
     }
 
     #[test]
@@ -2063,7 +2101,7 @@ mod tests {
         assert!(supported_history_command(
             "remotes::install_url(\"https://example.org:443/src/contrib/demo_1.0.0.tar.gz\", dependencies = TRUE)"
         )
-        .is_none());
+        .is_some());
         assert!(supported_history_command(
             "remotes::install_url(\"https://github.com/owner/demo\", dependencies = TRUE)"
         )
@@ -2357,8 +2395,8 @@ mod tests {
         assert!(parse_input_line("https://example.org/src/contrib/demo_1.0.0.tar.gz").is_some());
         assert!(parse_input_line("demo https://example.org/pkg_1.0.tar.gz").is_none());
         assert!(parse_input_line("https://user:pass@example.com/pkg_1.0.tar.gz").is_none());
-        assert!(parse_input_line("https://example.org:443/pkg_1.0.tar.gz").is_none());
-        assert!(parse_input_line("http://example.com/pkg_1.0.tar.gz").is_none());
+        assert!(parse_input_line("https://example.org:443/pkg_1.0.tar.gz").is_some());
+        assert!(parse_input_line("http://example.com/pkg_1.0.tar.gz").is_some());
         assert!(parse_input_line("ftp://example.com/pkg_1.0.tar.gz").is_none());
         assert!(parse_input_line("https://github.com/owner/demo").is_none());
         assert!(parse_input_line("https://example.com/pkg_1.0.tar.gz?token=secret").is_none());
