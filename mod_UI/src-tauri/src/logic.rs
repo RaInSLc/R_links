@@ -457,7 +457,8 @@ fn generate_script_inner(
     let mut output = Vec::new();
     for package in packages {
         let mut is_cran_archive = false;
-        let is_archive_url = package.raw.starts_with("https://");
+        let is_archive_url = package.raw.starts_with("http://")
+            || package.raw.starts_with("https://");
         if is_archive_url && !matches!(requested_method, "auto" | "devtools" | "remotes") {
             return Err(format!(
                 "安装归档 URL 仅支持智能路由、devtools 或 remotes，不能使用 {requested_method}"
@@ -1877,6 +1878,28 @@ mod tests {
         assert!(output.contains("requireNamespace(\"demo\", quietly = TRUE)"));
         assert!(output.contains("install.packages(\"other\""));
         assert!(!output.contains("install_version(\"demo\""));
+    }
+
+    #[test]
+    fn auto_routes_local_http_archive_url_to_install_url() {
+        let input = "http://192.168.5.250:8011/softs/Rpackages/scTenifoldNet_1.3.tar.gz";
+        let output = generate_script(
+            input,
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: false,
+                mirror: "https://mirrors.tuna.tsinghua.edu.cn/CRAN/".to_string(),
+                ..Default::default()
+            },
+            &[],
+        )
+        .expect("本地 HTTP 归档 URL 应使用远程归档安装");
+
+        assert!(output.contains(
+            "remotes::install_url(\"http://192.168.5.250:8011/softs/Rpackages/scTenifoldNet_1.3.tar.gz\""
+        ));
+        assert!(!output.contains("install.packages(\"scTenifoldNet\""));
     }
 
     #[test]

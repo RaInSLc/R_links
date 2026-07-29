@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-29 00:10:00 +08:00]
+
+### Fixed
+- **本地 HTTP 归档自动路由**：修复 HTTP R 包归档 URL 已通过输入校验但生成阶段未识别为归档，错误降级为 `install.packages()` 的问题；现在自动模式生成 `remotes::install_url()`。
+
+### Tests
+- **本地归档路由回归验证**：新增 `scTenifoldNet` 内网 HTTP 归档 URL 的自动脚本生成测试。
+
 ## [2026-07-29 00:00:00 +08:00]
 
 ### Fixed
