@@ -17,6 +17,7 @@ import {
   dedupeBoundedResults,
   resultIdentityKey,
   buildInputSmartSuggestions,
+  classifyInputProfile,
   buildSearchPlanPreview,
   buildResultSmartSuggestions,
   extractCanonicalInput,
@@ -469,6 +470,19 @@ describe("dedupePackageInput", () => {
   it("handles URL lines", () => {
     const url = "https://example.org/pkg_1.0.tar.gz";
     expect(dedupePackageInput(`${url}\n${url}`)).toBe(url);
+  });
+
+  it("handles local HTTP URL lines", () => {
+    const url = "http://192.168.5.250:8011/pkg_1.0.tar.gz";
+    expect(dedupePackageInput(`${url}\n${url}`)).toBe(url);
+  });
+});
+
+describe("classifyInputProfile", () => {
+  it("classifies HTTP archive URLs as URL inputs", () => {
+    expect(classifyInputProfile(
+      "http://192.168.5.250:8011/pkg_1.0.tar.gz\ndplyr",
+    )).toEqual({ total: 2, archiveUrls: 1, repositories: 0 });
   });
 });
 

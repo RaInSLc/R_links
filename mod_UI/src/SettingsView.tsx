@@ -470,7 +470,10 @@ export function SettingsView({
           <small>匹配这些正则表达式的行/段将被直接忽略（每行一个）</small>
           <textarea
             value={(inputRules.excludeRegex || []).join("\n")}
-            onChange={(event) => onInputRulesChange({ ...inputRules, excludeRegex: event.currentTarget.value.split("\n").map(s => s.trim()).filter(Boolean) })}
+            onChange={(event) => onInputRulesChange({
+              ...inputRules,
+              excludeRegex: event.currentTarget.value.split(/\r?\n/).map((s) => s.trim()),
+            })}
             placeholder="例如: ^library\( 或 ^install\.packages\("
             rows={3}
             style={{ 

@@ -88,6 +88,19 @@ describe('SettingsView Component', () => {
     expect(props.onSaveInputRules).toHaveBeenCalledTimes(1);
   });
 
+  it('编辑排除正则时应保留换行位置', () => {
+    const props = createProps();
+    render(<SettingsView {...props} />);
+    fireEvent.click(screen.getByText('输入过滤'));
+
+    const textarea = screen.getByPlaceholderText('例如: ^library\\( 或 ^install\\.packages\\(');
+    fireEvent.change(textarea, { target: { value: '^library\\(\n' } });
+
+    expect(props.onInputRulesChange).toHaveBeenCalledWith(expect.objectContaining({
+      excludeRegex: ['^library\\(', ''],
+    }));
+  });
+
   it('点击“保存设置”按钮时，应触发 onSaveSettings 回调', () => {
     const props = createProps();
     render(<SettingsView {...props} />);

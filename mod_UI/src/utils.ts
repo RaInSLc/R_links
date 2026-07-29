@@ -133,6 +133,12 @@ export const MAX_SEARCH_LOGS = 1_000;
 const INPUT_SEPARATORS = /[,;]/;
 const DEFAULT_PINNED_METHODS: Method[] = ["auto", "base", "biocManager", "github"];
 const VALID_METHODS: Method[] = ["auto", "devtools", "remotes", "github", "base", "version", "biocManager", "checkSystem"];
+const HTTP_INPUT_URL_RE = /^https?:\/\//i;
+
+function isHttpInputUrl(value: string): boolean {
+  return HTTP_INPUT_URL_RE.test(value);
+}
+
 function splitInputLine(line: string): string[] {
   const trimmed = line.trim();
   if (!trimmed || trimmed.startsWith("#")) return [];
@@ -212,7 +218,7 @@ export function extractCanonicalInput(value: string): string {
       continue;
     }
 
-    if (/^https:\/\//i.test(trimmed)) {
+    if (isHttpInputUrl(trimmed)) {
       pushUniqueInput(items, trimmed);
     }
   }
@@ -618,7 +624,7 @@ export function classifyInputProfile(value: string): { total: number; archiveUrl
     if (!raw || raw.startsWith("#")) {
       continue;
     }
-    if (/^https:\/\//i.test(raw)) {
+    if (isHttpInputUrl(raw)) {
       profile.total += 1;
       profile.archiveUrls += 1;
       if (profile.total > MAX_PACKAGE_LINES) break;
@@ -700,7 +706,7 @@ export function dedupePackageInput(value: string): string {
     const trimmed = line.trim();
     if (!trimmed) { if (out.length > 0) out.push(""); continue; }
     if (trimmed.startsWith("#")) { out.push(line); continue; }
-    if (/^https:\/\//i.test(trimmed)) {
+    if (isHttpInputUrl(trimmed)) {
       const key = trimmed.toLowerCase();
       if (!seen.has(key)) { seen.add(key); out.push(trimmed); }
       continue;
@@ -731,7 +737,7 @@ export function countDuplicatePackages(value: string): number {
   for (const line of value.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
-    if (/^https:\/\//i.test(trimmed)) { items.push(trimmed.toLowerCase()); continue; }
+    if (isHttpInputUrl(trimmed)) { items.push(trimmed.toLowerCase()); continue; }
     items.push(...splitInputLine(trimmed).map((s) => s.toLowerCase()));
   }
   if (items.length === 0) return 0;
@@ -755,7 +761,7 @@ export function buildInputSmartSuggestions(
   const dedupedInput = (() => {
     const items: string[] = [];
     for (const line of activeLines) {
-      if (/^https:\/\//i.test(line)) { items.push(line); continue; }
+      if (isHttpInputUrl(line)) { items.push(line); continue; }
       items.push(...splitInputLine(line));
     }
     const lower = items.map((s) => s.toLowerCase());
