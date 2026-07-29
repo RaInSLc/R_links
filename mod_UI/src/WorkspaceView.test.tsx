@@ -63,6 +63,17 @@ describe("WorkspaceView", () => {
     expect(textarea).toHaveValue("dplyr\ntidyr");
   });
 
+  it("preserves multiline input when Enter is pressed", () => {
+    const handleInputChange = vi.fn();
+    render(<WorkspaceView {...defaultProps} input="dplyr" onInputChange={handleInputChange} />);
+    const textarea = screen.getByRole("textbox", { name: "R 包输入列表" }) as HTMLTextAreaElement;
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    expect(handleInputChange).toHaveBeenCalledWith("dplyr\n", "manual");
+  });
+
   it("calls onClear when clear button is clicked", () => {
     const handleClear = vi.fn();
     render(<WorkspaceView {...defaultProps} onClear={handleClear} />);

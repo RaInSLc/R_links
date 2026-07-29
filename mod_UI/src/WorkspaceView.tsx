@@ -191,6 +191,22 @@ export function WorkspaceView({
               }
             }}
             onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                const el = e.currentTarget;
+                const start = el.selectionStart;
+                const end = el.selectionEnd;
+                onInputChange(
+                  input.slice(0, start) + "\n" + input.slice(end),
+                  "manual",
+                );
+                requestAnimationFrame(() => {
+                  if (textareaRef.current) {
+                    textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + 1;
+                  }
+                });
+                return;
+              }
               if (e.key === "Tab") {
                 e.preventDefault();
                 const el = e.currentTarget;
