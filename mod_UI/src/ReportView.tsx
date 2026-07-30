@@ -16,7 +16,16 @@ function isErrorResult(result: SearchResult) {
 }
 
 function uniquePackages(results: SearchResult[]) {
-  return [...new Set(results.map((result) => result.package))];
+  const packages: string[] = [];
+  const seen = new Set<string>();
+  for (const result of results) {
+    const key = result.package.toLocaleLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      packages.push(result.package);
+    }
+  }
+  return packages;
 }
 
 function isCacheHitResult(result: SearchResult) {
@@ -598,11 +607,11 @@ export function ReportView({
   }, [results, resultFilter, debouncedSearch, sourceFilter]);
 
   const missingCount = useMemo(
-    () => new Set(results.filter(isPlainMissingResult).map((r) => r.package)).size,
+    () => uniquePackages(results.filter(isPlainMissingResult)).length,
     [results],
   );
   const errorCount = useMemo(
-    () => new Set(results.filter(isErrorResult).map((r) => r.package)).size,
+    () => uniquePackages(results.filter(isErrorResult)).length,
     [results],
   );
 
@@ -615,8 +624,8 @@ export function ReportView({
   }, [results]);
 
   const taskSummary = useMemo(() => {
-    const uniqueResultPackages = new Set(results.map((r) => r.package)).size;
-    const cacheHits = new Set(results.filter(isCacheHitResult).map((r) => r.package)).size;
+    const uniqueResultPackages = uniquePackages(results).length;
+    const cacheHits = uniquePackages(results.filter(isCacheHitResult)).length;
     const failureTotal = failureGroups.missing.length + failureGroups.timeout.length + failureGroups.rateLimited.length + failureGroups.error.length;
     const verifiedRate = packageCount > 0 ? Math.round((uniqueFoundCount / packageCount) * 100) : 0;
     const nextAction = failureGroups.rateLimited.length > 0
@@ -1086,9 +1095,7 @@ export function ReportView({
                     type="button"
                     className="button ghost compact-btn"
                     onClick={async () => {
-                      const missing = [...new Set(
-                        results.filter((r) => !r.found).map((r) => r.package),
-                      )];
+                      const missing = uniquePackages(results.filter((r) => !r.found));
                       try {
                         await writeText(missing.join("\n"));
                         onStatusChange(`已复制 ${missing.length} 个未找到的包名`);
@@ -1104,9 +1111,7 @@ export function ReportView({
                     className="button ghost compact-btn"
                     disabled={searching}
                     onClick={() => {
-                      const missing = [...new Set(
-                        results.filter((r) => !r.found).map((r) => r.package),
-                      )];
+                       const missing = uniquePackages(results.filter((r) => !r.found));
                       onRetryMissing(missing);
                     }}
                   >
@@ -1118,11 +1123,7 @@ export function ReportView({
                       className="button ghost compact-btn"
                       disabled={searching}
                       onClick={() => {
-                        const errorPkgs = [...new Set(
-                          results
-                            .filter(isErrorResult)
-                            .map((r) => r.package),
-                        )];
+                       const errorPkgs = uniquePackages(results.filter(isErrorResult));
                         onRetryMissing(errorPkgs);
                       }}
                     >

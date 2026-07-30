@@ -195,6 +195,32 @@ describe("ReportView", () => {
     expect(handleStatus).toHaveBeenCalledWith("已回填 1 个超时包，可重新检索");
   });
 
+  it("deduplicates failure retries case-insensitively", () => {
+    const handleRetry = vi.fn();
+    render(
+      <ReportView
+        results={[
+          ...mockResults,
+          { ...mockResults[1], package: "NONEXIST" },
+        ]}
+        logs={[]}
+        dependencyGraph={null}
+        packageCount={5}
+        uniqueFoundCount={1}
+        smartSuggestions={[]}
+        searching={false}
+        searchDuration={1200}
+        onClearLogs={() => {}}
+        onStatusChange={() => {}}
+        onApplySmartSuggestion={() => {}}
+        onRetryMissing={handleRetry}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "重试全部失败" }));
+    expect(handleRetry).toHaveBeenCalledWith(["nonexist", "slowpkg", "limitedpkg", "brokenpkg"]);
+  });
+
   it("renders task summary with cache hits and next action", () => {
     render(
       <ReportView
