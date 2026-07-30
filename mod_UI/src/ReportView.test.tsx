@@ -247,4 +247,29 @@ describe("ReportView", () => {
     expect(summary).toHaveTextContent("1.5s");
     expect(summary).toHaveTextContent("建议配置 GitHub Token");
   });
+
+  it("uses the requested version in the copied CRAN command and shows version difference", async () => {
+    const writeText = await import("@tauri-apps/plugin-clipboard-manager").then((module) => module.writeText);
+    const requested = { ...mockResults[0], requestedVersion: "1.0.0", latestVersion: "1.1.2" };
+    render(
+      <ReportView
+        results={[requested]}
+        logs={[]}
+        dependencyGraph={null}
+        packageCount={1}
+        uniqueFoundCount={1}
+        smartSuggestions={[]}
+        searching={false}
+        searchDuration={1200}
+        onClearLogs={() => {}}
+        onStatusChange={() => {}}
+        onApplySmartSuggestion={() => {}}
+        onRetryMissing={() => {}}
+      />
+    );
+
+    expect(screen.getByText(/1\.1\.2（请求 1\.0\.0）/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByTitle(/复制安装指令/)[0]);
+    expect(vi.mocked(writeText)).toHaveBeenCalledWith(expect.stringContaining('install_version("dplyr", version = "1.0.0"'));
+  });
 });

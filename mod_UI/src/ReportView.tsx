@@ -494,6 +494,9 @@ function DependencyListView({ graph }: { graph: DependencyGraph }) {
 function getInstallCommand(result: SearchResult): string {
   if (!result.found) return result.package;
   if (result.source === "cran") {
+    if (result.requestedVersion) {
+      return `remotes::install_version("${result.package}", version = "${result.requestedVersion}", repos = "https://cloud.r-project.org", upgrade = "never")`;
+    }
     return `install.packages("${result.package}")`;
   }
   if (result.source === "bioc") {
@@ -506,8 +509,9 @@ function getInstallCommand(result: SearchResult): string {
     return `remotes::install_git("https://git.bioconductor.org/packages/${result.package}", ref = "${release}", upgrade = "never")`;
   }
   if (result.source === "github" && result.repository) {
-    if (result.latestVersion) {
-      const cleanVer = result.latestVersion.startsWith("v") ? result.latestVersion : `v${result.latestVersion}`;
+    const selectedVersion = result.requestedVersion || result.latestVersion;
+    if (selectedVersion) {
+      const cleanVer = selectedVersion.startsWith("v") ? selectedVersion : `v${selectedVersion}`;
       return `remotes::install_github("${result.repository}@${cleanVer}", upgrade = "never")`;
     }
     return `remotes::install_github("${result.repository}", upgrade = "never")`;
@@ -520,6 +524,18 @@ function getInstallCommand(result: SearchResult): string {
 
 function isCacheFeedbackSource(source: string) {
   return CACHE_FEEDBACK_SOURCES.has(source);
+}
+
+function resultSelectionKey(result: SearchResult) {
+  return `${result.package}\u0001${result.requestedVersion}\u0001${result.source}\u0001${result.repository}\u0001${result.realName}`;
+}
+
+function sourceCredibility(source: string, stage?: string) {
+  if (stage === "cacheHit") return "缓存验证";
+  if (source === "cran" || source === "bioc") return "官方源";
+  if (source === "github") return "仓库验证";
+  if (source === "r-forge") return "社区源";
+  return "未验证";
 }
 
 export function ReportView({
@@ -895,8 +911,7 @@ export function ReportView({
                   type="button"
                   className="button ghost compact-btn"
                   onClick={() => {
-                    const missing = new Set(results.filter(isPlainMissingResult).map((r) => r.package));
-                    setSelectedResults(missing);
+                    setSelectedResults(new Set(results.filter(isPlainMissingResult).map(resultSelectionKey)));
                   }}
                   title="选中所有未找到的包"
                 >
@@ -908,8 +923,7 @@ export function ReportView({
                   type="button"
                   className="button ghost compact-btn"
                   onClick={() => {
-                    const errored = new Set(results.filter(isErrorResult).map((r) => r.package));
-                    setSelectedResults(errored);
+                    setSelectedResults(new Set(results.filter(isErrorResult).map(resultSelectionKey)));
                   }}
                   title="选中所有异常的包"
                 >
@@ -922,7 +936,7 @@ export function ReportView({
                 onClick={() => {
                   const inverted = new Set<string>();
                   sortedResults.forEach((r) => {
-                    if (!selectedResults.has(r.package)) inverted.add(r.package);
+                    if (!selectedResults.has(resultSelectionKey(r))) inverted.add(resultSelectionKey(r));
                   });
                   setSelectedResults(inverted);
                 }}
@@ -937,7 +951,7 @@ export function ReportView({
                   className="button ghost compact-btn"
                   onClick={async () => {
                     const cmds = sortedResults
-                      .filter((r) => selectedResults.has(r.package))
+                      .filter((r) => selectedResults.has(resultSelectionKey(r)))
                       .map((r) => getInstallCommand(r));
                     const unique = [...new Set(cmds)];
                     try {
@@ -954,7 +968,7 @@ export function ReportView({
                   type="button"
                   className="button ghost compact-btn"
                   onClick={async () => {
-                    const names = [...new Set(sortedResults.filter((r) => selectedResults.has(r.package)).map((r) => r.package))];
+                    const names = [...new Set(sortedResults.filter((r) => selectedResults.has(resultSelectionKey(r))).map((r) => r.package))];
                     const rVector = `c(${names.map((n) => `"${n}"`).join(", ")})`;
                     try {
                       await writeText(rVector);
@@ -1150,12 +1164,14 @@ export function ReportView({
                       ? `"${v.replace(/"/g, '""')}"`
                       : v;
                   };
-                  const header = ["包名", "来源", "版本", "仓库", "状态", "安装命令"].join(",");
+                   const header = ["包名", "请求版本", "实际版本", "来源", "可信度", "仓库", "状态", "安装命令"].join(",");
                   const rows = results.map((r) =>
                     [
                       escape(r.package),
-                      escape(sourceNames[r.source] ?? r.source),
+                      escape(r.requestedVersion),
                       escape(r.latestVersion),
+                      escape(sourceNames[r.source] ?? r.source),
+                      escape(sourceCredibility(r.source, r.stage)),
                       escape(r.repository),
                       escape(
                         r.found
@@ -1196,9 +1212,11 @@ export function ReportView({
                     packageCount,
                     uniqueFoundCount,
                     results: results.map((r) => ({
-                      package: r.package,
-                      source: r.source,
-                      version: r.latestVersion || null,
+                       package: r.package,
+                       source: r.source,
+                       requestedVersion: r.requestedVersion || null,
+                       credibility: sourceCredibility(r.source, r.stage),
+                       version: r.latestVersion || null,
                       repository: r.repository || null,
                       found: r.found,
                       status: r.found ? "found" : r.status,
@@ -1219,11 +1237,13 @@ export function ReportView({
                 type="button"
                 className="button ghost compact-btn"
                 onClick={() => {
-                  const header = ["包名", "来源", "版本", "仓库", "状态"];
-                  const rows = results.map((r) => [
-                    r.package,
-                    sourceNames[r.source] ?? r.source,
-                    r.latestVersion || "",
+                   const header = ["包名", "请求版本", "实际版本", "来源", "可信度", "仓库", "状态"];
+                   const rows = results.map((r) => [
+                     r.package,
+                     r.requestedVersion || "",
+                     r.latestVersion || "",
+                     sourceNames[r.source] ?? r.source,
+                     sourceCredibility(r.source, r.stage),
                     r.repository || "",
                     r.found ? "已验证" : r.status === "timeout" ? "超时" : r.status === "rateLimited" ? "频率限制" : r.status === "error" ? "检索异常" : "未找到",
                   ].map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","));
@@ -1257,9 +1277,9 @@ export function ReportView({
                     ``,
                     `## 已验证 (${found.length})`,
                     ``,
-                    `| # | 包名 | 来源 | 版本 | 仓库 |`,
-                    `|---|------|------|------|------|`,
-                    ...found.map((r, i) => `| ${i + 1} | \`${r.package}\` | ${sourceNames[r.source] ?? r.source} | ${r.latestVersion || "-"} | ${r.repository || "-"} |`),
+                     `| # | 包名 | 请求版本 | 实际版本 | 来源 | 可信度 | 仓库 |`,
+                     `|---|------|----------|----------|------|--------|------|`,
+                     ...found.map((r, i) => `| ${i + 1} | \`${r.package}\` | ${r.requestedVersion || "-"} | ${r.latestVersion || "-"} | ${sourceNames[r.source] ?? r.source} | ${sourceCredibility(r.source, r.stage)} | ${r.repository || "-"} |`),
                     ``,
                   ];
                   if (missing.length > 0) {
@@ -1500,11 +1520,11 @@ export function ReportView({
                     <span role="columnheader" className="result-check-cell">
                       <input
                         type="checkbox"
-                        checked={sortedResults.length > 0 && sortedResults.every((r) => selectedResults.has(r.package))}
+                      checked={sortedResults.length > 0 && sortedResults.every((r) => selectedResults.has(resultSelectionKey(r)))}
                         onChange={() => {
-                          const allSelected = sortedResults.length > 0 && sortedResults.every((r) => selectedResults.has(r.package));
+                          const allSelected = sortedResults.length > 0 && sortedResults.every((r) => selectedResults.has(resultSelectionKey(r)));
                           if (allSelected) setSelectedResults(new Set());
-                          else setSelectedResults(new Set(sortedResults.map((r) => r.package)));
+                          else setSelectedResults(new Set(sortedResults.map(resultSelectionKey)));
                         }}
                         aria-label="全选"
                       />
@@ -1542,7 +1562,7 @@ export function ReportView({
                     <span role="cell" className="result-check-cell">
                       <input
                         type="checkbox"
-                        checked={selectedResults.has(result.package)}
+                        checked={selectedResults.has(resultSelectionKey(result))}
                         onChange={() => {}}
                         onClick={(e) => {
                           if (e.shiftKey && lastCheckedRef.current >= 0) {
@@ -1559,8 +1579,9 @@ export function ReportView({
                           } else {
                             setSelectedResults((prev) => {
                               const next = new Set(prev);
-                              if (next.has(result.package)) next.delete(result.package);
-                              else next.add(result.package);
+                               const key = resultSelectionKey(result);
+                               if (next.has(key)) next.delete(key);
+                               else next.add(key);
                               return next;
                             });
                           }
@@ -1587,6 +1608,9 @@ export function ReportView({
                       >
                         {sourceNames[result.source] ?? result.source}
                       </span>
+                      <small title="来源可信度" style={{ marginLeft: "4px", color: "var(--muted)" }}>
+                        {sourceCredibility(result.source, result.stage)}
+                      </small>
                       <button
                         type="button"
                         className={`row-copy-btn ${isCopied ? "copied" : ""}`}
@@ -1620,7 +1644,9 @@ export function ReportView({
                           }
                         }}
                       >
-                        {result.latestVersion || "—"}
+                        {result.requestedVersion && result.latestVersion && result.requestedVersion !== result.latestVersion
+                          ? `${result.latestVersion}（请求 ${result.requestedVersion}）`
+                          : result.latestVersion || "—"}
                       </code>
                     )}
                     {showRepoCol && (
