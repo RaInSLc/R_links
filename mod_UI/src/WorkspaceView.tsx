@@ -20,6 +20,7 @@ interface WorkspaceViewProps {
   scriptCommandCount: number;
   duplicateCount: number;
   searching: boolean;
+  paused?: boolean;
   openingSearchTabs: boolean;
   onInputChange: (value: string, source: "manual" | "clipboard") => string;
   onPaste: () => void;
@@ -27,6 +28,7 @@ interface WorkspaceViewProps {
   onOpenSearchTabs: () => void;
   onStartSearch: () => void;
   onStopSearch: () => void;
+  onTogglePause?: () => void;
   onMethodChange: (method: Method) => void;
   pinnedMethods: Method[];
   onPinnedMethodsChange: (methods: Method[]) => void;
@@ -52,12 +54,12 @@ export function WorkspaceView({
   smartSuggestions,
   script, scriptTooLarge,
   scriptCommandCount, duplicateCount,
-  searching, openingSearchTabs,
+  searching, paused, openingSearchTabs,
   onInputChange, onPaste, onClear, onOpenSearchTabs, onStartSearch, onStopSearch,
   onMethodChange, pinnedMethods, onPinnedMethodsChange, onApplySmartSuggestion, onConditionalChange, onInstallDependenciesChange,
   onShowRemoteVersionChange, onVerifyInstallChange, onFullSearchChange,
   onUseCacheChange, onTempFilter,
-  onCopyScript, onCleanComments, onDownloadScript,
+  onCopyScript, onCleanComments, onDownloadScript, onTogglePause = () => {},
   copyWithLineNumbers, onCopyWithLineNumbersChange, isMethodDisabled,
 }: WorkspaceViewProps) {
   const [filterText, setFilterText] = useState("");
@@ -403,7 +405,10 @@ export function WorkspaceView({
             {openingSearchTabs ? "正在打开..." : "浏览器搜索"}
           </button>
           {searching ? (
-            <button className="button danger" onClick={onStopSearch}>停止</button>
+            <>
+              <button className="button ghost" onClick={onTogglePause}>{paused ? "继续" : "暂停"}</button>
+              <button className="button danger" onClick={onStopSearch}>停止</button>
+            </>
           ) : (
             <button className="button primary" onClick={onStartSearch} disabled={!input.trim() || inputTooLarge} title="Ctrl+Enter">
               开始检索<span className="kbd-hint">Ctrl+↵</span>

@@ -218,6 +218,7 @@ pub async fn search_packages(
     app: &AppHandle,
     run_id: u64,
     cancelled: &AtomicBool,
+    state: &crate::SearchState,
     input: &str,
     settings: &Settings,
 ) -> Result<SearchResponse, String> {
@@ -278,6 +279,9 @@ pub async fn search_packages(
     let mut processed = 0usize;
 
     while processed < packages.len() {
+        while state.is_paused(run_id) && !cancelled.load(Ordering::SeqCst) {
+            sleep(SEARCH_STOP_POLL_INTERVAL).await;
+        }
         if search_stopped(cancelled, &budget) || timed_out.load(Ordering::SeqCst) {
             break;
         }
@@ -293,6 +297,10 @@ pub async fn search_packages(
         let mut batch_tasks = Vec::new();
         for (offset, package) in batch.iter().enumerate() {
             let index = batch_start + offset;
+            if state.is_package_cancelled(run_id, &package.name) {
+                log(app, run_id, &mut logs, &format!("[{}/{}] {} 已取消", index + 1, total, package.name));
+                continue;
+            }
             let cache_key = package.name.to_ascii_lowercase();
 
             if let Some(cached_entry) = cache

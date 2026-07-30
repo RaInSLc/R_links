@@ -152,6 +152,7 @@ function AppContent() {
 
   const { results, setResults, logs, setLogs, dependencyGraph,
     searching, openingSearchTabs, searchingRef, hasSearchEvidenceRef,
+    paused, togglePauseSearch, cancelSearchPackage,
     searchDuration,
     startSearch, stopSearch, openSearchTabs } = search;
   const { settings, showToken, setShowToken,
@@ -637,11 +638,11 @@ function AppContent() {
               script={script} scriptTooLarge={scriptTooLarge}
               scriptCommandCount={scriptCommandCount}
               duplicateCount={duplicateCount}
-              searching={searching} openingSearchTabs={openingSearchTabs}
+               searching={searching} paused={paused} openingSearchTabs={openingSearchTabs}
               onInputChange={acceptInputValue} onPaste={pasteInput}
               onClear={() => acceptInputValue("", "manual")}
               onOpenSearchTabs={() => openSearchTabs(input, inputTooLarge, inputRules.separators)}
-              onStartSearch={handleStartSearch} onStopSearch={stopSearch}
+               onStartSearch={handleStartSearch} onStopSearch={stopSearch} onTogglePause={togglePauseSearch}
               onMethodChange={setMethod}
               pinnedMethods={pinnedMethods}
               onPinnedMethodsChange={setPinnedMethodsFromUser}
@@ -673,7 +674,7 @@ function AppContent() {
               onFullSearchChange={(v) => updateAndPersistSettings((c) => ({ ...c, fullSearch: v }))}
               onUseCacheChange={(v) => updateAndPersistSettings((c) => ({ ...c, useCache: v }))}
               onTempFilter={handleTempFilter}
-              onCopyScript={copyScript} onCleanComments={cleanComments}
+               onCopyScript={copyScript} onCleanComments={cleanComments}
               copyWithLineNumbers={copyWithLineNumbers}
               onCopyWithLineNumbersChange={setCopyWithLineNumbers}
               onDownloadScript={downloadScript}
@@ -700,11 +701,12 @@ function AppContent() {
                   handleStartSearch();
                 }
               }}
-              onRetryMissing={(packages) => {
+               onRetryMissing={(packages) => {
                 acceptInputValue(packages.join("\n"), "manual");
                 setView("workspace");
                 setStatus(`已回填 ${packages.length} 个未找到的包名，可重新检索`);
-              }}
+               }}
+               onCancelPackage={cancelSearchPackage}
             />
           )}
           {view === "history" && (

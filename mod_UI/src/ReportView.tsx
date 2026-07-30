@@ -45,6 +45,7 @@ interface ReportViewProps {
   onStatusChange: (status: string) => void;
   onApplySmartSuggestion: (suggestion: SmartSuggestion) => void;
   onRetryMissing: (packages: string[]) => void;
+  onCancelPackage?: (packageName: string) => void;
 }
 
 function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
@@ -551,6 +552,7 @@ export function ReportView({
   onStatusChange,
   onApplySmartSuggestion,
   onRetryMissing,
+  onCancelPackage,
 }: ReportViewProps) {
   const [activeTab, setActiveTab] = useState<"graph" | "list">("graph");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -1590,7 +1592,7 @@ export function ReportView({
                         aria-label={`选择 ${result.package}`}
                       />
                     </span>
-                    <strong
+                     <strong
                       role="cell"
                       className={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github" || result.source === "r-forge") ? "pkg-link" : ""}
                       onClick={(e) => {
@@ -1598,7 +1600,17 @@ export function ReportView({
                         handleOpenPage(result);
                       }}
                       title={result.found && (result.source === "cran" || result.source === "bioc" || result.source === "github" || result.source === "r-forge") ? `点击打开网页 · Alt+点击搜索此包` : `Alt+点击搜索此包`}
-                    >{result.package}</strong>
+                     >{result.package}</strong>
+                     {searching && onCancelPackage && (
+                       <button
+                         type="button"
+                         className="row-copy-btn"
+                         title={`取消 ${result.package} 的检索`}
+                         onClick={() => onCancelPackage(result.package)}
+                       >
+                         取消
+                       </button>
+                     )}
                     <span role="cell" className="source-cell-with-copy">
                       <span
                         className={`source-tag ${result.source}${sourceFilter === result.source ? " tag-active" : ""}`}

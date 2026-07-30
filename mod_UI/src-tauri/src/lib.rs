@@ -9,7 +9,7 @@ mod storage;
 
 use regex::Regex;
 use reqwest::Client;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, MutexGuard, OnceLock,
@@ -35,7 +35,9 @@ pub struct SearchState {
 
 struct SearchStateInner {
     running: bool,
+    paused: bool,
     run_id: u64,
+    cancelled_packages: HashSet<String>,
     cancellation: Arc<AtomicBool>,
 }
 
@@ -50,7 +52,9 @@ impl Default for SearchState {
         Self {
             inner: Mutex::new(SearchStateInner {
                 running: false,
+                paused: false,
                 run_id: 0,
+                cancelled_packages: HashSet::new(),
                 cancellation: Arc::new(AtomicBool::new(false)),
             }),
         }
@@ -69,7 +73,9 @@ impl SearchState {
 
         let cancellation = Arc::new(AtomicBool::new(false));
         inner.running = true;
+        inner.paused = false;
         inner.run_id = run_id;
+        inner.cancelled_packages.clear();
         inner.cancellation = Arc::clone(&cancellation);
         Ok(SearchRunGuard {
             state: self,
@@ -86,6 +92,36 @@ impl SearchState {
 
         inner.cancellation.store(true, Ordering::SeqCst);
         true
+    }
+
+    fn set_paused(&self, run_id: u64, paused: bool) -> bool {
+        let mut inner = self.lock_inner();
+        if !inner.running || inner.run_id != run_id {
+            return false;
+        }
+        inner.paused = paused;
+        true
+    }
+
+    pub(crate) fn is_paused(&self, run_id: u64) -> bool {
+        let inner = self.lock_inner();
+        inner.running && inner.run_id == run_id && inner.paused
+    }
+
+    pub(crate) fn cancel_package(&self, run_id: u64, package: &str) -> bool {
+        let mut inner = self.lock_inner();
+        if !inner.running || inner.run_id != run_id {
+            return false;
+        }
+        inner.cancelled_packages.insert(package.to_ascii_lowercase());
+        true
+    }
+
+    pub(crate) fn is_package_cancelled(&self, run_id: u64, package: &str) -> bool {
+        let inner = self.lock_inner();
+        inner.running
+            && inner.run_id == run_id
+            && inner.cancelled_packages.contains(&package.to_ascii_lowercase())
     }
 
     fn lock_inner(&self) -> MutexGuard<'_, SearchStateInner> {
@@ -120,7 +156,9 @@ impl Drop for SearchRunGuard<'_> {
         let mut inner = self.state.lock_inner();
         if inner.run_id == self.run_id && Arc::ptr_eq(&inner.cancellation, &self.cancellation) {
             inner.running = false;
+            inner.paused = false;
             inner.run_id = 0;
+            inner.cancelled_packages.clear();
             inner.cancellation = Arc::new(AtomicBool::new(false));
         }
     }
@@ -437,6 +475,21 @@ fn stop_search(state: State<'_, SearchState>, run_id: u64) -> bool {
 }
 
 #[tauri::command]
+fn pause_search(state: State<'_, SearchState>, run_id: u64) -> bool {
+    state.set_paused(run_id, true)
+}
+
+#[tauri::command]
+fn resume_search(state: State<'_, SearchState>, run_id: u64) -> bool {
+    state.set_paused(run_id, false)
+}
+
+#[tauri::command]
+fn cancel_search_package(state: State<'_, SearchState>, run_id: u64, package: String) -> bool {
+    state.cancel_package(run_id, &package)
+}
+
+#[tauri::command]
 fn export_diagnostics(
     app: AppHandle,
     search_summary: Option<serde_json::Value>,
@@ -490,7 +543,7 @@ async fn start_search(
     let run = state.try_begin(run_id)?;
     let existing = load_existing_settings_for_runtime(&app)?;
     let settings = merge_runtime_settings(settings, &existing)?;
-    let result = search::search_packages(&app, run_id, run.cancelled(), &input, &settings).await;
+    let result = search::search_packages(&app, run_id, run.cancelled(), &state, &input, &settings).await;
     drop(run);
     result
 }
@@ -710,6 +763,9 @@ pub fn run() {
             open_package_page,
             start_search,
             stop_search,
+            pause_search,
+            resume_search,
+            cancel_search_package,
             export_diagnostics,
             load_input_rules,
             save_input_rules,
@@ -753,6 +809,37 @@ mod tests {
         drop(run);
         assert!(!state.is_running_for_test());
         assert!(!state.is_cancelled_for_test());
+    }
+
+    #[test]
+    fn search_state_toggles_pause_only_for_active_run() {
+        let state = SearchState::default();
+        let run = state.try_begin(25).expect("应允许启动检索任务");
+
+        assert!(!state.is_paused(25));
+        assert!(!state.set_paused(24, true));
+        assert!(state.set_paused(25, true));
+        assert!(state.is_paused(25));
+        assert!(state.set_paused(25, false));
+        assert!(!state.is_paused(25));
+
+        drop(run);
+        assert!(!state.is_paused(25));
+    }
+
+    #[test]
+    fn search_state_cancels_only_matching_package_and_run() {
+        let state = SearchState::default();
+        let run = state.try_begin(26).expect("应允许启动检索任务");
+
+        assert!(!state.is_package_cancelled(26, "dplyr"));
+        assert!(!state.cancel_package(25, "dplyr"));
+        assert!(state.cancel_package(26, "DPLYR"));
+        assert!(state.is_package_cancelled(26, "dplyr"));
+        assert!(!state.is_package_cancelled(26, "ggplot2"));
+
+        drop(run);
+        assert!(!state.is_package_cancelled(26, "dplyr"));
     }
 
     #[test]

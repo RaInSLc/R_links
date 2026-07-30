@@ -158,4 +158,26 @@ describe('useSearch Hook', () => {
 
     expect(result.current.logs).not.toContain('异常日志');
   });
+
+  it('可以暂停并继续当前检索任务', async () => {
+    vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
+      if (cmd === 'start_search') {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return { runId: 1, results: [], logs: [], stopped: false };
+      }
+      if (cmd === 'pause_search' || cmd === 'resume_search') return true;
+      return null;
+    });
+    const setStatus = vi.fn();
+    const { result } = renderHook(() => useSearch(setStatus));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    let searchPromise: Promise<void> | undefined;
+    act(() => { searchPromise = result.current.startSearch('ggplot2', {} as any, false, vi.fn(), vi.fn()); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(async () => { await result.current.togglePauseSearch(); });
+    expect(result.current.paused).toBe(true);
+    await act(async () => { await result.current.togglePauseSearch(); });
+    expect(result.current.paused).toBe(false);
+    await act(async () => { await searchPromise; });
+  });
 });

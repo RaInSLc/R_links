@@ -36,6 +36,7 @@ export function useSearch(setStatus: SetStatus) {
   const [logs, setLogs] = useState<string[]>([]);
   const [dependencyGraph, setDependencyGraph] = useState<DependencyGraph | null>(null);
   const [searching, setSearching] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [openingSearchTabs, setOpeningSearchTabs] = useState(false);
   const [searchDuration, setSearchDuration] = useState<number | null>(null);
   const activeSearchRunId = useRef(0);
@@ -113,6 +114,7 @@ export function useSearch(setStatus: SetStatus) {
     }
     searchingRef.current = true;
     setSearching(true);
+    setPaused(false);
     setSearchDuration(null);
     searchStartTime.current = Date.now();
     setResults([]);
@@ -139,6 +141,7 @@ export function useSearch(setStatus: SetStatus) {
         const elapsed = Date.now() - searchStartTime.current;
         setSearchDuration(elapsed);
         setSearching(false);
+        setPaused(false);
         searchingRef.current = false;
         activeSearchRunId.current = 0;
       }
@@ -156,6 +159,37 @@ export function useSearch(setStatus: SetStatus) {
       if (runId === activeSearchRunId.current) {
         setStatus(`停止失败: ${formatError(error)}`);
       }
+    }
+  }
+
+  async function togglePauseSearch() {
+    const runId = activeSearchRunId.current;
+    if (!runId) return;
+    const nextPaused = !paused;
+    try {
+      const accepted = await invoke<boolean>(nextPaused ? "pause_search" : "resume_search", { runId });
+      if (accepted && runId === activeSearchRunId.current) {
+        setPaused(nextPaused);
+        setStatus(nextPaused ? "检索已暂停" : "检索已继续");
+      }
+    } catch (error) {
+      setStatus(`检索任务控制失败: ${formatError(error)}`);
+    }
+  }
+
+  async function cancelSearchPackage(packageName: string) {
+    const runId = activeSearchRunId.current;
+    if (!runId || !packageName.trim()) return false;
+    try {
+      const accepted = await invoke<boolean>("cancel_search_package", {
+        runId,
+        package: packageName,
+      });
+      if (accepted) setStatus(`已取消包 ${packageName} 的检索`);
+      return accepted;
+    } catch (error) {
+      setStatus(`取消包检索失败: ${formatError(error)}`);
+      return false;
     }
   }
 
@@ -215,12 +249,15 @@ export function useSearch(setStatus: SetStatus) {
     logs, setLogs,
     dependencyGraph, setDependencyGraph,
     searching, setSearching,
+    paused,
     openingSearchTabs,
     searchingRef,
     hasSearchEvidenceRef,
     searchDuration,
     startSearch,
     stopSearch,
+    togglePauseSearch,
+    cancelSearchPackage,
     openSearchTabs,
   };
 }
