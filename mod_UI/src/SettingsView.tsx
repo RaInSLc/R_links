@@ -52,6 +52,19 @@ interface SettingsViewProps {
   inputRulesBusy: boolean;
 }
 
+interface PackageCacheEntry {
+  packageName: string;
+  source: string;
+  version: string;
+  repository: string;
+  realName: string;
+  cachedAt: string;
+  verifiedCount: number;
+  upVotes: number;
+  downVotes: number;
+  invalidated: boolean;
+}
+
 type SettingsMenuKey = "network" | "strategy" | "cache" | "input" | "appearance" | "backup";
 
 const settingsMenus: Array<{ key: SettingsMenuKey; label: string; meta: string }> = [
@@ -153,6 +166,8 @@ export function SettingsView({
   const [activeMenu, setActiveMenu] = useState<SettingsMenuKey>("network");
   const [speedTesting, setSpeedTesting] = useState(false);
   const [speedResults, setSpeedResults] = useState<MirrorSpeedResult[]>([]);
+  const [cacheEntries, setCacheEntries] = useState<PackageCacheEntry[]>([]);
+  const [cacheBusy, setCacheBusy] = useState(false);
   const fileConfigRef = useRef<HTMLInputElement>(null);
 
   async function handleTestSpeed() {
@@ -174,6 +189,33 @@ export function SettingsView({
       }]);
     } finally {
       setSpeedTesting(false);
+    }
+  }
+
+  async function loadCacheEntries() {
+    setCacheBusy(true);
+    try {
+      setCacheEntries(await invoke<PackageCacheEntry[]>("load_package_cache"));
+    } catch {
+      setCacheEntries([]);
+    } finally {
+      setCacheBusy(false);
+    }
+  }
+
+  async function handleDeleteCacheEntry(entry: PackageCacheEntry) {
+    setCacheBusy(true);
+    try {
+      await invoke("delete_package_cache_entry", {
+        package: entry.packageName,
+        source: entry.source,
+        version: entry.version,
+        repository: entry.repository,
+        realName: entry.realName,
+      });
+      setCacheEntries((current) => current.filter((item) => item !== entry));
+    } finally {
+      setCacheBusy(false);
     }
   }
 
@@ -696,7 +738,30 @@ export function SettingsView({
       <>
 
       <section className="panel settings-panel">
-        <PanelHeader step="缓存" title="包结果缓存" meta="避免重复检索" />
+         <PanelHeader step="缓存" title="包结果缓存" meta="避免重复检索" />
+         <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+           <span>缓存条目</span>
+           <small>显示当前有效缓存；失效条目不会参与离线命中。缓存默认保留 7 天。</small>
+           <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "9px" }}>
+             <button className="button ghost" onClick={() => void loadCacheEntries()} disabled={cacheBusy}>
+               {cacheBusy ? "处理中..." : "刷新列表"}
+             </button>
+             <span style={{ color: "var(--muted)", fontSize: "12px" }}>{cacheEntries.length} 条</span>
+           </div>
+           {cacheEntries.length > 0 && (
+             <div style={{ marginTop: "10px" }}>
+               {cacheEntries.map((entry) => (
+                 <div key={`${entry.packageName}-${entry.source}-${entry.version}-${entry.repository}-${entry.realName}`} style={{ display: "flex", gap: "8px", alignItems: "center", borderBottom: "1px solid var(--line)", padding: "8px 0" }}>
+                   <div style={{ minWidth: 0, flex: 1 }}>
+                     <strong>{entry.packageName}</strong>
+                     <small style={{ display: "block" }}>{entry.source} · {entry.version || "未知版本"} · {entry.invalidated ? "已失效" : entry.verifiedCount > 0 ? `已验证 ${entry.verifiedCount} 次` : "未验证"}</small>
+                   </div>
+                   <button className="button ghost" onClick={() => void handleDeleteCacheEntry(entry)} disabled={cacheBusy}>删除</button>
+                 </div>
+               ))}
+             </div>
+           )}
+         </div>
         <div className="toggle-row" style={{ flexDirection: "column", gap: "4px", padding: "4px 17px" }}>
           <Toggle
             checked={settings.useCache}

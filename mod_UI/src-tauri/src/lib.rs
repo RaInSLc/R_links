@@ -424,6 +424,32 @@ fn clear_package_cache(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn load_package_cache(app: AppHandle) -> Result<Vec<models::PackageCacheEntry>, String> {
+    let cache = storage::load_cache(&app)?;
+    let mut entries: Vec<_> = cache.into_values().collect();
+    entries.sort_by(|left, right| {
+        right.cached_at.cmp(&left.cached_at).then_with(|| {
+            left.package_name
+                .to_ascii_lowercase()
+                .cmp(&right.package_name.to_ascii_lowercase())
+        })
+    });
+    Ok(entries)
+}
+
+#[tauri::command]
+fn delete_package_cache_entry(
+    app: AppHandle,
+    package: String,
+    source: String,
+    version: String,
+    repository: String,
+    real_name: String,
+) -> Result<(), String> {
+    storage::delete_cache_entry(&app, &package, &source, &version, &repository, &real_name)
+}
+
+#[tauri::command]
 fn open_package_search(
     app: AppHandle,
     limiter: State<'_, BrowserOpenLimiter>,
@@ -759,6 +785,8 @@ pub fn run() {
             load_history,
             save_history,
             clear_package_cache,
+            load_package_cache,
+            delete_package_cache_entry,
             open_package_search,
             open_package_page,
             start_search,

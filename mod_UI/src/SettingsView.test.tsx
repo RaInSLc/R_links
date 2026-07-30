@@ -4,6 +4,10 @@ import { vi, describe, it, expect } from 'vitest';
 import '@testing-library/jest-dom';
 import { defaultSettings } from './types';
 
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(async (command: string) => command === 'load_package_cache' ? [] : undefined),
+}));
+
 describe('SettingsView Component', () => {
   const createProps = () => ({
     settings: {
@@ -215,6 +219,16 @@ describe('SettingsView Component', () => {
 
     expect(props.onUseCacheChange).toHaveBeenCalledWith(false);
     expect(screen.getByText('包结果缓存')).toBeInTheDocument();
+  });
+
+  it('缓存菜单可以刷新条目列表', async () => {
+    const props = createProps();
+    render(<SettingsView {...props} />);
+
+    fireEvent.click(screen.getByText('缓存'));
+    fireEvent.click(screen.getByText('刷新列表'));
+
+    await waitFor(() => expect(screen.getByText('0 条')).toBeInTheDocument());
   });
 
   it('网络设置中调整搜索并发上限时应触发回调', () => {

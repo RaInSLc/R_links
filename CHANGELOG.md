@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-07-30 23:12:00 +08:00]
+
+### Added
+- **缓存管理**：设置页缓存分类新增缓存条目刷新、包名/来源/版本展示和单项删除；新增 Tauri `load_package_cache` 与 `delete_package_cache_entry` 命令，保留原有全量清理和 7 天过期策略。
+
+### Tests
+- **缓存管理回归验证**：前端 `npm test -- --run` 通过 127 项，`npm run build` 通过，Rust `cargo test` 通过 180 项。
+
 ## [2026-07-30 22:59:00 +08:00]
 
 ### Added

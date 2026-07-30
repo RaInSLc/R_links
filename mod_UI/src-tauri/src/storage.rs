@@ -877,6 +877,33 @@ pub fn clear_cache(app: &AppHandle) -> Result<(), String> {
     atomic_write(&dep_path, "{}")
 }
 
+pub fn delete_cache_entry(
+    app: &AppHandle,
+    package: &str,
+    source: &str,
+    version: &str,
+    repository: &str,
+    real_name: &str,
+) -> Result<(), String> {
+    let key = package.trim();
+    if key.is_empty() || source.trim().is_empty() {
+        return Err("缓存删除参数无效".to_string());
+    }
+    let mut cache = load_cache(app)?;
+    let before = cache.len();
+    cache.retain(|_, entry| {
+        !(entry.package_name.eq_ignore_ascii_case(key)
+            && entry.source == source
+            && entry.version == version
+            && entry.repository == repository
+            && entry.real_name == real_name)
+    });
+    if cache.len() == before {
+        return Err("没有找到匹配的缓存记录".to_string());
+    }
+    save_cache(app, &cache)
+}
+
 const DEP_CACHE_FILE_NAME: &str = "dep_cache.json";
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
