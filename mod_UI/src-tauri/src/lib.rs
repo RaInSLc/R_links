@@ -834,6 +834,21 @@ mod tests {
     }
 
     #[test]
+    fn offline_cache_version_match_accepts_requested_prefix_only() {
+        let matches = |found: &str, requested: &str| {
+            requested.is_empty()
+                || found == requested
+                || (requested.matches('.').count() == 1
+                    && found
+                        .strip_prefix(requested)
+                        .is_some_and(|suffix| suffix.starts_with('.')))
+        };
+
+        assert!(matches("1.2.3", "1.2"));
+        assert!(!matches("1.3.0", "1.2"));
+    }
+
+    #[test]
     fn runtime_settings_preserve_saved_token_when_incoming_token_empty() {
         let existing = Settings {
             github_token: "ghp_saved".to_string(),

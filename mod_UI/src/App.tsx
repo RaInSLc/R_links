@@ -220,15 +220,18 @@ function AppContent() {
   }, [method]);
 
   useEffect(() => {
-    if (!input.trim()) return;
-    invoke<SearchResult[]>("load_cached_results", { input })
+    const requestedInput = input;
+    if (!requestedInput.trim()) return;
+    let active = true;
+    invoke<SearchResult[]>("load_cached_results", { input: requestedInput })
       .then((cached) => {
-        if (cached.length > 0) {
+        if (active && latestInputRef.current === requestedInput && cached.length > 0) {
           setResults(cached);
           hasSearchEvidenceRef.current = true;
         }
       })
       .catch(() => {});
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
