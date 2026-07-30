@@ -40,6 +40,7 @@ const SEARCH_STOPPED_ERROR: &str = "检索已停止";
 const SEARCH_LOGS_TRUNCATED_MESSAGE: &str = "检索日志达到上限，后续日志已停止记录";
 const SEARCH_RESULTS_TRUNCATED_MESSAGE: &str = "检索结果达到上限，后续来源请求已停止";
 const STREAM_RESULT_PAUSE: Duration = Duration::from_millis(35);
+const AUTO_RETRY_LIMIT: usize = 1;
 const R_FORGE_PACKAGES_URL: &str = "https://r-forge.r-project.org/src/contrib/PACKAGES";
 const R_FORGE_REPOS_URL: &str = "http://R-Forge.R-project.org";
 static HTML_VERSION_RE: OnceLock<Regex> = OnceLock::new();
@@ -495,6 +496,7 @@ async fn search_one_package(
     let mut has_retried_casing = false;
     let mut errors = Vec::new();
 
+    let mut attempts = 0;
     loop {
         if context.should_stop() {
             break;
@@ -609,6 +611,24 @@ async fn search_one_package(
             }
         }
 
+        if results.iter().any(|result| result.found && result.package.eq_ignore_ascii_case(&loop_package.name)) {
+            break;
+        }
+        if attempts < AUTO_RETRY_LIMIT
+            && errors.iter().any(|error| {
+                error.contains("超时")
+                    || error.contains("限流")
+                    || error.contains("网络")
+                    || error.contains("请求")
+            })
+            && !context.should_stop()
+        {
+            attempts += 1;
+            context.log(&format!("{} 检索失败，正在自动重试 ({}/{})", loop_package.name, attempts, AUTO_RETRY_LIMIT));
+            errors.clear();
+            continue;
+        }
+
         if !had_found_before
             && !has_found_result_for_package(results, &loop_package.name)
             && !context.should_stop()
@@ -616,10 +636,7 @@ async fn search_one_package(
             let (message, status) = if context.timed_out.load(Ordering::SeqCst) {
                 ("检索超时，部分来源未查询".to_string(), "timeout")
             } else if context.github_rate_limited {
-                (
-                    "GitHub API 频率限制，部分来源未查询".to_string(),
-                    "rateLimited",
-                )
+                ("GitHub API 频率限制，部分来源未查询".to_string(), "rateLimited")
             } else if !errors.is_empty() {
                 (errors.join("; "), "error")
             } else {
