@@ -56,6 +56,14 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
   const [reverseDepsLoading, setReverseDepsLoading] = useState(false);
   const fetchDepsToken = useRef(0);
 
+  useEffect(() => {
+    setHoveredNode(null);
+    setSelectedNode(null);
+    setReverseDeps(null);
+    setReverseDepsLoading(false);
+    fetchDepsToken.current += 1;
+  }, [graph]);
+
   async function fetchReverseDeps(packageName: string) {
     const token = ++fetchDepsToken.current;
     setReverseDepsLoading(true);
