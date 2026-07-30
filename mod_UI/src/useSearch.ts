@@ -159,13 +159,13 @@ export function useSearch(setStatus: SetStatus) {
     }
   }
 
-  async function openSearchTabs(input: string, inputTooLarge: boolean) {
+  async function openSearchTabs(input: string, inputTooLarge: boolean, separators?: string[]) {
     if (browserOpenInProgress.current) return;
     if (inputTooLarge) {
       setStatus("输入超出限制，无法打开浏览器搜索");
       return;
     }
-    const { names, total } = collectBrowserSearchNames(input, MAX_SEARCH_TABS);
+    const { names, total } = collectBrowserSearchNames(input, MAX_SEARCH_TABS, separators);
     if (names.length === 0) {
       setStatus("没有可搜索的包名");
       return;

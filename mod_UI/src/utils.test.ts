@@ -484,6 +484,32 @@ describe("classifyInputProfile", () => {
       "http://192.168.5.250:8011/pkg_1.0.tar.gz\ndplyr",
     )).toEqual({ total: 2, archiveUrls: 1, repositories: 0 });
   });
+
+  it("uses configured separators for input statistics", () => {
+    expect(classifyInputProfile("dplyr|ggplot2", ["|"])).toEqual({
+      total: 2,
+      archiveUrls: 0,
+      repositories: 0,
+    });
+  });
+});
+
+describe("search result identity", () => {
+  it("keeps the same package at different requested versions separate", () => {
+    const base = {
+      package: "dplyr",
+      requestedVersion: "1.0.0",
+      latestVersion: "1.0.0",
+      repository: "",
+      realName: "dplyr",
+      source: "cran",
+      found: true,
+      message: "ok",
+    };
+    const other = { ...base, requestedVersion: "2.0.0", latestVersion: "2.0.0" };
+    expect(resultIdentityKey(base)).not.toBe(resultIdentityKey(other));
+    expect(dedupeBoundedResults([base, other], 10, 10)).toHaveLength(2);
+  });
 });
 
 describe("normalizePackageInputDisplay", () => {

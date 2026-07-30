@@ -167,8 +167,8 @@ function AppContent() {
     setScriptState(next);
   }
 
-  const packageCount = useMemo(() => activeInputLineCount(input), [input]);
-  const inputProfile = useMemo(() => classifyInputProfile(input), [input]);
+  const packageCount = useMemo(() => activeInputLineCount(input, inputRules.separators), [input, inputRules.separators]);
+  const inputProfile = useMemo(() => classifyInputProfile(input, inputRules.separators), [input, inputRules.separators]);
   const smartSuggestions = useMemo(
     () => buildInputSmartSuggestions(input, inputProfile, method, { verifyInstall }),
     [input, inputProfile, method, verifyInstall],
@@ -637,7 +637,7 @@ function AppContent() {
               searching={searching} openingSearchTabs={openingSearchTabs}
               onInputChange={acceptInputValue} onPaste={pasteInput}
               onClear={() => acceptInputValue("", "manual")}
-              onOpenSearchTabs={() => openSearchTabs(input, inputTooLarge)}
+              onOpenSearchTabs={() => openSearchTabs(input, inputTooLarge, inputRules.separators)}
               onStartSearch={handleStartSearch} onStopSearch={stopSearch}
               onMethodChange={setMethod}
               pinnedMethods={pinnedMethods}

@@ -130,7 +130,7 @@ export const MAX_PACKAGE_LINES = 500;
 export const MAX_SEARCH_RESULTS = MAX_PACKAGE_LINES * 16;
 export const MAX_SEARCH_RESULT_SCAN = MAX_SEARCH_RESULTS * 2;
 export const MAX_SEARCH_LOGS = 1_000;
-const INPUT_SEPARATORS = /[,;]/;
+const DEFAULT_INPUT_SEPARATORS = [",", ";"];
 const DEFAULT_PINNED_METHODS: Method[] = ["auto", "base", "biocManager", "github"];
 const VALID_METHODS: Method[] = ["auto", "devtools", "remotes", "github", "base", "version", "biocManager", "checkSystem"];
 const HTTP_INPUT_URL_RE = /^https?:\/\//i;
@@ -139,14 +139,17 @@ function isHttpInputUrl(value: string): boolean {
   return HTTP_INPUT_URL_RE.test(value);
 }
 
-function splitInputLine(line: string): string[] {
+function splitInputLine(line: string, separators: string[] = DEFAULT_INPUT_SEPARATORS): string[] {
   const trimmed = line.trim();
   if (!trimmed || trimmed.startsWith("#")) return [];
   let content = trimmed;
   const cParens = trimmed.match(/^(?:c|list)\((.+)\)$/s);
   if (cParens) content = cParens[1];
-  return content
-    .split(INPUT_SEPARATORS)
+  const safeSeparators = separators.filter(Boolean).sort((a, b) => b.length - a.length);
+  const separatorPattern = safeSeparators.length > 0
+    ? new RegExp(safeSeparators.map((separator) => separator.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"))
+    : null;
+  return (separatorPattern ? content.split(separatorPattern) : [content])
     .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
     .filter((s) => s.length > 0);
 }
@@ -324,6 +327,7 @@ export function sanitizeSearchResult(value: unknown): SearchResult {
 export function resultIdentityKey(result: SearchResult): string {
   return [
     result.package.toLocaleLowerCase(),
+    result.requestedVersion,
     result.source,
     result.repository.toLocaleLowerCase(),
     result.realName.toLocaleLowerCase(),
@@ -519,11 +523,11 @@ export function settingsFieldLabel(field: "proxy" | "githubToken" | "cranMirror"
   }
 }
 
-export function activeInputLineCount(value: string) {
+export function activeInputLineCount(value: string, separators?: string[]) {
   let count = 0;
   for (const line of value.split(/\r?\n/)) {
     if (isActiveInputLine(line)) {
-      count += splitInputLine(line).length;
+      count += splitInputLine(line, separators).length;
     }
   }
   return count;
@@ -589,7 +593,7 @@ export function isBrowserSearchPackageName(value: string) {
   return /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value);
 }
 
-export function collectBrowserSearchNames(value: string, limit: number) {
+export function collectBrowserSearchNames(value: string, limit: number, separators?: string[]) {
   const allNames: string[] = [];
   const seen = new Set<string>();
   const boundedLimit = Math.max(0, Math.floor(limit));
@@ -599,7 +603,7 @@ export function collectBrowserSearchNames(value: string, limit: number) {
     if (!isActiveInputLine(lines[index])) {
       continue;
     }
-    for (const segment of splitInputLine(lines[index])) {
+    for (const segment of splitInputLine(lines[index], separators)) {
       totalPackages += 1;
       if (totalPackages > MAX_PACKAGE_LINES) break;
       const name = segment.split("/").pop() ?? segment;
@@ -616,7 +620,7 @@ export function collectBrowserSearchNames(value: string, limit: number) {
   };
 }
 
-export function classifyInputProfile(value: string): { total: number; archiveUrls: number; repositories: number } {
+export function classifyInputProfile(value: string, separators?: string[]): { total: number; archiveUrls: number; repositories: number } {
   const profile = { total: 0, archiveUrls: 0, repositories: 0 };
   const lines = value.split(/\r?\n/);
   for (let index = 0; index < lines.length; index += 1) {
@@ -630,7 +634,7 @@ export function classifyInputProfile(value: string): { total: number; archiveUrl
       if (profile.total > MAX_PACKAGE_LINES) break;
       continue;
     }
-    for (const segment of splitInputLine(raw)) {
+    for (const segment of splitInputLine(raw, separators)) {
       profile.total += 1;
       if (profile.total > MAX_PACKAGE_LINES) break;
       if (segment.includes("/")) {
