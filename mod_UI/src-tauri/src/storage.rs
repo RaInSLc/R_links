@@ -441,6 +441,13 @@ fn sanitize_history_record(
         version,
         tool_name,
         created_at,
+        input: record.input.clone(),
+        method: record.method.clone(),
+        conditional: record.conditional,
+        install_dependencies: record.install_dependencies,
+        show_remote_version: record.show_remote_version,
+        verify_install: record.verify_install,
+        cran_mirror: record.cran_mirror.clone(),
     })
 }
 
@@ -1468,6 +1475,7 @@ mod tests {
             version: String::new(),
             tool_name: "base R".to_string(),
             created_at: "1".to_string(),
+            ..HistoryRecord::default()
         }];
         let history = sanitize_history(&records);
 
@@ -1485,6 +1493,7 @@ mod tests {
             version: "9.9.9".to_string(),
             tool_name: "forged".to_string(),
             created_at: "123456".to_string(),
+            ..HistoryRecord::default()
         }];
         let history = sanitize_history(&records);
 
@@ -1505,6 +1514,7 @@ mod tests {
                 version: String::new(),
                 tool_name: "base R".to_string(),
                 created_at: "1".to_string(),
+                ..HistoryRecord::default()
             };
             MAX_HISTORY_LOAD_SCAN_RECORDS
         ];
@@ -1517,6 +1527,7 @@ mod tests {
             version: String::new(),
             tool_name: "GitHub".to_string(),
             created_at: "1".to_string(),
+            ..HistoryRecord::default()
         });
 
         let history = sanitize_history(&records);
@@ -1539,6 +1550,7 @@ mod tests {
             version: "9.9.9".to_string(),
             tool_name: "forged".to_string(),
             created_at: "bad-time".to_string(),
+            ..HistoryRecord::default()
         }];
 
         let saved = save_history_to_path(&path, &history).expect("历史应可保存");
@@ -1567,6 +1579,7 @@ mod tests {
             version: String::new(),
             tool_name: "GitHub".to_string(),
             created_at: "1".to_string(),
+            ..HistoryRecord::default()
         };
         let bounded = vec![record.clone(); MAX_HISTORY_SAVE_RECORDS];
         let unbounded = vec![record; MAX_HISTORY_SAVE_RECORDS + 1];
@@ -1584,6 +1597,7 @@ mod tests {
             version: String::new(),
             tool_name: "GitHub".to_string(),
             created_at: "1".to_string(),
+            ..HistoryRecord::default()
         }];
 
         let error =
@@ -1603,6 +1617,7 @@ mod tests {
             version: String::new(),
             tool_name: "GitHub".to_string(),
             created_at: "1".to_string(),
+            ..HistoryRecord::default()
         }];
 
         let error =
@@ -1623,6 +1638,7 @@ mod tests {
                 version: "1.0.0".to_string(),
                 tool_name: "t".repeat(MAX_FIELD_CHARS),
                 created_at: "1".to_string(),
+                ..HistoryRecord::default()
             })
             .collect::<Vec<_>>();
 

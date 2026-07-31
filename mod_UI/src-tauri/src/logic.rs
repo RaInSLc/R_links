@@ -1167,6 +1167,13 @@ pub fn build_history_records(script: &str) -> Vec<HistoryRecord> {
                 version,
                 tool_name,
                 created_at: now.to_string(),
+                input: String::new(),
+                method: "auto".to_string(),
+                conditional: false,
+                install_dependencies: false,
+                show_remote_version: false,
+                verify_install: false,
+                cran_mirror: String::new(),
             },
         )
         .take(MAX_HISTORY_RECORDS)

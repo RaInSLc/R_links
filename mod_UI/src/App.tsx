@@ -394,13 +394,23 @@ function AppContent() {
     try {
       const records = await invoke<HistoryRecord[]>("build_history_records", { script: snapshot });
       const cleanRecords = sanitizeHistoryList(records);
+      const taskRecords = cleanRecords.map((record) => ({
+        ...record,
+        input,
+        method,
+        conditional,
+        installDependencies,
+        showRemoteVersion,
+        verifyInstall,
+        cranMirror: settings.cranMirror,
+      }));
       const textToCopy = copyWithLineNumbersRef.current
         ? snapshot.split("\n").map((line, i) => `${String(i + 1).padStart(3, " ")}  ${line}`).join("\n")
         : snapshot;
       await writeText(textToCopy);
       await enqueueHistorySave((current) => {
-        const commands = new Set(cleanRecords.map((r) => r.command));
-        return [...cleanRecords, ...current.filter((r) => !commands.has(r.command))].slice(0, MAX_HISTORY_RECORDS);
+        const commands = new Set(taskRecords.map((r) => r.command));
+        return [...taskRecords, ...current.filter((r) => !commands.has(r.command))].slice(0, MAX_HISTORY_RECORDS);
       });
       setStatus(`已复制脚本并记录 ${cleanRecords.length} 条命令`);
     } catch (error) {
@@ -446,20 +456,28 @@ function AppContent() {
   async function applyHistoryRecord(record: HistoryRecord) {
     const clean = sanitizeHistoryList([record])[0];
     if (!clean) return;
-    let valueToLoad = clean.packageName;
+    let valueToLoad = clean.input || clean.packageName;
     if (clean.command.includes("install_url(")) {
       const match = clean.command.match(/install_url\("([^"]+)"/);
       if (match && match[1]) valueToLoad = match[1];
     }
     const result = acceptInputValue(valueToLoad, "manual");
     if (result !== "rejected") {
-      if (clean.toolName === "GitHub") setMethod("github");
+      if (clean.input) setMethod(clean.method || "auto");
+      else if (clean.toolName === "GitHub") setMethod("github");
       else if (clean.toolName === "Bioconductor") setMethod("biocManager");
       else if (clean.toolName === "remotes") setMethod(clean.command.includes("install_url") ? "remotes" : "auto");
       else if (clean.toolName === "devtools") setMethod("devtools");
       else if (clean.toolName === "base R") setMethod(clean.command.includes("packageVersion") ? "version" : "base");
+      if (clean.input) {
+        setConditional(clean.conditional ?? true);
+        setInstallDependencies(clean.installDependencies ?? true);
+        setShowRemoteVersion(clean.showRemoteVersion ?? true);
+        setVerifyInstall(clean.verifyInstall ?? false);
+        if (clean.cranMirror) updateAndPersistSettings((current) => ({ ...current, cranMirror: clean.cranMirror ?? current.cranMirror }));
+      }
       setView("workspace");
-      setStatus(`已加载历史命令 ${clean.packageName} 至工作台`);
+      setStatus(`已恢复历史任务 ${clean.packageName} 至工作台`);
     }
   }
 

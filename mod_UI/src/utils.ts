@@ -86,6 +86,13 @@ export interface HistoryRecord {
   version: string;
   toolName: string;
   createdAt: string;
+  input?: string;
+  method?: Method;
+  conditional?: boolean;
+  installDependencies?: boolean;
+  showRemoteVersion?: boolean;
+  verifyInstall?: boolean;
+  cranMirror?: string;
 }
 
 export interface ReverseDependenciesInfo {
@@ -586,6 +593,13 @@ export function sanitizeHistoryRecord(value: unknown): HistoryRecord {
     version: safeText(record.version, MAX_VERSION_CHARS),
     toolName: safeText(record.toolName, MAX_RESULT_FIELD_CHARS),
     createdAt: safeText(record.createdAt, 32),
+    input: safeText(record.input, MAX_INPUT_CHARS),
+    method: VALID_METHODS.includes(record.method as Method) ? record.method as Method : "auto",
+    conditional: safeBoolean(record.conditional),
+    installDependencies: safeBoolean(record.installDependencies),
+    showRemoteVersion: safeBoolean(record.showRemoteVersion),
+    verifyInstall: safeBoolean(record.verifyInstall),
+    cranMirror: safeText(record.cranMirror, MAX_RESULT_FIELD_CHARS),
   };
 }
 

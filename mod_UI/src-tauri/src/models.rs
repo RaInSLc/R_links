@@ -33,7 +33,7 @@ pub struct Settings {
     pub pinned_methods: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicSettings {
     pub proxy: String,
@@ -295,7 +295,7 @@ pub struct SearchResponse {
     pub dependency_graph: Option<DependencyGraph>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryRecord {
     pub id: String,
@@ -304,6 +304,20 @@ pub struct HistoryRecord {
     pub version: String,
     pub tool_name: String,
     pub created_at: String,
+    #[serde(default)]
+    pub input: String,
+    #[serde(default)]
+    pub method: String,
+    #[serde(default)]
+    pub conditional: bool,
+    #[serde(default)]
+    pub install_dependencies: bool,
+    #[serde(default)]
+    pub show_remote_version: bool,
+    #[serde(default)]
+    pub verify_install: bool,
+    #[serde(default)]
+    pub cran_mirror: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
