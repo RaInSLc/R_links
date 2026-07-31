@@ -217,6 +217,18 @@ pub struct MirrorSpeedResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct NetworkDiagnostic {
+    pub target: String,
+    pub url: String,
+    pub success: bool,
+    pub status_code: Option<u16>,
+    pub latency_ms: u64,
+    pub proxy: String,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReverseDependenciesInfo {
     pub package: String,
     pub depends: usize,

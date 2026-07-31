@@ -1,5 +1,5 @@
 import { PanelHeader, Toggle } from "./components";
-import { MAX_RESULT_FIELD_CHARS, MAX_TOKEN_CHARS, type MirrorSpeedResult } from "./utils";
+import { MAX_RESULT_FIELD_CHARS, MAX_TOKEN_CHARS, type MirrorSpeedResult, type NetworkDiagnostic } from "./utils";
 import { mirrors, defaultSettings, defaultInputRules, methods } from "./types";
 import type { InputRules, Settings } from "./types";
 import { useState, useRef } from "react";
@@ -166,6 +166,8 @@ export function SettingsView({
   const [activeMenu, setActiveMenu] = useState<SettingsMenuKey>("network");
   const [speedTesting, setSpeedTesting] = useState(false);
   const [speedResults, setSpeedResults] = useState<MirrorSpeedResult[]>([]);
+  const [networkDiagnostics, setNetworkDiagnostics] = useState<NetworkDiagnostic[]>([]);
+  const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
   const [cacheEntries, setCacheEntries] = useState<PackageCacheEntry[]>([]);
   const [cacheBusy, setCacheBusy] = useState(false);
   const fileConfigRef = useRef<HTMLInputElement>(null);
@@ -189,6 +191,25 @@ export function SettingsView({
       }]);
     } finally {
       setSpeedTesting(false);
+    }
+  }
+
+  async function handleTestNetwork() {
+    setDiagnosticsBusy(true);
+    setNetworkDiagnostics([]);
+    try {
+      setNetworkDiagnostics(await invoke<NetworkDiagnostic[]>("test_network_connection"));
+    } catch (error) {
+      setNetworkDiagnostics([{
+        target: "诊断失败",
+        url: "",
+        success: false,
+        latencyMs: 0,
+        proxy: settings.proxy || "未配置",
+        error: String(error instanceof Error ? error.message : error),
+      }]);
+    } finally {
+      setDiagnosticsBusy(false);
     }
   }
 
@@ -249,6 +270,22 @@ export function SettingsView({
             placeholder="不使用代理"
             maxLength={MAX_RESULT_FIELD_CHARS}
           />
+          <small style={{ display: "block", marginTop: "6px" }}>
+            当前代理：{settings.proxy.trim() ? settings.proxy : "未配置（使用系统/直连）"}；代理是否生效请使用下方网络诊断验证。
+          </small>
+          <button className="button ghost" type="button" onClick={() => void handleTestNetwork()} disabled={diagnosticsBusy} style={{ marginTop: "9px" }}>
+            {diagnosticsBusy ? "正在诊断..." : "诊断代理与网络"}
+          </button>
+          {networkDiagnostics.length > 0 && (
+            <div style={{ marginTop: "10px", fontSize: "12px" }}>
+              {networkDiagnostics.map((item) => (
+                <div key={item.target} style={{ borderTop: "1px solid var(--line)", padding: "7px 0" }}>
+                  <strong>{item.target}</strong>：{item.success ? `成功 ${item.statusCode ?? ""}，${item.latencyMs}ms` : `失败${item.statusCode ? ` HTTP ${item.statusCode}` : ""}`}
+                  <small style={{ display: "block", color: item.success ? "var(--muted)" : "#b91c1c" }}>{item.error || `代理 ${item.proxy}`}</small>
+                </div>
+              ))}
+            </div>
+          )}
         </label>
         <label className="field">
           <span>GitHub Token</span>

@@ -121,6 +121,16 @@ export interface SmartSuggestion {
   value?: string;
 }
 
+export interface NetworkDiagnostic {
+  target: string;
+  url: string;
+  success: boolean;
+  statusCode?: number;
+  latencyMs: number;
+  proxy: string;
+  error?: string;
+}
+
 export interface SearchPlanPreview {
   total: number;
   cranLike: number;

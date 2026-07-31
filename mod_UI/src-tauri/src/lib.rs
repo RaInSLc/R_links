@@ -19,7 +19,7 @@ use tauri::{AppHandle, State};
 
 use models::{
     GenerateOptions, HistoryRecord, InputRules, MirrorSpeedResult, PublicSettings,
-    ReverseDependenciesInfo, SearchResponse, SearchResult, Settings,
+    NetworkDiagnostic, ReverseDependenciesInfo, SearchResponse, SearchResult, Settings,
 };
 
 const MAX_BROWSER_OPEN_REQUESTS: usize = 30;
@@ -669,7 +669,11 @@ async fn test_mirror_speed(
             async move {
                 let test_url = format!("{}src/contrib/PACKAGES.gz", mirror);
                 let start = Instant::now();
-                let result = client.head(&test_url).send().await;
+                let result = client
+                    .get(&test_url)
+                    .header("Range", "bytes=0-1023")
+                    .send()
+                    .await;
                 let latency_ms = start.elapsed().as_millis() as u64;
                 match result {
                     Ok(response) if response.status().is_success() => MirrorSpeedResult {
@@ -701,6 +705,61 @@ async fn test_mirror_speed(
     let mut results = futures_util::future::join_all(tasks).await;
     results.sort_by_key(|r| if r.success { r.latency_ms } else { u64::MAX });
     Ok(results)
+}
+
+#[tauri::command]
+async fn test_network_connection(app: AppHandle) -> Result<Vec<NetworkDiagnostic>, String> {
+    let settings = load_existing_settings_for_runtime(&app)?;
+    let proxy = settings.proxy.trim().to_string();
+    let targets = [
+        ("GitHub API", "https://api.github.com/"),
+        ("GitHub 仓库", "https://github.com/davidsjoberg/ggsankey"),
+        ("CRAN 主站", "https://cloud.r-project.org/"),
+    ];
+    let client = build_simple_client(
+        Some(&proxy),
+        Duration::from_secs(5),
+        Duration::from_secs(12),
+        true,
+    )?;
+    let tasks = targets.into_iter().map(|(target, url)| {
+        let client = client.clone();
+        let proxy = proxy.clone();
+        async move {
+            let start = Instant::now();
+            let result = client
+                .get(url)
+                .header("Accept", "application/vnd.github+json")
+                .send()
+                .await;
+            let latency_ms = start.elapsed().as_millis() as u64;
+            match result {
+                Ok(response) => NetworkDiagnostic {
+                    target: target.to_string(),
+                    url: url.to_string(),
+                    success: response.status().is_success(),
+                    status_code: Some(response.status().as_u16()),
+                    latency_ms,
+                    proxy: if proxy.is_empty() { "未配置".to_string() } else { proxy },
+                    error: if response.status().is_success() {
+                        None
+                    } else {
+                        Some(format!("HTTP {}", response.status().as_u16()))
+                    },
+                },
+                Err(error) => NetworkDiagnostic {
+                    target: target.to_string(),
+                    url: url.to_string(),
+                    success: false,
+                    status_code: None,
+                    latency_ms,
+                    proxy: if proxy.is_empty() { "未配置".to_string() } else { proxy },
+                    error: Some(error.to_string()),
+                },
+            }
+        }
+    });
+    Ok(futures_util::future::join_all(tasks).await)
 }
 
 const MAX_REVERSE_DEPS_HTML_BYTES: u64 = 2 * 1024 * 1024;
@@ -798,6 +857,7 @@ pub fn run() {
             load_input_rules,
             save_input_rules,
             test_mirror_speed,
+            test_network_connection,
             fetch_reverse_dependencies,
             load_cached_results,
             rate_cache_result
