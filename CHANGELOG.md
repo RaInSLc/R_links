@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-07-31 21:44:00 +08:00]
+
+### Fixed
+- **修复 ggsankey GitHub 检索丢失**：GitHub API 已返回精确仓库但 raw `DESCRIPTION` 因网络或分支差异暂时不可用时，保留已验证的精确仓库结果；非精确候选仍要求 DESCRIPTION 包名校验。
+- **支持 GitHub 未取到版本的结果**：精确仓库结果在版本暂不可得时不再被结果清洗器误判为未找到，后续仍可生成 GitHub 安装命令。
+
+### Tests
+- **ggsankey 回归验证**：Rust `cargo test` 通过 182 项，前端 `npm test -- --run` 通过 128 项，`npm run build` 通过。
+
 ## [2026-07-31 11:46:00 +08:00]
 
 ### Added

@@ -1130,6 +1130,18 @@ async fn search_github(
                 }
                 Err(error) => {
                     context.log(&format!("获取 GitHub DESCRIPTION 异常: {error}"));
+                    if lower_repo == lower_package {
+                        // 精确仓库名已由 GitHub API 返回并通过仓库名校验；DESCRIPTION
+                        // 暂时不可用时仍保留该仓库，避免网络抖动造成真实包被判定为未找到。
+                        seen.insert(repository_name.to_ascii_lowercase());
+                        results.push(found_result(
+                            package,
+                            "unknown",
+                            &repository_name,
+                            repo_name,
+                            "github",
+                        ));
+                    }
                 }
             }
         }
@@ -1782,6 +1794,14 @@ mod tests {
         assert!(!github_package_name_matches_request("demo\nbad", "demo"));
         assert!(extract_description_metadata("Package: demo\nVersion: 1.2.3\n").is_some());
         assert!(extract_description_metadata("Package: demo\nbad\nVersion: 1.2.3\n").is_none());
+    }
+
+    #[test]
+    fn parses_ggsankey_description_metadata() {
+        let description = "Package: ggsankey\nType: Package\nTitle: Sankey, Alluvial and Sankey Bump Plots\nVersion: 0.0.99999\nImports: \n    ggplot2,\n    dplyr,\n    stringr\n";
+        let metadata = extract_description_metadata(description).expect("ggsankey DESCRIPTION 应可解析");
+        assert_eq!(metadata.package_name, "ggsankey");
+        assert_eq!(metadata.version, "0.0.99999");
     }
 
     #[test]

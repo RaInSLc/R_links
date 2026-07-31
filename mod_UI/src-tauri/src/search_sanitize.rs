@@ -130,7 +130,9 @@ pub(crate) fn sanitize_search_result_for_emit(mut result: SearchResult) -> Searc
 }
 
 fn is_trusted_emit_result(result: &SearchResult) -> bool {
-    if result.package.is_empty() || result.real_name.is_empty() || result.latest_version.is_empty()
+    if result.package.is_empty()
+        || result.real_name.is_empty()
+        || (result.latest_version.is_empty() && result.source != "github")
     {
         return false;
     }
@@ -343,5 +345,23 @@ mod tests {
         assert!(clean_result_repository("github", "owner/repo").is_some());
         assert!(clean_result_repository("github", "invalid").is_none());
         assert_eq!(clean_result_repository("github", "").unwrap(), "");
+    }
+
+    #[test]
+    fn accepts_github_repository_without_description_version() {
+        let result = sanitize_search_result_for_emit(SearchResult {
+            package: "ggsankey".to_string(),
+            requested_version: String::new(),
+            latest_version: String::new(),
+            repository: "davidsjoberg/ggsankey".to_string(),
+            real_name: "ggsankey".to_string(),
+            source: "github".to_string(),
+            found: true,
+            message: "GitHub 仓库已验证，版本待获取".to_string(),
+            status: "found".to_string(),
+            stage: "final".to_string(),
+        });
+        assert!(result.found);
+        assert_eq!(result.repository, "davidsjoberg/ggsankey");
     }
 }
