@@ -424,6 +424,11 @@ fn clear_package_cache(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn clear_invalidated_cache(app: AppHandle) -> Result<usize, String> {
+    storage::clear_invalidated_cache(&app)
+}
+
+#[tauri::command]
 fn load_package_cache(app: AppHandle) -> Result<Vec<models::PackageCacheEntry>, String> {
     let cache = storage::load_cache(&app)?;
     let mut entries: Vec<_> = cache.into_values().collect();
@@ -844,6 +849,7 @@ pub fn run() {
             load_history,
             save_history,
             clear_package_cache,
+            clear_invalidated_cache,
             load_package_cache,
             delete_package_cache_entry,
             open_package_search,

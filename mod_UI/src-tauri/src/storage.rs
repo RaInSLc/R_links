@@ -821,7 +821,7 @@ pub fn load_cache(app: &AppHandle) -> Result<HashMap<String, PackageCacheEntry>,
             }
             // 自动清理超过 7 天的旧缓存
             cache.retain(|_, entry| {
-                entry
+                !entry.invalidated && entry
                     .cached_at
                     .parse::<u64>()
                     .map(|ts| now.saturating_sub(ts) < 7 * 24 * 3600)
@@ -882,6 +882,15 @@ pub fn clear_cache(app: &AppHandle) -> Result<(), String> {
     atomic_write(&path, "[]")?;
     let dep_path = data_file(app, DEP_CACHE_FILE_NAME)?;
     atomic_write(&dep_path, "{}")
+}
+
+pub fn clear_invalidated_cache(app: &AppHandle) -> Result<usize, String> {
+    let mut cache = load_cache(app)?;
+    let before = cache.len();
+    cache.retain(|_, entry| !entry.invalidated);
+    let removed = before.saturating_sub(cache.len());
+    save_cache(app, &cache)?;
+    Ok(removed)
 }
 
 pub fn delete_cache_entry(

@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-08-01 00:22:00 +08:00]
+
+### Added
+- **本地 R 包归档支持**：支持 Windows 绝对路径下的 `.tar.gz`、`.tar.bz2`、`.tar.xz`、`.tgz` 和 `.zip` 归档输入，并生成 `install.packages(..., repos = NULL, type = "source")` 安装命令；相对路径、非归档文件和目录穿越输入会被拒绝。
+- **失效缓存 GC**：缓存加载时自动排除 `invalidated` 条目，设置页新增“清理失效项”操作及 Tauri `clear_invalidated_cache` 命令。
+
+### Tests
+- **阶段一逻辑增强验证**：Rust `cargo test` 通过 185 项，前端 `npm test -- --run` 主体通过，`npm run build` 通过；暂停检索单测单独通过 6 项。
+
 ## [2026-08-01 00:12:00 +08:00]
 
 ### Added

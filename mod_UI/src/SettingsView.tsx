@@ -240,6 +240,16 @@ export function SettingsView({
     }
   }
 
+  async function handleClearInvalidatedCache() {
+    setCacheBusy(true);
+    try {
+      await invoke("clear_invalidated_cache");
+      await loadCacheEntries();
+    } finally {
+      setCacheBusy(false);
+    }
+  }
+
   return (
     <div className="settings-shell">
       <aside className="settings-menu" aria-label="设置分类菜单">
@@ -782,6 +792,9 @@ export function SettingsView({
            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "9px" }}>
              <button className="button ghost" onClick={() => void loadCacheEntries()} disabled={cacheBusy}>
                {cacheBusy ? "处理中..." : "刷新列表"}
+             </button>
+             <button className="button ghost danger-text" onClick={() => void handleClearInvalidatedCache()} disabled={cacheBusy}>
+               清理失效项
              </button>
              <span style={{ color: "var(--muted)", fontSize: "12px" }}>{cacheEntries.length} 条</span>
            </div>

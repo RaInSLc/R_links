@@ -29,6 +29,7 @@ static SOURCE_HINT_RE: OnceLock<Regex> = OnceLock::new();
 static HISTORY_VERSION_RE: OnceLock<Regex> = OnceLock::new();
 static BASE_HISTORY_RE: OnceLock<[Regex; 4]> = OnceLock::new();
 static INSTALL_URL_HISTORY_RE: OnceLock<Regex> = OnceLock::new();
+static LOCAL_ARCHIVE_RE: OnceLock<Regex> = OnceLock::new();
 static CRAN_HISTORY_RE: OnceLock<[Regex; 2]> = OnceLock::new();
 static REVERSE_DEPS_RE: OnceLock<Regex> = OnceLock::new();
 
@@ -286,6 +287,35 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
         });
     }
 
+    let local_archive_re = LOCAL_ARCHIVE_RE.get_or_init(|| {
+        Regex::new(r"(?i)^(?:[A-Z]:[\\/]|\\\\)[^\r\n]+$").expect("固定本地路径正则必须有效")
+    });
+    if local_archive_re.is_match(raw) {
+        let path = normalize_local_archive_path(raw).ok()?;
+        let name = path
+            .replace('\\', "/")
+            .rsplit('/')
+            .next()
+            .and_then(|file| {
+                let stem = package_name_from_archive_file(file)?;
+                stem.rsplit_once('_')
+                    .filter(|(_, version)| version.chars().next().is_some_and(|c| c.is_ascii_digit()))
+                    .map(|(name, _)| name.to_string())
+                    .or(Some(stem))
+            })
+            .filter(|name| is_valid_package_name(name))?;
+        return Some(PackageInput {
+            raw: path,
+            name,
+            version: String::new(),
+            source_hint: Some("local".to_string()),
+        });
+    }
+
+    if raw.contains('\\') || raw.starts_with('/') {
+        return None;
+    }
+
     if raw.contains("http://") || raw.contains("https://") {
         return None;
     }
@@ -468,12 +498,14 @@ fn generate_script_inner(
         let is_archive_url = (package.raw.starts_with("http://")
             || package.raw.starts_with("https://"))
             && normalize_github_repository(&package.raw).is_none();
+        let is_local_archive = package.source_hint.as_deref() == Some("local");
         if is_archive_url && !matches!(requested_method, "auto" | "devtools" | "remotes") {
             return Err(format!(
                 "安装归档 URL 仅支持智能路由、devtools 或 remotes，不能使用 {requested_method}"
             ));
         }
-        let mut value = if matches!(requested_method, "devtools" | "remotes")
+        let mut value = if is_local_archive
+            || matches!(requested_method, "devtools" | "remotes")
             || (requested_method == "auto" && is_archive_url)
         {
             package.raw.clone()
@@ -481,7 +513,9 @@ fn generate_script_inner(
             package.name.clone()
         };
         let mut version = package.version.clone();
-        let mut method = if requested_method == "auto" && is_archive_url {
+        let mut method = if is_local_archive {
+            "local".to_string()
+        } else if requested_method == "auto" && is_archive_url {
             "remotes".to_string()
         } else {
             requested_method.to_string()
@@ -582,6 +616,7 @@ fn generate_script_inner(
 
         if requested_method == "auto"
             && !is_archive_url
+            && !is_local_archive
             && !matches!(
                 method.as_str(),
                 "github" | "biocManager" | "biocGit" | "rForge" | "remotes"
@@ -604,6 +639,13 @@ fn generate_script_inner(
             mirror.clone()
         };
 
+        if is_local_archive {
+            output.push(format!(
+                "install.packages(\"{}\", repos = NULL, type = \"source\")",
+                escape_r(&value)
+            ));
+            continue;
+        }
         output.push(generate_command(
             &value,
             &method,
@@ -1409,6 +1451,29 @@ fn normalize_install_archive_url(value: &str) -> Result<String, String> {
     Ok(normalized)
 }
 
+fn normalize_local_archive_path(value: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty()
+        || trimmed.len() > MAX_FIELD_CHARS
+        || trimmed.chars().any(|character| character.is_control())
+    {
+        return Err("本地归档路径无效".to_string());
+    }
+    let path = std::path::Path::new(trimmed);
+    if !path.is_absolute() {
+        return Err("本地归档路径必须是绝对路径".to_string());
+    }
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "本地归档文件名无效".to_string())?;
+    let lower = file_name.to_ascii_lowercase();
+    if !INSTALL_ARCHIVE_EXTENSIONS.iter().any(|ext| lower.ends_with(ext)) {
+        return Err("本地文件必须是 R 包归档格式".to_string());
+    }
+    Ok(trimmed.to_string())
+}
+
 fn package_name_from_archive_file(file_name: &str) -> Option<String> {
     let lower_file_name = file_name.to_ascii_lowercase();
     INSTALL_ARCHIVE_EXTENSIONS
@@ -1720,6 +1785,20 @@ mod tests {
             .expect("GitHub 仓库 URL 应可解析");
         assert_eq!(value.name, "davidsjoberg/ggsankey");
         assert_eq!(value.source_hint.as_deref(), Some("github"));
+    }
+
+    #[test]
+    fn parses_local_r_archive_path() {
+        let value = parse_input_line(r"C:\packages\ggsankey_0.0.99999.tar.gz")
+            .expect("本地 R 包归档路径应可解析");
+        assert_eq!(value.name, "ggsankey");
+        assert_eq!(value.source_hint.as_deref(), Some("local"));
+    }
+
+    #[test]
+    fn rejects_relative_or_non_archive_local_path() {
+        assert!(parse_input_line(r"packages\ggsankey.tar.gz").is_none());
+        assert!(parse_input_line(r"C:\packages\ggsankey.pdf").is_none());
     }
 
     #[test]
