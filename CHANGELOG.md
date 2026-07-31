@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-07-31 22:58:00 +08:00]
+
+### Fixed
+- **GitHub URL 输入识别**：直接粘贴 `https://github.com/owner/repo` 时，现在按 GitHub 仓库解析并进入精确仓库检索，不再误判为普通 R 包归档 URL。
+- **自动安装路由**：GitHub 仓库 URL 识别后使用 GitHub 仓库安装路径，普通 HTTP/HTTPS R 包归档仍保持原有 `install_url` 路由和安全校验。
+
+### Tests
+- **GitHub URL 回归验证**：Rust `cargo test` 通过 183 项，前端 `npm test -- --run` 通过 128 项，`npm run build` 通过。
+
 ## [2026-07-31 21:44:00 +08:00]
 
 ### Fixed

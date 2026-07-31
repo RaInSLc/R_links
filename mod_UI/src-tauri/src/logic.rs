@@ -263,6 +263,14 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
     }
 
     if raw.starts_with("http://") || raw.starts_with("https://") {
+        if let Some(repository) = normalize_github_repository(raw) {
+            return Some(PackageInput {
+                raw: raw.to_string(),
+                name: repository,
+                version: String::new(),
+                source_hint: Some("github".to_string()),
+            });
+        }
         if normalize_install_archive_url(raw).is_err() {
             return None;
         }
@@ -457,8 +465,9 @@ fn generate_script_inner(
     let mut output = Vec::new();
     for package in packages {
         let mut is_cran_archive = false;
-        let is_archive_url = package.raw.starts_with("http://")
-            || package.raw.starts_with("https://");
+        let is_archive_url = (package.raw.starts_with("http://")
+            || package.raw.starts_with("https://"))
+            && normalize_github_repository(&package.raw).is_none();
         if is_archive_url && !matches!(requested_method, "auto" | "devtools" | "remotes") {
             return Err(format!(
                 "安装归档 URL 仅支持智能路由、devtools 或 remotes，不能使用 {requested_method}"
@@ -1706,6 +1715,14 @@ mod tests {
     }
 
     #[test]
+    fn parses_github_repository_url_as_github_input() {
+        let value = parse_input_line("https://github.com/davidsjoberg/ggsankey")
+            .expect("GitHub 仓库 URL 应可解析");
+        assert_eq!(value.name, "davidsjoberg/ggsankey");
+        assert_eq!(value.source_hint.as_deref(), Some("github"));
+    }
+
+    #[test]
     fn extracts_github_repository_name() {
         assert_eq!(
             extract_package_name("https://github.com/buenrostrolab/FigR/"),
@@ -2428,7 +2445,12 @@ mod tests {
         assert!(parse_input_line("https://example.org:443/pkg_1.0.tar.gz").is_some());
         assert!(parse_input_line("http://example.com/pkg_1.0.tar.gz").is_some());
         assert!(parse_input_line("ftp://example.com/pkg_1.0.tar.gz").is_none());
-        assert!(parse_input_line("https://github.com/owner/demo").is_none());
+        assert_eq!(
+            parse_input_line("https://github.com/owner/demo")
+                .expect("合法 GitHub 仓库 URL 应可解析")
+                .name,
+            "owner/demo"
+        );
         assert!(parse_input_line("https://example.com/pkg_1.0.tar.gz?token=secret").is_none());
         assert!(parse_input_line("https://example.com/pkg_1.0.tar.gz#section").is_none());
         assert!(parse_input_line("https://example.com/index.html").is_none());
