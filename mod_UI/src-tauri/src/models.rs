@@ -671,6 +671,15 @@ mod tests {
     }
 
     #[test]
+    fn accepts_rspm_mirror_as_https_cran_repository() {
+        assert_eq!(
+            normalize_cran_mirror_url("https://packagemanager.posit.co/cran/latest")
+                .expect("RSPM 应作为 CRAN 兼容仓库接受"),
+            "https://packagemanager.posit.co/cran/latest/"
+        );
+    }
+
+    #[test]
     fn rejects_plain_http_package_source_url() {
         assert!(normalize_https_url("http://example.com/pkg_1.0.tar.gz", "安装 URL").is_err());
         assert!(normalize_https_url("https://example.com/pkg_1.0.tar.gz", "安装 URL").is_ok());

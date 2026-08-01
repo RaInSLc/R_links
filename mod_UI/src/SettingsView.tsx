@@ -370,6 +370,9 @@ export function SettingsView({
             placeholder="https://cloud.r-project.org"
             maxLength={MAX_RESULT_FIELD_CHARS}
           />
+          <small>
+            使用 Posit Package Manager（RSPM）时，生成脚本会启用 R 的 binary 包类型；R 会按当前操作系统、架构和 R 版本选择预编译包，普通 CRAN 镜像仍保持默认行为。
+          </small>
         </label>
         <button className="button primary save-button" onClick={() => onSaveSettings()} disabled={settingsBusy}>
           {settingsBusy ? "处理中..." : "保存设置"}

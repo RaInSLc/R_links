@@ -111,6 +111,7 @@ export const methods: Array<{
 
 export const mirrors = [
   { label: "Posit Cloud", value: "https://cloud.r-project.org" },
+  { label: "Posit Package Manager", value: "https://packagemanager.posit.co/cran/latest" },
   { label: "清华大学", value: "https://mirrors.tuna.tsinghua.edu.cn/CRAN/" },
   { label: "中国科学技术大学", value: "https://mirrors.ustc.edu.cn/CRAN/" },
   { label: "北京外国语大学", value: "https://mirrors.bfsu.edu.cn/CRAN/" },

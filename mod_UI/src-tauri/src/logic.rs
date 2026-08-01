@@ -481,6 +481,7 @@ fn generate_script_inner(
     } else {
         normalize_cran_mirror_url(&options.mirror)?
     };
+    let binary_mirror = is_binary_package_mirror(&mirror);
 
     let packages_for_verify = if options.append_verify {
         packages.clone()
@@ -493,6 +494,12 @@ fn generate_script_inner(
     }
 
     let mut output = Vec::new();
+    if binary_mirror {
+        output.push(format!(
+            "# [RSPM 二进制镜像: {mirror} | 由 R 按当前平台选择预编译包]"
+        ));
+        output.push("options(pkgType = \"binary\")".to_string());
+    }
     for package in packages {
         let mut is_cran_archive = false;
         let is_archive_url = (package.raw.starts_with("http://")
@@ -603,6 +610,10 @@ fn generate_script_inner(
                         value = best.repository.clone();
                         version.clear();
                     }
+                    "cran" if binary_mirror && package.version.is_empty() => {
+                        method = "base".to_string();
+                        version.clear();
+                    }
                     _ => method = "remotesVersion".to_string(),
                 }
             }
@@ -663,6 +674,13 @@ fn generate_script_inner(
     }
     validate_script_size(&script)?;
     Ok(script)
+}
+
+fn is_binary_package_mirror(mirror: &str) -> bool {
+    let normalized = mirror.trim().to_ascii_lowercase();
+    normalized.contains("packagemanager.posit.co")
+        || normalized.contains("posit.co/rspm")
+        || normalized.contains("/rspm/")
 }
 
 fn generate_check_system_script(packages: &[PackageInput]) -> Result<String, String> {
@@ -3254,5 +3272,40 @@ mod tests {
         assert!(output.contains("install.packages(\"dplyr\""));
         assert!(output.contains("# ===== 安装结果验证 ====="));
         assert!(output.contains("packageVersion(p)"));
+    }
+
+    #[test]
+    fn rspm_mirror_generates_binary_install_setup() {
+        let output = generate_script(
+            "dplyr",
+            &GenerateOptions {
+                method: "base".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://packagemanager.posit.co/cran/latest".to_string(),
+                ..Default::default()
+            },
+            &[],
+        )
+        .expect("RSPM 应生成安装脚本");
+
+        assert!(output.contains("options(pkgType = \"binary\")"));
+        assert!(output.contains("install.packages(\"dplyr\", repos = \"https://packagemanager.posit.co/cran/latest/\""));
+    }
+
+    #[test]
+    fn ordinary_cran_mirror_does_not_force_binary_package_type() {
+        let output = generate_script(
+            "dplyr",
+            &GenerateOptions {
+                method: "base".to_string(),
+                mirror: "https://cloud.r-project.org".to_string(),
+                ..Default::default()
+            },
+            &[],
+        )
+        .expect("普通 CRAN 镜像应生成安装脚本");
+
+        assert!(!output.contains("pkgType = \"binary\""));
     }
 }

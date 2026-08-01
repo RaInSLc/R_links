@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [2026-08-01 11:45:00 +08:00]
+
+### Added
+- **R 二进制镜像支持**：新增 Posit Package Manager（RSPM）CRAN 镜像预设；脚本生成器识别 RSPM 地址后输出 `options(pkgType = "binary")`，由 R 按当前操作系统、架构和 R 版本选择预编译包。
+- **兼容现有检索链路**：RSPM 继续复用现有 CRAN 包元数据采集、缓存和版本结果；普通 CRAN、GitHub、Bioconductor、本地归档安装行为保持不变。
+- **设置页说明**：补充 RSPM 二进制包行为说明和自定义镜像提示。
+
+### Tests
+- **Rust**：`cargo test` 通过 189 项。
+- **前端**：`npm test -- --run` 通过 128 项，`npm run build` 通过。
+
 ## [2026-08-01 11:20:00 +08:00]
 
 ### Fixed
