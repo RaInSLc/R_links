@@ -438,8 +438,9 @@ export function WorkspaceView({
         </div>
       </section>
 
-      <section className="panel method-panel compact-method-panel">
+      <section className={`panel method-panel compact-method-panel ${ecosystem !== "r" ? "multi-method-panel" : ""}`}>
         <PanelHeader step="02" title="安装策略" meta={settings.fullSearch ? "全量检索" : "快速检索"} />
+        {ecosystem !== "r" && <div className="multi-ecosystem-note"><strong>{ecosystem === "pip" ? "Pip 批量检索" : "Conda 批量检索"}</strong><span>源地址和版本会写入检索结果，复制命令即可安装。</span></div>}
         <div className="method-grid pinned-method-grid" aria-label="常用安装策略">
           {pinnedMethods.map((id) => {
             const item = methods.find((m) => m.id === id);

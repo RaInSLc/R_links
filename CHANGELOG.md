@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-08-01 11:00:00 +08:00]
+
+### Changed
+- **工作台布局优化**：将生态选择、源配置和包输入拆分为清晰的三层结构；Pip 使用单行 Index URL，Conda 使用紧凑的逗号分隔 channel 输入，避免多行源配置挤压包列表区域。
+- **多生态策略区优化**：R 模式保留原有安装策略卡片；Pip/Conda 模式显示专属检索说明，减少无关 R 策略信息和视觉噪声。
+- **多生态配置持久化**：Pip Index 与 Conda channels 接入设置模型，重启后保持配置。
+
+### Tests
+- **界面优化验证**：前端 `npm test -- --run` 通过 128 项，Rust `cargo test` 通过 186 项，`npm run build` 通过，`npm run tauri build` 成功生成 MSI 和 NSIS 安装包。
+
 ## [2026-08-01 10:49:00 +08:00]
 
 ### Added

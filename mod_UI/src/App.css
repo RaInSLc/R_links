@@ -557,6 +557,25 @@ input:focus-visible,
   color: var(--muted);
 }
 
+.ecosystem-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 17px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(244, 248, 252, 0.72);
+}
+.ecosystem-label { font-weight: 700; color: var(--ink); }
+.ecosystem-tabs { display: flex; gap: 6px; }
+.ecosystem-tabs .button { min-height: 32px; padding: 5px 14px; }
+.ecosystem-hint { margin-left: auto; color: var(--muted); font-size: 12px; }
+.source-config-row { display: grid; grid-template-columns: 90px 1fr; gap: 10px; align-items: center; padding: 8px 17px; background: #f8fbfd; border-bottom: 1px solid var(--line); }
+.source-config-row label { color: var(--muted); font-size: 12px; font-weight: 700; }
+.source-config-row input { min-height: 32px; }
+.multi-ecosystem-note { display: flex; gap: 10px; align-items: baseline; padding: 12px 17px; color: var(--muted); font-size: 12px; }
+.multi-ecosystem-note strong { color: var(--theme-color); font-size: 14px; }
+
 .inline-warning {
   padding: 10px 14px;
   color: #8f3f24;
