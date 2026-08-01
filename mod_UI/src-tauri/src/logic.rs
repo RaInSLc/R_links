@@ -998,7 +998,7 @@ fn clean_result_version(value: &str) -> Option<String> {
 
 fn clean_result_source(value: &str) -> Option<String> {
     match value.trim() {
-        "cran" | "bioc" | "biocGit" | "github" | "r-forge" | "none" => {
+        "cran" | "cran-binary" | "bioc" | "biocGit" | "github" | "r-forge" | "none" => {
             Some(value.trim().to_string())
         }
         _ => None,
@@ -1039,6 +1039,11 @@ fn clean_result_repository(source: &str, value: &str) -> Option<String> {
             } else {
                 None
             }
+        }
+        "cran-binary" => {
+            if trimmed.starts_with("https://packagemanager.posit.co/") && trimmed.ends_with('/') {
+                Some(trimmed.to_string())
+            } else { None }
         }
         _ => {
             if trimmed.len() <= MAX_FIELD_CHARS && !trimmed.chars().any(char::is_control) {

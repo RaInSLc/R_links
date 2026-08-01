@@ -53,7 +53,7 @@ pub(crate) fn clean_result_repository(source: &str, value: &str) -> Option<Strin
                 None
             }
         }
-        "cran" | "cran-binary" => {
+        "cran" => {
             if trimmed.is_empty()
                 || (trimmed.starts_with("https://cran.r-project.org/src/contrib/Archive/")
                     && trimmed.ends_with(".tar.gz"))
@@ -62,6 +62,11 @@ pub(crate) fn clean_result_repository(source: &str, value: &str) -> Option<Strin
             } else {
                 None
             }
+        }
+        "cran-binary" => {
+            if trimmed.starts_with("https://packagemanager.posit.co/") && trimmed.ends_with("/") {
+                Some(trimmed.to_string())
+            } else { None }
         }
         _ => trimmed.is_empty().then(String::new),
     }

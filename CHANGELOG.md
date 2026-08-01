@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-08-01 12:35:00 +08:00]
+
+### Fixed
+- **修复 R 二进制镜像误报检索异常**：将 `packagemanager.posit.co/cran/.../PACKAGES` 加入受限检索 URL 白名单；此前请求在网络访问前被安全校验拦截，报告显示“检索异常”。
+- **保留二进制镜像仓库地址**：`cran-binary` 结果清洗现在允许并校验 Posit Package Manager 镜像 URL，命中结果不会再因仓库字段被清空而降级。
+
+### Tests
+- **Rust**：`cargo test` 通过 189 项。
+- **前端**：`npm test -- --run` 通过 128 项。
+
 ## [2026-08-01 12:15:00 +08:00]
 
 ### Fixed
