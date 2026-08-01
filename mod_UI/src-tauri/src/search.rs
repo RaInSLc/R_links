@@ -18,6 +18,7 @@ use crate::models::{
     MAX_FIELD_CHARS, MAX_PACKAGE_LINES,
 };
 use crate::storage;
+use crate::search_urls::validate_search_request_url_with_mirror;
 
 const BIOC_VERSIONS: &[&str] = &[
     "3.23", "3.22", "3.21", "3.20", "3.19", "3.18", "3.17", "3.16", "3.15", "3.14", "3.13", "3.12",
@@ -512,74 +513,35 @@ pub async fn search_binary_packages(
         return Err("请输入至少一个有效的 R 二进制包名".to_string());
     }
     let mirror = crate::models::normalize_cran_mirror_url(mirror)?;
-    let client = build_client(settings)?;
-    let budget = RequestBudget::new(MAX_SEARCH_HTTP_REQUESTS);
-    let timed_out = AtomicBool::new(false);
-    let deadline = Instant::now() + MAX_SEARCH_DURATION;
     let mut results = Vec::new();
     let mut logs = Vec::new();
-    log(app, run_id, &mut logs, &format!("开始 R 二进制包独立检索，镜像: {mirror}"));
+    log(app, run_id, &mut logs, &format!("开始 R 二进制包命令生成，镜像: {mirror}"));
 
     for (index, package) in packages.iter().enumerate() {
         if state.is_paused(run_id) {
             sleep(SEARCH_STOP_POLL_INTERVAL).await;
         }
-        if search_stopped(cancelled, &budget) || timed_out.load(Ordering::SeqCst) {
+        if cancelled.load(Ordering::SeqCst) {
             break;
         }
-        log(app, run_id, &mut logs, &format!("[{}/{}] 检索 R 二进制包 {}", index + 1, packages.len(), package.name));
-        let url = format!("{}src/contrib/PACKAGES", mirror);
-        let mut context = SearchContext {
-            log_emitter: Some((app, run_id)), client: &client, settings, cancelled,
-            budget: &budget, deadline, timed_out: &timed_out, logs: &mut logs,
-            result_limit_reached: false, github_rate_limited: false,
+        log(app, run_id, &mut logs, &format!("[{}/{}] 已按输入生成 R 二进制安装命令 {}", index + 1, packages.len(), package.name));
+        let result = SearchResult {
+            package: package.name.clone(),
+            requested_version: package.version.clone(),
+            latest_version: if package.version.is_empty() { "unknown".to_string() } else { package.version.clone() },
+            repository: mirror.clone(),
+            real_name: package.name.clone(),
+            source: "cran-binary".to_string(),
+            found: true,
+            message: "已生成安装命令，未执行网络检索".to_string(),
+            status: "found".to_string(),
+            stage: "final".to_string(),
         };
-        let result = match get_text(&mut context, &url).await {
-            Ok(Some(text)) => match find_package_in_dcf(&text, &package.name) {
-                Some(version) if package.version.is_empty() || version_compatible(&version, &package.version) => {
-                    log(app, run_id, &mut logs, &format!("R 二进制包 {} 命中版本 {}", package.name, version));
-                    found_result(package, &version, &mirror, &package.name, "cran-binary")
-                }
-                Some(version) => missing_binary_result(package, format!("镜像有包但没有匹配请求版本，当前版本 {version}")),
-                None => missing_binary_result(package, format!("镜像 PACKAGES 中没有 {}，请确认镜像仓库和 R 版本路径", package.name)),
-            },
-            Ok(None) => missing_binary_result(package, "镜像未返回 PACKAGES 元数据（HTTP 404）".to_string()),
-            Err(error) => missing_binary_result(package, format!("读取二进制镜像失败: {error}")),
-        };
-        if !result.found {
-            log(app, run_id, &mut logs, &format!("{}: {}", package.name, result.message));
-        }
         let _ = app.emit("search-progress", SearchProgressEvent { run_id, result: result.clone() });
         results.push(result);
     }
-    log(app, run_id, &mut logs, "R 二进制包独立检索完成");
-    Ok(SearchResponse { run_id, results, logs, stopped: timed_out.load(Ordering::SeqCst) || search_stopped(cancelled, &budget), dependency_graph: None })
-}
-
-fn missing_binary_result(package: &PackageInput, message: String) -> SearchResult {
-    SearchResult {
-        package: package.name.clone(), requested_version: package.version.clone(), latest_version: String::new(),
-        repository: String::new(), real_name: package.name.clone(), source: "cran-binary".to_string(),
-        found: false, message, status: "error".to_string(), stage: "final".to_string(),
-    }
-}
-
-fn find_package_in_dcf(text: &str, package_name: &str) -> Option<String> {
-    let mut current_package: Option<String> = None;
-    let mut current_version: Option<String> = None;
-    for line in text.lines().chain(std::iter::once("")) {
-        if line.trim().is_empty() {
-            if current_package.as_deref().is_some_and(|name| name.eq_ignore_ascii_case(package_name)) {
-                return current_version;
-            }
-            current_package = None;
-            current_version = None;
-            continue;
-        }
-        if let Some(value) = line.strip_prefix("Package:") { current_package = Some(value.trim().to_string()); }
-        if let Some(value) = line.strip_prefix("Version:") { current_version = Some(value.trim().to_string()); }
-    }
-    None
+    log(app, run_id, &mut logs, "R 二进制安装命令生成完成（未执行网络检索）");
+    Ok(SearchResponse { run_id, results, logs, stopped: cancelled.load(Ordering::SeqCst), dependency_graph: None })
 }
 
 async fn search_one_package(
@@ -1364,7 +1326,13 @@ async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Result<Option<S
     if context.is_stopped() {
         return Ok(None);
     }
-    if let Err(error) = validate_search_request_url(url) {
+    let is_cran_mirror_request = url.contains("/web/packages/") || url.contains("/src/contrib/Archive/");
+    let validation = if is_cran_mirror_request {
+        validate_search_request_url_with_mirror(url, Some(&context.settings.cran_mirror))
+    } else {
+        validate_search_request_url(url)
+    };
+    if let Err(error) = validation {
         context.log(&error);
         return Err(error);
     }

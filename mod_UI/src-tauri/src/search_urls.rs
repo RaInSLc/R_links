@@ -3,6 +3,13 @@ use crate::models::url_has_explicit_port;
 use url::Url;
 
 pub(crate) fn validate_search_request_url(value: &str) -> Result<(), String> {
+    validate_search_request_url_with_mirror(value, None)
+}
+
+pub(crate) fn validate_search_request_url_with_mirror(
+    value: &str,
+    configured_mirror: Option<&str>,
+) -> Result<(), String> {
     let parsed = Url::parse(value).map_err(|_| "检索 URL 无效，已阻止请求".to_string())?;
     if parsed.scheme() != "https"
         || parsed.port().is_some()
@@ -56,7 +63,13 @@ pub(crate) fn validate_search_request_url(value: &str) -> Result<(), String> {
                         && file == "DESCRIPTION"
                 })
         }
-        _ => false,
+        _ => configured_mirror.is_some_and(|mirror| {
+            let Ok(configured) = Url::parse(mirror) else { return false; };
+            configured.scheme() == "https"
+                && configured.host_str() == Some(host)
+                && parsed.query().is_none()
+                && (is_allowed_cran_package_path(&parsed) || is_allowed_cran_archive_path(&parsed))
+        }),
     };
 
     if allowed {

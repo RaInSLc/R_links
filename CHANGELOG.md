@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [2026-08-01 14:10:00 +08:00]
+
+### Fixed
+- **修复自定义 CRAN 镜像被误拦截**：检索 URL 校验现在仅允许当前配置镜像主机的标准包页和 Archive 路径，清华等已配置 HTTPS 镜像可正常请求，同时不扩大到任意未知主机。
+- **调整 R 二进制模式**：二进制模式改为仅根据输入和镜像生成安装命令，不再请求 `PACKAGES` 或触发 CRAN、Bioconductor、R-Universe、GitHub、R-Forge 多源检索；报告明确标记“已生成安装命令，未执行网络检索”。
+
+### Tests
+- **Rust**：`cargo test` 通过 190 项。
+- **前端**：`npm test -- --run` 通过 128 项，`npm run build` 通过。
+- **桌面打包**：`npm run tauri build` 成功生成 MSI 和 NSIS 安装包。
+
 ## [2026-08-01 13:50:00 +08:00]
 
 ### Fixed
