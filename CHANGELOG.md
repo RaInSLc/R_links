@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-08-01 13:05:00 +08:00]
+
+### Fixed
+- **修复 Linux R 安装失败**：RSPM 安装脚本不再强制使用无效的 `type = "binary"`；运行时按平台选择 `win.binary`、`mac.binary` 或 Linux 的 `source`，避免 `type 'binary' is not supported on this platform`。
+
+### Tests
+- **Rust**：`cargo test` 通过 189 项。
+- **前端**：`npm run build` 通过。
+- **桌面打包**：`npm run tauri build` 成功生成 MSI 和 NSIS 安装包。
+
 ## [2026-08-01 12:35:00 +08:00]
 
 ### Fixed

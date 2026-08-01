@@ -498,7 +498,10 @@ fn generate_script_inner(
         output.push(format!(
             "# [RSPM 二进制镜像: {mirror} | 由 R 按当前平台选择预编译包]"
         ));
-        output.push("options(pkgType = \"binary\")".to_string());
+        output.push(
+            "options(pkgType = if (.Platform$OS.type == \"windows\") \"win.binary\" else if (identical(Sys.info()[[\"sysname\"]], \"Darwin\")) \"mac.binary\" else \"source\")"
+                .to_string(),
+        );
     }
     for package in packages {
         let mut is_cran_archive = false;
@@ -3296,7 +3299,8 @@ mod tests {
         )
         .expect("RSPM 应生成安装脚本");
 
-        assert!(output.contains("options(pkgType = \"binary\")"));
+        assert!(output.contains("options(pkgType = if (.Platform$OS.type == \"windows\") \"win.binary\""));
+        assert!(output.contains("else \"source\")"));
         assert!(output.contains("install.packages(\"dplyr\", repos = \"https://packagemanager.posit.co/cran/latest/\""));
     }
 
