@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [2026-08-01 14:45:00 +08:00]
+
+### Added
+- **增强 R 输入格式兼容**：支持中文全角分隔符、`pacman::p_load`、`renv::install`、`pak::pkg_install`、`R/Rscript -e` 以及 Dockerfile `RUN Rscript -e` 场景的包名提取和后端解析。
+- **保持显示层与后端一致**：前端规范化建议与 Rust 实际检索解析同步覆盖上述输入形式，避免输入统计和实际检索数量不一致。
+
+### Tests
+- **Rust**：`cargo test` 通过 192 项。
+- **前端**：`npm test -- --run` 通过 130 项，`npm run build` 通过。
+- **桌面打包**：`npm run tauri build` 成功生成 MSI 和 NSIS 安装包。
+
 ## [2026-08-01 14:03:00 +08:00]
 
 ### Added

@@ -52,6 +52,18 @@ describe("safeText", () => {
   });
 });
 
+describe("normalizePackageInputDisplay", () => {
+  it("preserves package manager commands and normalizes full-width separators", () => {
+    expect(normalizePackageInputDisplay("pacman::p_load(dplyr，ggplot2)"))
+      .toBe("pacman::p_load(dplyr，ggplot2)");
+  });
+
+  it("extracts packages from Rscript shell commands", () => {
+    expect(extractCanonicalInput("RUN Rscript -e 'install.packages(c(\"dplyr\",\"tidyr\"))'"))
+      .toBe("dplyr\ntidyr");
+  });
+});
+
 describe("safeBoolean", () => {
   it("returns true only for literal true", () => {
     expect(safeBoolean(true)).toBe(true);

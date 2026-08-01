@@ -53,6 +53,17 @@ pub fn parse_inputs_filtered(input: &str, rules: &InputRules) -> Result<Vec<Pack
         if trimmed.is_empty() || is_comment_line(trimmed, rules) {
             continue;
         }
+        if let Some(managed) = normalize_managed_package_line(trimmed) {
+            for item in managed.lines().map(str::trim).filter(|item| !item.is_empty()) {
+                let pkg = parse_input_line(item)
+                    .ok_or_else(|| format!("第 {line_idx} 行包管理器输入格式无效"))?;
+                packages.push(pkg);
+                if packages.len() > MAX_PACKAGE_LINES {
+                    return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+                }
+            }
+            continue;
+        }
         if let Some(markdown_line) = normalize_markdown_table_line(trimmed) {
             if markdown_line.is_empty() {
                 continue;
@@ -153,6 +164,37 @@ pub fn parse_inputs_filtered(input: &str, rules: &InputRules) -> Result<Vec<Pack
     Ok(packages)
 }
 
+fn normalize_managed_package_line(line: &str) -> Option<String> {
+    let normalized = line.replace(['，', '、', '；'], ",");
+    let call_re = Regex::new(r"(?i)\b(?:install\.packages|BiocManager::install|pacman::p_load|renv::install|pak::pkg_install)\s*\((.*)\)").ok()?;
+    let shell = Regex::new(r#"(?i)\b(?:R|Rscript)\s+-e\s+[\"'](.+)[\"']"#).ok()?;
+    let body = if let Some(captures) = call_re.captures(&normalized) {
+        captures.get(1)?.as_str().to_string()
+    } else if let Some(captures) = shell.captures(&normalized) {
+        return normalize_managed_package_line(captures.get(1)?.as_str());
+    } else {
+        return None;
+    };
+    let quoted = Regex::new(r#"[\"']([^\"']+)[\"']"#).ok()?;
+    let quoted_values = quoted
+        .captures_iter(&body)
+        .filter_map(|capture| capture.get(1).map(|value| value.as_str().to_string()))
+        .collect::<Vec<_>>();
+    if !quoted_values.is_empty() {
+        return Some(quoted_values.join("\n"));
+    }
+    Some(
+        body.trim()
+            .trim_start_matches(|c: char| c == 'c' || c == 'C' || c == 'l' || c == 'i' || c == 's' || c == 't' || c == '(')
+            .trim_end_matches(')')
+            .split([',', ';'])
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+}
+
 fn normalize_markdown_table_line(line: &str) -> Option<String> {
     if !line.starts_with('|') || !line.ends_with('|') {
         return None;
@@ -218,7 +260,8 @@ fn strip_r_parens_wrapper(line: &str) -> String {
 }
 
 fn split_by_separators(line: &str, rules: &InputRules) -> Vec<String> {
-    let mut result = vec![line.to_string()];
+    let normalized = line.replace(['，', '、', '；'], ",");
+    let mut result = vec![normalized];
 
     for sep in &rules.separators {
         let mut next = Vec::new();
@@ -3207,6 +3250,27 @@ mod tests {
         assert_eq!(packages.len(), 5);
         assert_eq!(packages[0].name, "ChIPseeker");
         assert_eq!(packages[4].name, "enrichplot");
+    }
+
+    #[test]
+    fn parses_package_manager_and_full_width_separator_input() {
+        let packages = parse_inputs_filtered(
+            "pacman::p_load(dplyr，ggplot2)\nrenv::install(c(\"Seurat\", \"patchwork\"))",
+            &InputRules::default(),
+        )
+        .expect("包管理器和中文分隔符输入应可解析");
+        let names = packages.iter().map(|package| package.name.as_str()).collect::<Vec<_>>();
+        assert_eq!(names, ["dplyr", "ggplot2", "Seurat", "patchwork"]);
+    }
+
+    #[test]
+    fn parses_docker_run_rscript_input() {
+        let packages = parse_inputs_filtered(
+            "RUN Rscript -e 'install.packages(c(\"dplyr\", \"tidyr\"))'",
+            &InputRules::default(),
+        )
+        .expect("Docker RUN Rscript 输入应可解析");
+        assert_eq!(packages.iter().map(|package| package.name.as_str()).collect::<Vec<_>>(), ["dplyr", "tidyr"]);
     }
 
     #[test]

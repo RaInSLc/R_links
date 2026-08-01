@@ -159,7 +159,7 @@ function isHttpInputUrl(value: string): boolean {
 }
 
 function splitInputLine(line: string, separators: string[] = DEFAULT_INPUT_SEPARATORS): string[] {
-  const trimmed = line.trim();
+  const trimmed = line.replace(/[，、；]/g, (value) => value === "；" ? ";" : ",").trim();
   if (!trimmed || trimmed.startsWith("#")) return [];
   let content = trimmed;
   const cParens = trimmed.match(/^(?:c|list)\((.+)\)$/s);
@@ -787,7 +787,7 @@ export function buildInputSmartSuggestions(
   const activeLines = input.split(/\r?\n/).filter(isActiveInputLine);
   const hasVersionHint = activeLines.some((line) => /\b\d+\.\d+(?:[.\-][0-9A-Za-z]+)*\b/.test(line));
   const hasBiocHint = activeLines.some((line) => /\b(?:BiocManager::install|bioconductor|bioc)\b/i.test(line));
-  const hasInstallCall = activeLines.some((line) => /\b(?:install\.packages|BiocManager::install|remotes::install_[A-Za-z_]*|devtools::install_[A-Za-z_]*|library|require)\s*\(/.test(line));
+  const hasInstallCall = activeLines.some((line) => /\b(?:install\.packages|BiocManager::install|pacman::p_load|renv::install|pak::pkg_install|remotes::install_[A-Za-z_]*|devtools::install_[A-Za-z_]*|library|require)\s*\(/.test(line));
   const hasLikelyNoise = activeLines.some((line) => /(?:ERROR|Warning|Traceback|安装失败|报错|not available|there is no package)/i.test(line));
   const canonicalInput = hasInstallCall ? extractCanonicalInput(input) : "";
   const dedupedInput = (() => {
