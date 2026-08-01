@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-08-01 11:20:00 +08:00]
+
+### Fixed
+- **修复 Conda 配置框覆盖包列表**：Conda channel 输入改为独立单行源配置控件，避免继承包输入 textarea 的行号、宽度和高度样式，恢复包列表与工具栏的正常布局。
+
+### Tests
+- **布局回归验证**：前端 `npm test -- --run` 通过 128 项，Rust `cargo test` 通过 186 项，`npm run build` 通过，`npm run tauri build` 成功生成 MSI 和 NSIS 安装包。
+
 ## [2026-08-01 11:16:00 +08:00]
 
 ### Fixed
