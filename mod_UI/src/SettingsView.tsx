@@ -171,6 +171,7 @@ export function SettingsView({
   const [cacheEntries, setCacheEntries] = useState<PackageCacheEntry[]>([]);
   const [cacheBusy, setCacheBusy] = useState(false);
   const fileConfigRef = useRef<HTMLInputElement>(null);
+  const fileCacheRef = useRef<HTMLInputElement>(null);
 
   async function handleTestSpeed() {
     setSpeedTesting(true);
@@ -245,6 +246,40 @@ export function SettingsView({
     try {
       await invoke("clear_invalidated_cache");
       await loadCacheEntries();
+    } finally {
+      setCacheBusy(false);
+    }
+  }
+
+  async function handleExportCache() {
+    setCacheBusy(true);
+    try {
+      const content = await invoke<string>("export_package_cache");
+      const blob = new Blob([content], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `rlinks_cache_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    } finally {
+      setCacheBusy(false);
+    }
+  }
+
+  async function handleImportCache(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setCacheBusy(true);
+    try {
+      const imported = await invoke<number>("import_package_cache", { content: await file.text() });
+      await loadCacheEntries();
+      window.alert(`已合并 ${imported} 条缓存记录`);
+    } catch (error) {
+      window.alert(`缓存导入失败：${String(error)}`);
     } finally {
       setCacheBusy(false);
     }
@@ -796,9 +831,16 @@ export function SettingsView({
              <button className="button ghost" onClick={() => void loadCacheEntries()} disabled={cacheBusy}>
                {cacheBusy ? "处理中..." : "刷新列表"}
              </button>
-             <button className="button ghost danger-text" onClick={() => void handleClearInvalidatedCache()} disabled={cacheBusy}>
-               清理失效项
-             </button>
+              <button className="button ghost danger-text" onClick={() => void handleClearInvalidatedCache()} disabled={cacheBusy}>
+                清理失效项
+              </button>
+              <button className="button ghost" onClick={() => void handleExportCache()} disabled={cacheBusy}>
+                导出共享缓存
+              </button>
+              <button className="button ghost" onClick={() => fileCacheRef.current?.click()} disabled={cacheBusy}>
+                导入共享缓存
+              </button>
+              <input ref={fileCacheRef} type="file" accept=".json" onChange={(event) => void handleImportCache(event)} style={{ display: "none" }} />
              <span style={{ color: "var(--muted)", fontSize: "12px" }}>{cacheEntries.length} 条</span>
            </div>
            {cacheEntries.length > 0 && (

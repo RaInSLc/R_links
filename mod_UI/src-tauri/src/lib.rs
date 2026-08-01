@@ -430,6 +430,16 @@ fn clear_invalidated_cache(app: AppHandle) -> Result<usize, String> {
 }
 
 #[tauri::command]
+fn export_package_cache(app: AppHandle) -> Result<String, String> {
+    storage::export_cache(&app)
+}
+
+#[tauri::command]
+fn import_package_cache(app: AppHandle, content: String) -> Result<usize, String> {
+    storage::import_cache(&app, &content)
+}
+
+#[tauri::command]
 async fn search_multi_ecosystem(
     input: String,
     ecosystem: String,
@@ -879,6 +889,8 @@ pub fn run() {
             save_history,
             clear_package_cache,
             clear_invalidated_cache,
+            export_package_cache,
+            import_package_cache,
             search_multi_ecosystem,
             load_package_cache,
             delete_package_cache_entry,

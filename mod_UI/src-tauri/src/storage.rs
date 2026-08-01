@@ -796,6 +796,7 @@ fn redact_settings_value(value: &mut serde_json::Value) {
 }
 
 const CACHE_FILE_NAME: &str = "pkg_cache.json";
+const MAX_CACHE_IMPORT_BYTES: usize = 8 * 1024 * 1024;
 
 pub fn load_cache(app: &AppHandle) -> Result<HashMap<String, PackageCacheEntry>, String> {
     let path = data_file(app, CACHE_FILE_NAME)?;
@@ -860,6 +861,47 @@ pub fn save_cache(
     let entries = sorted_cache_entries(cache, limit);
     let content = serde_json::to_string_pretty(&entries).map_err(|error| error.to_string())?;
     atomic_write(&path, &content)
+}
+
+pub fn export_cache(app: &AppHandle) -> Result<String, String> {
+    let cache = load_cache(app)?;
+    let entries = sorted_cache_entries(&cache, usize::MAX)
+        .into_iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    serde_json::to_string_pretty(&entries).map_err(|error| format!("缓存导出失败: {error}"))
+}
+
+pub fn import_cache(app: &AppHandle, content: &str) -> Result<usize, String> {
+    if content.len() > MAX_CACHE_IMPORT_BYTES {
+        return Err("缓存文件超过 8 MB 导入限制".to_string());
+    }
+    let entries = serde_json::from_str::<Vec<PackageCacheEntry>>(content)
+        .map_err(|_| "缓存文件格式无效，应为缓存条目 JSON 数组".to_string())?;
+    let mut cache = load_cache(app)?;
+    let before = cache.len();
+    for entry in entries.into_iter().take(10_000) {
+        if entry.package_name.trim().is_empty()
+            || entry.real_name.trim().is_empty()
+            || entry.source.trim().is_empty()
+            || entry.package_name.len() > MAX_FIELD_CHARS
+            || entry.version.len() > MAX_HISTORY_VERSION_CHARS
+            || entry.repository.len() > MAX_FIELD_CHARS
+        {
+            continue;
+        }
+        let key = entry.package_name.to_ascii_lowercase();
+        let should_replace = cache.get(&key).is_none_or(|current| {
+            (!current.is_trusted() && entry.is_trusted())
+                || entry.cached_at.parse::<u64>().unwrap_or_default()
+                    > current.cached_at.parse::<u64>().unwrap_or_default()
+        });
+        if should_replace {
+            cache.insert(key, entry);
+        }
+    }
+    save_cache(app, &cache)?;
+    Ok(cache.len().saturating_sub(before))
 }
 
 fn sorted_cache_entries(
