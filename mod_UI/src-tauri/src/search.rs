@@ -546,6 +546,9 @@ pub async fn search_binary_packages(
             Ok(None) => missing_binary_result(package, "镜像未返回 PACKAGES 元数据（HTTP 404）".to_string()),
             Err(error) => missing_binary_result(package, format!("读取二进制镜像失败: {error}")),
         };
+        if !result.found {
+            log(app, run_id, &mut logs, &format!("{}: {}", package.name, result.message));
+        }
         let _ = app.emit("search-progress", SearchProgressEvent { run_id, result: result.clone() });
         results.push(result);
     }

@@ -499,6 +499,10 @@ fn generate_script_inner(
             "# [RSPM 二进制镜像: {mirror} | 由 R 按当前平台选择预编译包]"
         ));
         output.push(
+            "user_library <- file.path(path.expand(\"~\"), \"R\", \"library\")\nif (!dir.exists(user_library)) dir.create(user_library, recursive = TRUE, showWarnings = FALSE)\n.libPaths(unique(c(user_library, .libPaths())))"
+                .to_string(),
+        );
+        output.push(
             "options(pkgType = if (.Platform$OS.type == \"windows\") \"win.binary\" else if (identical(Sys.info()[[\"sysname\"]], \"Darwin\")) \"mac.binary\" else \"source\")"
                 .to_string(),
         );
@@ -3318,5 +3322,23 @@ mod tests {
         .expect("普通 CRAN 镜像应生成安装脚本");
 
         assert!(!output.contains("pkgType = \"binary\""));
+    }
+
+    #[test]
+    fn rspm_script_uses_writable_user_library() {
+        let output = generate_script(
+            "seurat",
+            &GenerateOptions {
+                method: "base".to_string(),
+                mirror: "https://packagemanager.posit.co/cran/latest".to_string(),
+                ..Default::default()
+            },
+            &[],
+        )
+        .expect("RSPM 应生成用户库初始化代码");
+
+        assert!(output.contains("user_library <- file.path(path.expand(\"~\"), \"R\", \"library\")"));
+        assert!(output.contains(".libPaths(unique(c(user_library, .libPaths())))"));
+        assert!(!output.contains("Would you like to use a personal library"));
     }
 }
