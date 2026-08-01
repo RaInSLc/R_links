@@ -274,7 +274,7 @@ export function WorkspaceView({
           <div className="input-stats-bar">
             <span className="input-stat-chip">行数 <strong>{input.split("\n").filter((l) => l.trim()).length}</strong></span>
             <span className="input-stat-chip">字符 <strong>{input.length}</strong></span>
-            {inputProfile.total > 0 && <span className="input-stat-chip">CRAN/Bioc <strong>{inputProfile.total - inputProfile.archiveUrls - inputProfile.repositories}</strong></span>}
+            {inputProfile.total > 0 && <span className="input-stat-chip">{ecosystem === "r-binary" ? "待生成" : "CRAN/Bioc"} <strong>{inputProfile.total - inputProfile.archiveUrls - inputProfile.repositories}</strong></span>}
             {inputProfile.repositories > 0 && <span className="input-stat-chip">GitHub <strong>{inputProfile.repositories}</strong></span>}
             {inputProfile.archiveUrls > 0 && <span className="input-stat-chip">URL <strong>{inputProfile.archiveUrls}</strong></span>}
             {duplicateCount > 0 && (
@@ -292,7 +292,7 @@ export function WorkspaceView({
             )}
           </div>
         )}
-        {inputProfile.total > 0 && (
+        {inputProfile.total > 0 && ecosystem !== "r-binary" && (
           <div className={`search-plan-preview ${searchPlan.level}`} aria-label="搜索计划预览">
             <div>
               <span className="search-plan-eyebrow">搜索计划</span>
@@ -439,8 +439,8 @@ export function WorkspaceView({
       </section>
 
       <section className={`panel method-panel compact-method-panel ${ecosystem !== "r" ? "multi-method-panel" : ""}`}>
-        <PanelHeader step="02" title="安装策略" meta={settings.fullSearch ? "全量检索" : "快速检索"} />
-        {ecosystem !== "r" && <div className="multi-ecosystem-note"><strong>{ecosystem === "pip" ? "Pip 批量检索" : "Conda 批量检索"}</strong><span>源地址和版本会写入检索结果，复制命令即可安装。</span></div>}
+        <PanelHeader step="02" title={ecosystem === "r-binary" ? "二进制命令" : "安装策略"} meta={ecosystem === "r-binary" ? "不执行网络检索" : settings.fullSearch ? "全量检索" : "快速检索"} />
+        {ecosystem !== "r" && <div className="multi-ecosystem-note"><strong>{ecosystem === "r-binary" ? "R 二进制命令生成" : ecosystem === "pip" ? "Pip 批量检索" : "Conda 批量检索"}</strong><span>{ecosystem === "r-binary" ? "根据输入直接生成 RSPM 安装代码，不混合默认 R 多源搜索。" : "源地址和版本会写入检索结果，复制命令即可安装。"}</span></div>}
         <div className="method-grid pinned-method-grid" aria-label="常用安装策略">
           {pinnedMethods.map((id) => {
             const item = methods.find((m) => m.id === id);
