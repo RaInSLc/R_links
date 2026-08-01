@@ -144,20 +144,17 @@ export function WorkspaceView({
     <div className="workspace-grid">
       <section className="panel input-panel">
         <PanelHeader step="01" title="输入包列表" meta={`${inputProfile.total}/${MAX_PACKAGE_LINES} 项${duplicateCount > 0 ? ` · ${duplicateCount} 重复` : ""} · ${new Blob([input]).size}/${MAX_INPUT_CHARS}B`} />
-        <div className="field" style={{ margin: "0 17px 10px" }}>
-          <span>包生态</span>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "8px" }}>
+        <div className="ecosystem-bar">
+          <span className="ecosystem-label">包生态</span>
+          <div className="ecosystem-tabs">
             {([["r", "R"], ["pip", "Pip"], ["conda", "Conda"]] as const).map(([value, label]) => (
               <button type="button" key={value} className={`button ${ecosystem === value ? "primary" : "ghost"}`} onClick={() => onEcosystemChange(value)} disabled={searching}>{label}</button>
             ))}
           </div>
-          {ecosystem === "pip" && (
-            <input value={pipIndex} onChange={(e) => onPipIndexChange(e.currentTarget.value)} placeholder="Pip Index URL，例如 https://pypi.org" style={{ marginTop: "8px" }} />
-          )}
-          {ecosystem === "conda" && (
-            <textarea value={condaChannels.join("\n")} onChange={(e) => onCondaChannelsChange(e.currentTarget.value.split(/\r?\n|,/).map((v) => v.trim()).filter(Boolean))} placeholder="Conda channels，每行一个，例如 conda-forge\nbioconda" rows={2} style={{ marginTop: "8px" }} />
-          )}
+          <span className="ecosystem-hint">{ecosystem === "r" ? "CRAN / Bioconductor / GitHub" : ecosystem === "pip" ? "Python 包索引" : "Conda channel"}</span>
         </div>
+        {ecosystem === "pip" && <div className="source-config-row"><label>Index URL</label><input value={pipIndex} onChange={(e) => onPipIndexChange(e.currentTarget.value)} placeholder="https://pypi.org" /></div>}
+        {ecosystem === "conda" && <div className="source-config-row"><label>Channels</label><input value={condaChannels.join(", ")} onChange={(e) => onCondaChannelsChange(e.currentTarget.value.split(/\s*,\s*/).filter(Boolean))} placeholder="conda-forge, bioconda" /></div>}
         <div className="textarea-with-gutter">
           <div className="line-gutter" ref={lineGutterRef} aria-hidden="true">
             {input.split("\n").map((_, i) => (
