@@ -2,6 +2,7 @@ mod dependency;
 mod logic;
 mod models;
 mod search;
+mod search_multi;
 mod search_sanitize;
 mod search_urls;
 mod secrets;
@@ -429,6 +430,16 @@ fn clear_invalidated_cache(app: AppHandle) -> Result<usize, String> {
 }
 
 #[tauri::command]
+async fn search_multi_ecosystem(
+    input: String,
+    ecosystem: String,
+    pip_index: String,
+    conda_channels: Vec<String>,
+) -> Result<SearchResponse, String> {
+    search_multi::search(&input, &ecosystem, &pip_index, &conda_channels).await
+}
+
+#[tauri::command]
 fn load_package_cache(app: AppHandle) -> Result<Vec<models::PackageCacheEntry>, String> {
     let cache = storage::load_cache(&app)?;
     let mut entries: Vec<_> = cache.into_values().collect();
@@ -850,6 +861,7 @@ pub fn run() {
             save_history,
             clear_package_cache,
             clear_invalidated_cache,
+            search_multi_ecosystem,
             load_package_cache,
             delete_package_cache_entry,
             open_package_search,

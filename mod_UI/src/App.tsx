@@ -18,9 +18,9 @@ import {
   MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES,
   MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS, utf8Length,
   dedupePackageInput, normalizePackageInputDisplay, trimTrailingBlankLines,
-  type HistoryRecord, type SearchResult,
+  type HistoryRecord, type SearchResult, type SearchResponse,
 } from "./utils";
-import { type View, type Method, type InputRules, type Settings, methods, defaultInputRules, defaultSettings } from "./types";
+import { type View, type Method, type InputRules, type Settings, type Ecosystem, methods, defaultInputRules, defaultSettings } from "./types";
 
 type UpdateState = "idle" | "checking" | "available" | "downloading" | "installing" | "readyToRestart" | "upToDate" | "error";
 
@@ -86,6 +86,9 @@ function AppContent() {
     return (v >= 12 && v <= 20) ? v : 14;
   });
   const [input, setInput] = useState(() => localStorage.getItem("rlinks_input") || "");
+  const [ecosystem, setEcosystem] = useState<Ecosystem>(() => (localStorage.getItem("rlinks_ecosystem") as Ecosystem) || "r");
+  const [pipIndex, setPipIndex] = useState(() => localStorage.getItem("rlinks_pip_index") || defaultSettings.pipIndex);
+  const [condaChannels, setCondaChannels] = useState(() => (localStorage.getItem("rlinks_conda_channels") || defaultSettings.condaChannels.join("\n")).split("\n"));
   const [copyWithLineNumbers, setCopyWithLineNumbers] = useState(false);
   const [method, setMethod] = useState<Method>(() => {
     const stored = localStorage.getItem("rlinks_method");
@@ -123,6 +126,7 @@ function AppContent() {
   function setInstallDependencies(v: boolean) { setInstallDependenciesState(v); localStorage.setItem("rlinks_install_deps", v ? "1" : "0"); }
   function setShowRemoteVersion(v: boolean) { setShowRemoteVersionState(v); localStorage.setItem("rlinks_show_remote_version", v ? "1" : "0"); }
   function setVerifyInstall(v: boolean) { setVerifyInstallState(v); localStorage.setItem("rlinks_verify_install", v ? "1" : "0"); }
+  function setEcosystemValue(v: Ecosystem) { setEcosystem(v); localStorage.setItem("rlinks_ecosystem", v); }
   function setPinnedMethodsFromUser(nextMethods: Method[]) {
     const valid = nextMethods.filter(
       (value, index) => nextMethods.indexOf(value) === index && methods.some((item) => item.id === value),
@@ -159,6 +163,7 @@ function AppContent() {
     tokenConfigured, settingsBusy, settingsLoaded, updateSettingsFromUser,
     replaceSettingsFromUser, acceptSettingValue, persistSettings, clearSavedToken } = settingsHook;
   const pinnedMethods = settings.pinnedMethods;
+  useEffect(() => { if (settings.pipIndex) setPipIndex(settings.pipIndex); if (settings.condaChannels.length) setCondaChannels(settings.condaChannels); }, [settings.pipIndex, settings.condaChannels]);
   const { history, historySearch, setHistorySearch,
     sanitizeHistoryList, enqueueHistorySave,
     copyHistoryRecord, deleteHistoryRecord, clearAllHistory } = historyHook;
@@ -526,6 +531,13 @@ function AppContent() {
   }
 
   function handleStartSearch() {
+    if (ecosystem !== "r") {
+      setView("report");
+      void invoke<SearchResponse>("search_multi_ecosystem", { input, ecosystem, pipIndex, condaChannels })
+        .then((response) => { setResults(response.results); setLogs(response.logs); setStatus("多生态检索完成"); })
+        .catch((error) => setStatus(`多生态检索失败: ${formatError(error)}`));
+      return;
+    }
     startSearch(input, settings, inputTooLarge, () => setView("report"), () => setMethod("auto"));
   }
 
@@ -650,6 +662,10 @@ function AppContent() {
             <WorkspaceView
               input={input} inputTooLarge={inputTooLarge} inputProfile={inputProfile}
               method={method} conditional={conditional} installDependencies={installDependencies}
+              ecosystem={ecosystem} pipIndex={pipIndex} condaChannels={condaChannels}
+              onEcosystemChange={setEcosystemValue}
+              onPipIndexChange={(value) => { setPipIndex(value); localStorage.setItem("rlinks_pip_index", value); updateAndPersistSettings((current) => ({ ...current, pipIndex: value })); }}
+              onCondaChannelsChange={(value) => { setCondaChannels(value); localStorage.setItem("rlinks_conda_channels", value.join("\n")); updateAndPersistSettings((current) => ({ ...current, condaChannels: value })); }}
               showRemoteVersion={showRemoteVersion} verifyInstall={verifyInstall}
               settings={settings}
               smartSuggestions={smartSuggestions}

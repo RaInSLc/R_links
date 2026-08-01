@@ -1,6 +1,7 @@
 import type { SearchResult } from "./utils";
 
 export type View = "workspace" | "report" | "history" | "settings";
+export type Ecosystem = "r" | "pip" | "conda";
 export type Method =
   | "auto"
   | "devtools"
@@ -29,6 +30,8 @@ export interface Settings {
   includeLightDependencies: boolean;
   maxDependencyNodes: number;
   pinnedMethods: Method[];
+  pipIndex: string;
+  condaChannels: string[];
 }
 
 export interface InputRules {
@@ -75,6 +78,8 @@ export const defaultSettings: Settings = {
   includeLightDependencies: false,
   maxDependencyNodes: 100,
   pinnedMethods: ["auto", "base", "biocManager", "github"],
+  pipIndex: "https://pypi.org",
+  condaChannels: ["conda-forge", "bioconda"],
 };
 
 export const defaultInputRules: InputRules = {
@@ -118,4 +123,6 @@ export const sourceNames: Record<string, string> = {
   github: "GitHub",
   "r-forge": "R-Forge",
   none: "未找到",
+  pip: "Pip",
+  conda: "Conda",
 };

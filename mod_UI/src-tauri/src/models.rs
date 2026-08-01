@@ -31,7 +31,14 @@ pub struct Settings {
     pub max_dependency_nodes: usize,
     #[serde(default = "default_pinned_methods")]
     pub pinned_methods: Vec<String>,
+    #[serde(default = "default_pip_index")]
+    pub pip_index: String,
+    #[serde(default = "default_conda_channels")]
+    pub conda_channels: Vec<String>,
 }
+
+fn default_pip_index() -> String { "https://pypi.org".to_string() }
+fn default_conda_channels() -> Vec<String> { vec!["conda-forge".to_string(), "bioconda".to_string()] }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +60,8 @@ pub struct PublicSettings {
     pub include_light_dependencies: bool,
     pub max_dependency_nodes: usize,
     pub pinned_methods: Vec<String>,
+    pub pip_index: String,
+    pub conda_channels: Vec<String>,
 }
 
 fn default_pinned_methods() -> Vec<String> {
@@ -82,6 +91,8 @@ impl Default for Settings {
             include_light_dependencies: false,
             max_dependency_nodes: 100,
             pinned_methods: default_pinned_methods(),
+            pip_index: default_pip_index(),
+            conda_channels: default_conda_channels(),
         }
     }
 }
@@ -116,6 +127,8 @@ impl Settings {
             include_light_dependencies: self.include_light_dependencies,
             max_dependency_nodes,
             pinned_methods,
+            pip_index: self.pip_index.trim().to_string(),
+            conda_channels: self.conda_channels.iter().map(|v| v.trim().to_string()).filter(|v| !v.is_empty()).take(20).collect(),
         })
     }
 
@@ -138,6 +151,8 @@ impl Settings {
             include_light_dependencies: self.include_light_dependencies,
             max_dependency_nodes: self.max_dependency_nodes,
             pinned_methods: self.pinned_methods.clone(),
+            pip_index: self.pip_index.clone(),
+            conda_channels: self.conda_channels.clone(),
         }
     }
 

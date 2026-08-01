@@ -494,6 +494,12 @@ function DependencyListView({ graph }: { graph: DependencyGraph }) {
 
 function getInstallCommand(result: SearchResult): string {
   if (!result.found) return result.package;
+  if (result.source === "pip") {
+    return `pip install ${result.package}${result.requestedVersion ? `==${result.requestedVersion}` : ""}`;
+  }
+  if (result.source === "conda") {
+    return `conda install ${result.repository || "conda-forge"}::${result.package}${result.requestedVersion ? `=${result.requestedVersion}` : ""}`;
+  }
   if (result.source === "cran") {
     if (result.requestedVersion) {
       return `remotes::install_version("${result.package}", version = "${result.requestedVersion}", repos = "https://cloud.r-project.org", upgrade = "never")`;
@@ -536,6 +542,8 @@ function sourceCredibility(source: string, stage?: string) {
   if (source === "cran" || source === "bioc") return "官方源";
   if (source === "github") return "仓库验证";
   if (source === "r-forge") return "社区源";
+  if (source === "pip") return "Pip Index";
+  if (source === "conda") return "Conda Channel";
   return "未验证";
 }
 

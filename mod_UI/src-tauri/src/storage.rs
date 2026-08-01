@@ -94,11 +94,18 @@ struct StoredSettings {
     max_dependency_nodes: usize,
     #[serde(default = "default_pinned_methods")]
     pinned_methods: Vec<String>,
+    #[serde(default = "default_pip_index_storage")]
+    pip_index: String,
+    #[serde(default = "default_conda_channels_storage")]
+    conda_channels: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     github_token: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     github_token_protected: String,
 }
+
+fn default_pip_index_storage() -> String { "https://pypi.org".to_string() }
+fn default_conda_channels_storage() -> Vec<String> { vec!["conda-forge".to_string(), "bioconda".to_string()] }
 
 impl StoredSettings {
     fn into_settings(self) -> Result<Settings, String> {
@@ -128,6 +135,8 @@ impl StoredSettings {
             include_light_dependencies: self.include_light_dependencies,
             max_dependency_nodes: self.max_dependency_nodes,
             pinned_methods: self.pinned_methods,
+            pip_index: self.pip_index,
+            conda_channels: self.conda_channels,
         }
         .normalized()
     }
@@ -153,6 +162,8 @@ impl StoredSettings {
             include_light_dependencies: settings.include_light_dependencies,
             max_dependency_nodes: settings.max_dependency_nodes,
             pinned_methods: settings.pinned_methods,
+            pip_index: settings.pip_index,
+            conda_channels: settings.conda_channels,
         })
     }
 }

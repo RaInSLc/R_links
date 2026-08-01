@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## [2026-08-01 10:49:00 +08:00]
+
+### Added
+- **Pip/Conda 多生态检索 MVP**：新增独立 `search_multi` Rust 引擎，支持批量解析 Pip requirements 风格输入、调用可配置 PyPI JSON Index，以及按 Conda channel 顺序查询 Anaconda API。
+- **工作台生态选择**：新增 R、Pip、Conda 切换；Pip 展示 Index URL 配置，Conda 展示多 channel 配置；多生态结果进入统一报告列表。
+- **多生态安装命令**：报告页复制 Pip `pip install` 和 Conda `conda install channel::package` 命令。
+- **源配置持久化**：Pip Index 和 Conda channels 纳入 Rust 设置文件，旧配置自动使用 `https://pypi.org`、`conda-forge`、`bioconda` 默认值。
+
+### Tests
+- **多生态 MVP 验证**：Rust `cargo test` 通过 186 项，前端 `npm test -- --run` 通过 128 项，`npm run build` 通过。
+
+## [2026-08-01 10:36:00 +08:00]
+
+### Added
+- **本地归档与缓存阶段一闭环**：结合多生态扩展方案落地本地 R 包归档识别和失效缓存 GC，为后续 Pip/Conda 多生态 Provider 接入保留清晰的输入与存储边界。
+
+### Tests
+- **阶段一最终验证**：Rust `cargo test` 通过 185 项，前端 `npm test -- --run` 通过 128 项，`npm run build` 通过，`npm run tauri build` 成功生成 MSI 和 NSIS 安装包。
+
 ## [2026-08-01 10:31:00 +08:00]
 
 ### Added

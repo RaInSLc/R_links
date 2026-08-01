@@ -77,6 +77,8 @@ export interface PublicSettings {
   includeLightDependencies: boolean;
   maxDependencyNodes: number;
   pinnedMethods: Method[];
+  pipIndex: string;
+  condaChannels: string[];
 }
 
 export interface HistoryRecord {
@@ -591,6 +593,8 @@ export function sanitizePublicSettings(value: unknown): PublicSettings {
     includeLightDependencies: safeBoolean(s.includeLightDependencies),
     maxDependencyNodes: typeof s.maxDependencyNodes === "number" && Number.isSafeInteger(s.maxDependencyNodes) && s.maxDependencyNodes >= 1 && s.maxDependencyNodes <= 500 ? s.maxDependencyNodes : 100,
     pinnedMethods: pinnedMethods.length >= 1 ? pinnedMethods : [...DEFAULT_PINNED_METHODS],
+    pipIndex: safeText(s.pipIndex, MAX_RESULT_FIELD_CHARS) || "https://pypi.org",
+    condaChannels: Array.isArray(s.condaChannels) ? s.condaChannels.filter((v): v is string => typeof v === "string").map((v) => safeText(v, MAX_RESULT_FIELD_CHARS)).filter(Boolean).slice(0, 20) : ["conda-forge", "bioconda"],
   };
 }
 

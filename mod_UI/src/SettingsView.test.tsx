@@ -28,6 +28,8 @@ describe('SettingsView Component', () => {
       includeLightDependencies: false,
       maxDependencyNodes: 100,
       pinnedMethods: [...defaultSettings.pinnedMethods],
+      pipIndex: defaultSettings.pipIndex,
+      condaChannels: [...defaultSettings.condaChannels],
     },
     tokenConfigured: false,
     showToken: false,

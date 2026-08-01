@@ -55,6 +55,8 @@ export function useSettings(setStatus: SetStatus) {
           includeLightDependencies: clean.includeLightDependencies,
           maxDependencyNodes: clean.maxDependencyNodes,
           pinnedMethods: clean.pinnedMethods,
+          pipIndex: clean.pipIndex,
+          condaChannels: clean.condaChannels,
         });
         setTokenConfigured(clean.githubTokenConfigured);
         setSettingsLoaded(true);
@@ -147,6 +149,8 @@ export function useSettings(setStatus: SetStatus) {
         includeLightDependencies: publicSettings.includeLightDependencies,
         maxDependencyNodes: publicSettings.maxDependencyNodes,
         pinnedMethods: publicSettings.pinnedMethods,
+        pipIndex: publicSettings.pipIndex,
+        condaChannels: publicSettings.condaChannels,
       });
       setShowToken(false);
       setStatus("设置已保存并立即生效");
@@ -196,6 +200,8 @@ export function useSettings(setStatus: SetStatus) {
         includeLightDependencies: publicSettings.includeLightDependencies,
         maxDependencyNodes: publicSettings.maxDependencyNodes,
         pinnedMethods: publicSettings.pinnedMethods,
+        pipIndex: publicSettings.pipIndex,
+        condaChannels: publicSettings.condaChannels,
       });
       setShowToken(false);
       setStatus("已清除保存的 GitHub Token");

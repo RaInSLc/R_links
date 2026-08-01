@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { PanelHeader, Toggle } from "./components";
 import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, buildSearchPlanPreview, dedupePackageInput, normalizePackageInputDisplay, trimTrailingBlankLines, type SmartSuggestion } from "./utils";
-import type { Method, Settings } from "./types";
+import type { Ecosystem, Method, Settings } from "./types";
 import { methods, defaultPinnedMethods } from "./types";
 
 interface WorkspaceViewProps {
@@ -9,6 +9,12 @@ interface WorkspaceViewProps {
   inputTooLarge: boolean;
   inputProfile: { total: number; archiveUrls: number; repositories: number };
   method: Method;
+  ecosystem?: Ecosystem;
+  pipIndex?: string;
+  condaChannels?: string[];
+  onEcosystemChange?: (value: Ecosystem) => void;
+  onPipIndexChange?: (value: string) => void;
+  onCondaChannelsChange?: (value: string[]) => void;
   conditional: boolean;
   installDependencies: boolean;
   showRemoteVersion: boolean;
@@ -51,6 +57,7 @@ interface WorkspaceViewProps {
 export function WorkspaceView({
   input, inputTooLarge, inputProfile, method,
   conditional, installDependencies, showRemoteVersion, verifyInstall, settings,
+  ecosystem = "r", pipIndex = "", condaChannels = [], onEcosystemChange = () => {}, onPipIndexChange = () => {}, onCondaChannelsChange = () => {},
   smartSuggestions,
   script, scriptTooLarge,
   scriptCommandCount, duplicateCount,
@@ -137,6 +144,20 @@ export function WorkspaceView({
     <div className="workspace-grid">
       <section className="panel input-panel">
         <PanelHeader step="01" title="输入包列表" meta={`${inputProfile.total}/${MAX_PACKAGE_LINES} 项${duplicateCount > 0 ? ` · ${duplicateCount} 重复` : ""} · ${new Blob([input]).size}/${MAX_INPUT_CHARS}B`} />
+        <div className="field" style={{ margin: "0 17px 10px" }}>
+          <span>包生态</span>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "8px" }}>
+            {([["r", "R"], ["pip", "Pip"], ["conda", "Conda"]] as const).map(([value, label]) => (
+              <button type="button" key={value} className={`button ${ecosystem === value ? "primary" : "ghost"}`} onClick={() => onEcosystemChange(value)} disabled={searching}>{label}</button>
+            ))}
+          </div>
+          {ecosystem === "pip" && (
+            <input value={pipIndex} onChange={(e) => onPipIndexChange(e.currentTarget.value)} placeholder="Pip Index URL，例如 https://pypi.org" style={{ marginTop: "8px" }} />
+          )}
+          {ecosystem === "conda" && (
+            <textarea value={condaChannels.join("\n")} onChange={(e) => onCondaChannelsChange(e.currentTarget.value.split(/\r?\n|,/).map((v) => v.trim()).filter(Boolean))} placeholder="Conda channels，每行一个，例如 conda-forge\nbioconda" rows={2} style={{ marginTop: "8px" }} />
+          )}
+        </div>
         <div className="textarea-with-gutter">
           <div className="line-gutter" ref={lineGutterRef} aria-hidden="true">
             {input.split("\n").map((_, i) => (
