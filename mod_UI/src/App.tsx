@@ -89,6 +89,7 @@ function AppContent() {
   const [ecosystem, setEcosystem] = useState<Ecosystem>(() => (localStorage.getItem("rlinks_ecosystem") as Ecosystem) || "r");
   const [pipIndex, setPipIndex] = useState(() => localStorage.getItem("rlinks_pip_index") || defaultSettings.pipIndex);
   const [condaChannels, setCondaChannels] = useState(() => (localStorage.getItem("rlinks_conda_channels") || defaultSettings.condaChannels.join("\n")).split("\n"));
+  const [rBinaryMirror, setRBinaryMirror] = useState(() => localStorage.getItem("rlinks_r_binary_mirror") || "https://packagemanager.posit.co/cran/latest");
   const [copyWithLineNumbers, setCopyWithLineNumbers] = useState(false);
   const [method, setMethod] = useState<Method>(() => {
     const stored = localStorage.getItem("rlinks_method");
@@ -158,7 +159,7 @@ function AppContent() {
     searching, openingSearchTabs, searchingRef, hasSearchEvidenceRef,
     paused, togglePauseSearch, cancelSearchPackage,
     searchDuration,
-    startSearch, stopSearch, openSearchTabs } = search;
+     startSearch, startBinarySearch, stopSearch, openSearchTabs } = search;
   const { settings, showToken, setShowToken,
     tokenConfigured, settingsBusy, settingsLoaded, updateSettingsFromUser,
     replaceSettingsFromUser, acceptSettingValue, persistSettings, clearSavedToken } = settingsHook;
@@ -372,7 +373,7 @@ function AppContent() {
       }
       invoke<string>("generate_script", {
         input,
-        options: { method, conditional, installDependencies, mirror: settings.cranMirror, archiveGithubMajorGap: settings.archiveGithubMajorGap, appendVerify: verifyInstall },
+         options: { method, conditional, installDependencies, mirror: ecosystem === "r-binary" ? rBinaryMirror : settings.cranMirror, archiveGithubMajorGap: settings.archiveGithubMajorGap, appendVerify: verifyInstall },
         results,
         showRemoteVersion,
       })
@@ -380,7 +381,7 @@ function AppContent() {
         .catch((error) => { if (active && seq === scriptRequestSeq.current) setStatus(`生成失败: ${formatError(error)}`); });
     }, 120);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [input, method, conditional, installDependencies, showRemoteVersion, verifyInstall, settings.cranMirror, results, inputTooLarge]);
+  }, [input, method, conditional, installDependencies, showRemoteVersion, verifyInstall, settings.cranMirror, rBinaryMirror, ecosystem, results, inputTooLarge]);
 
   useEffect(() => {
     if (inputProfile.total === 0 || methodSupportsInput(method, inputProfile)) return;
@@ -531,6 +532,11 @@ function AppContent() {
   }
 
   function handleStartSearch() {
+    if (ecosystem === "r-binary") {
+      setView("report");
+      void startBinarySearch(input, settings, inputTooLarge, rBinaryMirror, () => setView("report"));
+      return;
+    }
     if (ecosystem !== "r") {
       setView("report");
       void invoke<SearchResponse>("search_multi_ecosystem", { input, ecosystem, pipIndex, condaChannels })
@@ -663,7 +669,9 @@ function AppContent() {
               input={input} inputTooLarge={inputTooLarge} inputProfile={inputProfile}
               method={method} conditional={conditional} installDependencies={installDependencies}
               ecosystem={ecosystem} pipIndex={pipIndex} condaChannels={condaChannels}
+              rBinaryMirror={rBinaryMirror}
               onEcosystemChange={setEcosystemValue}
+              onRBinaryMirrorChange={(value) => { setRBinaryMirror(value); localStorage.setItem("rlinks_r_binary_mirror", value); }}
               onPipIndexChange={(value) => { setPipIndex(value); localStorage.setItem("rlinks_pip_index", value); updateAndPersistSettings((current) => ({ ...current, pipIndex: value })); }}
               onCondaChannelsChange={(value) => { setCondaChannels(value); localStorage.setItem("rlinks_conda_channels", value.join("\n")); updateAndPersistSettings((current) => ({ ...current, condaChannels: value })); }}
               showRemoteVersion={showRemoteVersion} verifyInstall={verifyInstall}

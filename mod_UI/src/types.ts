@@ -1,7 +1,7 @@
 import type { SearchResult } from "./utils";
 
 export type View = "workspace" | "report" | "history" | "settings";
-export type Ecosystem = "r" | "pip" | "conda";
+export type Ecosystem = "r" | "r-binary" | "pip" | "conda";
 export type Method =
   | "auto"
   | "devtools"
@@ -119,6 +119,7 @@ export const mirrors = [
 
 export const sourceNames: Record<string, string> = {
   cran: "CRAN",
+  "cran-binary": "R 二进制镜像",
   bioc: "Bioconductor",
   biocGit: "Bioc 历史版",
   github: "GitHub",

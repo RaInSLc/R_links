@@ -610,6 +610,7 @@ fn generate_script_inner(
                         value = best.repository.clone();
                         version.clear();
                     }
+                    "cran-binary" => method = "base".to_string(),
                     "cran" if binary_mirror && package.version.is_empty() => {
                         method = "base".to_string();
                         version.clear();
@@ -1411,6 +1412,7 @@ pub fn infer_bioc_version(major: i32, minor: i32) -> Option<i32> {
 fn source_label(source: &str) -> &str {
     match source {
         "cran" => "CRAN",
+        "cran-binary" => "R 二进制镜像",
         "bioc" => "Bioconductor",
         "biocGit" => "Bioconductor 历史版本",
         "github" => "GitHub",

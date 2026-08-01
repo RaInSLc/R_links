@@ -53,7 +53,7 @@ pub(crate) fn clean_result_repository(source: &str, value: &str) -> Option<Strin
                 None
             }
         }
-        "cran" => {
+        "cran" | "cran-binary" => {
             if trimmed.is_empty()
                 || (trimmed.starts_with("https://cran.r-project.org/src/contrib/Archive/")
                     && trimmed.ends_with(".tar.gz"))
@@ -69,7 +69,7 @@ pub(crate) fn clean_result_repository(source: &str, value: &str) -> Option<Strin
 
 pub(crate) fn clean_result_source(value: &str) -> String {
     match value.trim() {
-        "cran" | "bioc" | "biocGit" | "github" | "r-forge" | "none" => value.trim().to_string(),
+        "cran" | "cran-binary" | "bioc" | "biocGit" | "github" | "r-forge" | "none" => value.trim().to_string(),
         _ => "none".to_string(),
     }
 }
@@ -143,6 +143,7 @@ fn is_trusted_emit_result(result: &SearchResult) -> bool {
                 || (result.repository.starts_with("https://cran.r-project.org/src/contrib/Archive/")
                     && result.repository.ends_with(".tar.gz"))
         }
+        "cran-binary" => !result.repository.is_empty() && result.repository.starts_with("https://"),
         "bioc" => result.repository.is_empty(),
         "biocGit" => !result.repository.is_empty(),
         "github" => github_emit_identity_matches(result),

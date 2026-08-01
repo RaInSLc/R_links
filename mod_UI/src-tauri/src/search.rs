@@ -395,7 +395,7 @@ pub async fn search_packages(
                 if result.found
                     && matches!(
                         result.source.as_str(),
-                        "cran" | "bioc" | "biocGit" | "github" | "r-forge"
+                        "cran" | "cran-binary" | "bioc" | "biocGit" | "github" | "r-forge"
                     )
                 {
                     let now = SystemTime::now()
@@ -485,6 +485,100 @@ pub async fn search_packages(
     })
 }
 
+pub async fn search_binary_packages(
+    app: &AppHandle,
+    run_id: u64,
+    cancelled: &AtomicBool,
+    state: &crate::SearchState,
+    input: &str,
+    settings: &Settings,
+    mirror: &str,
+) -> Result<SearchResponse, String> {
+    let rules = if settings.use_filter {
+        storage::load_input_rules(app)
+    } else {
+        InputRules {
+            separators: Vec::new(),
+            strip_quotes: true,
+            strip_c_parens: true,
+            comment_chars: Vec::new(),
+            split_spaces: false,
+            exclude_regex: Vec::new(),
+            exclude_keywords: Vec::new(),
+        }
+    };
+    let packages = parse_inputs_filtered(input, &rules)?;
+    if packages.is_empty() {
+        return Err("请输入至少一个有效的 R 二进制包名".to_string());
+    }
+    let mirror = crate::models::normalize_cran_mirror_url(mirror)?;
+    let client = build_client(settings)?;
+    let budget = RequestBudget::new(MAX_SEARCH_HTTP_REQUESTS);
+    let timed_out = AtomicBool::new(false);
+    let deadline = Instant::now() + MAX_SEARCH_DURATION;
+    let mut results = Vec::new();
+    let mut logs = Vec::new();
+    log(app, run_id, &mut logs, &format!("开始 R 二进制包独立检索，镜像: {mirror}"));
+
+    for (index, package) in packages.iter().enumerate() {
+        if state.is_paused(run_id) {
+            sleep(SEARCH_STOP_POLL_INTERVAL).await;
+        }
+        if search_stopped(cancelled, &budget) || timed_out.load(Ordering::SeqCst) {
+            break;
+        }
+        log(app, run_id, &mut logs, &format!("[{}/{}] 检索 R 二进制包 {}", index + 1, packages.len(), package.name));
+        let url = format!("{}src/contrib/PACKAGES", mirror);
+        let mut context = SearchContext {
+            log_emitter: Some((app, run_id)), client: &client, settings, cancelled,
+            budget: &budget, deadline, timed_out: &timed_out, logs: &mut logs,
+            result_limit_reached: false, github_rate_limited: false,
+        };
+        let result = match get_text(&mut context, &url).await {
+            Ok(Some(text)) => match find_package_in_dcf(&text, &package.name) {
+                Some(version) if package.version.is_empty() || version_compatible(&version, &package.version) => {
+                    log(app, run_id, &mut logs, &format!("R 二进制包 {} 命中版本 {}", package.name, version));
+                    found_result(package, &version, &mirror, &package.name, "cran-binary")
+                }
+                Some(version) => missing_binary_result(package, format!("镜像有包但没有匹配请求版本，当前版本 {version}")),
+                None => missing_binary_result(package, format!("镜像 PACKAGES 中没有 {}，请确认镜像仓库和 R 版本路径", package.name)),
+            },
+            Ok(None) => missing_binary_result(package, "镜像未返回 PACKAGES 元数据（HTTP 404）".to_string()),
+            Err(error) => missing_binary_result(package, format!("读取二进制镜像失败: {error}")),
+        };
+        let _ = app.emit("search-progress", SearchProgressEvent { run_id, result: result.clone() });
+        results.push(result);
+    }
+    log(app, run_id, &mut logs, "R 二进制包独立检索完成");
+    Ok(SearchResponse { run_id, results, logs, stopped: timed_out.load(Ordering::SeqCst) || search_stopped(cancelled, &budget), dependency_graph: None })
+}
+
+fn missing_binary_result(package: &PackageInput, message: String) -> SearchResult {
+    SearchResult {
+        package: package.name.clone(), requested_version: package.version.clone(), latest_version: String::new(),
+        repository: String::new(), real_name: package.name.clone(), source: "cran-binary".to_string(),
+        found: false, message, status: "error".to_string(), stage: "final".to_string(),
+    }
+}
+
+fn find_package_in_dcf(text: &str, package_name: &str) -> Option<String> {
+    let mut current_package: Option<String> = None;
+    let mut current_version: Option<String> = None;
+    for line in text.lines().chain(std::iter::once("")) {
+        if line.trim().is_empty() {
+            if current_package.as_deref().is_some_and(|name| name.eq_ignore_ascii_case(package_name)) {
+                return current_version;
+            }
+            current_package = None;
+            current_version = None;
+            continue;
+        }
+        if let Some(value) = line.strip_prefix("Package:") { current_package = Some(value.trim().to_string()); }
+        if let Some(value) = line.strip_prefix("Version:") { current_version = Some(value.trim().to_string()); }
+    }
+    None
+}
+
 async fn search_one_package(
     context: &mut SearchContext<'_>,
     results: &mut Vec<SearchResult>,
@@ -532,6 +626,7 @@ async fn search_one_package(
                 }
                 Ok(None) => {}
                 Err(error) => {
+                    context.log(&format!("CRAN 检索失败（{}）: {error}", context.settings.cran_mirror));
                     errors.push(format!("CRAN 检索失败: {error}"));
                 }
             }
@@ -547,6 +642,7 @@ async fn search_one_package(
                         }
                     }
                     Err(error) => {
+                        context.log(&format!("Bioconductor 检索失败: {error}"));
                         errors.push(format!("Bioconductor 检索失败: {error}"));
                     }
                 }
@@ -589,6 +685,7 @@ async fn search_one_package(
                         }
                     }
                     Err(error) => {
+                        context.log(&format!("GitHub/R-Universe 检索失败: {error}"));
                         errors.push(format!("GitHub 检索失败: {error}"));
                     }
                 }
@@ -605,6 +702,7 @@ async fn search_one_package(
                     }
                     Ok(None) => {}
                     Err(error) => {
+                        context.log(&format!("R-Forge 检索失败: {error}"));
                         errors.push(format!("R-Forge 检索失败: {error}"));
                     }
                 }
@@ -766,7 +864,8 @@ async fn search_cran(
     package: &PackageInput,
 ) -> Result<Option<SearchResult>, String> {
     let url = format!(
-        "https://cloud.r-project.org/web/packages/{}/index.html",
+        "{}/web/packages/{}/index.html",
+        context.settings.cran_mirror.trim_end_matches('/'),
         urlencoding::encode(&package.name)
     );
     let html = get_text(context, &url).await?;
@@ -786,7 +885,8 @@ async fn search_cran(
     // 如果主页请求失败（404），或者主页中无法提取出版本号（例如包已被移出 CRAN 官方主页并归档）
     // 尝试从 CRAN Archive 归档区寻找包的历史版本
     let archive_url = format!(
-        "https://cloud.r-project.org/src/contrib/Archive/{}/",
+        "{}/src/contrib/Archive/{}/",
+        context.settings.cran_mirror.trim_end_matches('/'),
         urlencoding::encode(&package.name)
     );
     context.log(&format!(

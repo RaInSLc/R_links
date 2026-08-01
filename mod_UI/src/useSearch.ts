@@ -148,6 +148,31 @@ export function useSearch(setStatus: SetStatus) {
     }
   }
 
+  async function startBinarySearch(
+    input: string,
+    settings: Settings,
+    inputTooLarge: boolean,
+    mirror: string,
+    onViewReport: () => void,
+  ) {
+    if (!input.trim() || searchingRef.current || inputTooLarge) return;
+    const runId = nextSearchRunId();
+    activeSearchRunId.current = runId;
+    await listenerReadyRef.current;
+    searchingRef.current = true;
+    setSearching(true); setPaused(false); setSearchDuration(null); setResults([]); setLogs([]); setDependencyGraph(null); setStatus("正在检索 R 二进制包"); onViewReport();
+    searchStartTime.current = Date.now();
+    try {
+      const response = await invoke<SearchResponse>("start_binary_search", { runId, input, settings, mirror });
+      const clean = sanitizeSearchResponse(response);
+      setResults(clean.results); setLogs(clean.logs); setDependencyGraph(null); setStatus("R 二进制包检索完成");
+    } catch (error) {
+      setStatus(`R 二进制包检索失败: ${formatError(error)}`);
+    } finally {
+      setSearchDuration(Date.now() - searchStartTime.current); setSearching(false); setPaused(false); searchingRef.current = false; activeSearchRunId.current = 0;
+    }
+  }
+
   async function stopSearch() {
     const runId = activeSearchRunId.current;
     if (!runId) return;
@@ -255,6 +280,7 @@ export function useSearch(setStatus: SetStatus) {
     hasSearchEvidenceRef,
     searchDuration,
     startSearch,
+    startBinarySearch,
     stopSearch,
     togglePauseSearch,
     cancelSearchPackage,

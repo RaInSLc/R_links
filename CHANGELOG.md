@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [2026-08-01 12:15:00 +08:00]
+
+### Fixed
+- **补充 R 默认搜索诊断**：CRAN 检索改为使用当前设置的镜像，不再固定请求 `cloud.r-project.org`；CRAN、Bioconductor、GitHub/R-Universe、R-Forge 的失败原因分别写入检索日志。
+- **修复未找到原因不可见**：错误结果保留具体请求失败、HTTP 错误、限流、超时和来源未命中信息，报告页可以按异常状态查看。
+
+### Added
+- **独立 R 二进制包搜索**：工作台新增“R 二进制”入口和独立镜像输入，调用 `start_binary_search` 读取镜像 `PACKAGES` 元数据，不与默认 R 搜索结果混合。
+- **二进制搜索结果标识**：新增 `cran-binary` 来源，结果展示为“R 二进制镜像”，命中后沿用 RSPM 镜像生成 `options(pkgType = "binary")` 和 `install.packages` 安装代码。
+- **二进制失败提示**：明确提示镜像 404、包不存在、请求版本不匹配和镜像读取失败等原因。
+
+### Tests
+- **Rust**：`cargo test` 通过 189 项。
+- **前端**：`npm test -- --run` 通过 128 项，`npm run build` 通过。
+
 ## [2026-08-01 11:45:00 +08:00]
 
 ### Added

@@ -590,6 +590,24 @@ async fn start_search(
     result
 }
 
+#[tauri::command]
+async fn start_binary_search(
+    app: AppHandle,
+    state: State<'_, SearchState>,
+    run_id: u64,
+    input: String,
+    settings: Settings,
+    mirror: String,
+) -> Result<SearchResponse, String> {
+    logic::validate_input_size(&input)?;
+    let run = state.try_begin(run_id)?;
+    let existing = load_existing_settings_for_runtime(&app)?;
+    let settings = merge_runtime_settings(settings, &existing)?;
+    let result = search::search_binary_packages(&app, run_id, run.cancelled(), &state, &input, &settings, &mirror).await;
+    drop(run);
+    result
+}
+
 fn merge_runtime_settings(incoming: Settings, existing: &Settings) -> Result<Settings, String> {
     incoming.merged_with_existing_token(existing)
 }
@@ -867,6 +885,7 @@ pub fn run() {
             open_package_search,
             open_package_page,
             start_search,
+            start_binary_search,
             stop_search,
             pause_search,
             resume_search,
