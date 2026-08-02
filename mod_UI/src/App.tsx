@@ -454,7 +454,7 @@ function AppContent() {
     const wrapper = isMultiEcosystem && kind === "bash"
       ? snapshot
       : isMultiEcosystem
-      ? `# ${ecosystem} installer\n$ErrorActionPreference = "Stop"\n$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path\n& bash (Join-Path $scriptDir "${ecosystem === "pip" ? "install_packages.sh" : "install_conda.sh"}")\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n`
+      ? `$ErrorActionPreference = "Stop"\n${snapshot.split("\n").filter(Boolean).map((line) => `& ${line}`).join("\n")}\n`
       : kind === "powershell"
       ? `# R links package installer\n$ErrorActionPreference = "Stop"\n$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path\n$rscript = Get-Command Rscript -ErrorAction SilentlyContinue\nif (-not $rscript) { Write-Error "Rscript was not found in PATH."; exit 127 }\n& $rscript.Source -f (Join-Path $scriptDir "install_packages.R")\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\nWrite-Host "R package installation completed."\n`
       : `#!/usr/bin/env bash\nset -u\nSCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nif ! command -v Rscript >/dev/null 2>&1; then\n  printf '%s\\n' "Rscript was not found in PATH." >&2\n  exit 127\nfi\nRscript "$SCRIPT_DIR/install_packages.R"\nstatus=$?\nif [ "$status" -ne 0 ]; then\n  exit "$status"\nfi\nprintf '%s\\n' "R package installation completed."\n`;

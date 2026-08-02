@@ -12,6 +12,7 @@
 ### Fixed
 - **跨生态下载一致性**：Pip/Conda 现在生成并下载对应 Shell 脚本，不再使用 `install_packages.R` 文件名。
 - **包装器路由**：Pip/Conda 的 PowerShell 包装器调用 Bash 脚本，Bash 下载直接使用生态脚本内容，不再错误调用 `Rscript`。
+- **PowerShell 独立执行**：Pip/Conda 的 `.ps1` 导出现在直接执行对应包管理器命令，不依赖同目录额外 Bash 文件。
 - **多核编译**：R/RSPM 脚本可选注入 `options(Ncpus = parallel::detectCores())`，Pip/Conda 不注入 R 语句。
 
 ### Tests
