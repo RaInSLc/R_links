@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { ReportView } from "./ReportView";
 import type { SearchResult } from "./utils";
 
@@ -270,7 +270,9 @@ describe("ReportView", () => {
     );
 
     expect(screen.getByText(/1\.1\.2（请求 1\.0\.0）/)).toBeInTheDocument();
-    fireEvent.click(screen.getAllByTitle(/复制安装指令/)[0]);
+    await act(async () => {
+      fireEvent.click(screen.getAllByTitle(/复制安装指令/)[0]);
+    });
     expect(vi.mocked(writeText)).toHaveBeenCalledWith(expect.stringContaining('install_version("dplyr", version = "1.0.0"'));
   });
 });
