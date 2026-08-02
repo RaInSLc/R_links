@@ -1355,6 +1355,10 @@ async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Result<Option<S
         return Ok(None);
     }
     if !response.status().is_success() {
+        if response.status() == StatusCode::FORBIDDEN && url.contains("api.github.com") {
+            context.log("GitHub API 返回 HTTP 403，可能触发频率限制或 Token 权限不足");
+            return Err("GitHub API 返回 HTTP 403，可能触发频率限制或 Token 权限不足".to_string());
+        }
         return Err(format!("HTTP错误: {}", response.status()));
     }
     let text = read_limited_text(

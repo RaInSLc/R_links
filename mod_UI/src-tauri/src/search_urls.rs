@@ -26,7 +26,7 @@ pub(crate) fn validate_search_request_url_with_mirror(
         .ok_or_else(|| "检索 URL 缺少主机名，已阻止请求".to_string())?;
     let path = parsed.path();
     let allowed = match host {
-        "cloud.r-project.org" => {
+        "cloud.r-project.org" | "cran.r-project.org" => {
             parsed.query().is_none()
                 && (is_allowed_cran_package_path(&parsed) || is_allowed_cran_archive_path(&parsed))
         }
@@ -68,7 +68,7 @@ pub(crate) fn validate_search_request_url_with_mirror(
             configured.scheme() == "https"
                 && configured.host_str() == Some(host)
                 && parsed.query().is_none()
-                && (is_allowed_cran_package_path(&parsed) || is_allowed_cran_archive_path(&parsed))
+                && configured_mirror_path_allows(&configured, &parsed)
         }),
     };
 
@@ -76,6 +76,42 @@ pub(crate) fn validate_search_request_url_with_mirror(
         Ok(())
     } else {
         Err("检索 URL 不在允许范围内，已阻止请求".to_string())
+    }
+}
+
+fn configured_mirror_path_allows(configured: &Url, requested: &Url) -> bool {
+    let configured_path = configured.path().trim_end_matches('/');
+    let requested_path = requested.path();
+    let relative_path = if configured_path.is_empty() {
+        requested_path
+    } else {
+        requested_path.strip_prefix(configured_path).unwrap_or("")
+    };
+    let relative = format!("https://host{}", relative_path);
+    let Ok(relative_url) = Url::parse(&relative) else { return false; };
+    is_allowed_cran_package_path(&relative_url) || is_allowed_cran_archive_path(&relative_url)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_search_request_url_with_mirror;
+
+    #[test]
+    fn accepts_standard_package_path_under_configured_cran_directory() {
+        let result = validate_search_request_url_with_mirror(
+            "https://mirrors.tuna.tsinghua.edu.cn/CRAN/web/packages/dplyr/index.html",
+            Some("https://mirrors.tuna.tsinghua.edu.cn/CRAN/"),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn rejects_paths_outside_configured_cran_directory() {
+        let result = validate_search_request_url_with_mirror(
+            "https://mirrors.tuna.tsinghua.edu.cn/other/web/packages/dplyr/index.html",
+            Some("https://mirrors.tuna.tsinghua.edu.cn/CRAN/"),
+        );
+        assert!(result.is_err());
     }
 }
 

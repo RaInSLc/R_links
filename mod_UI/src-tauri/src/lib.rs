@@ -825,6 +825,8 @@ async fn test_network_connection(app: AppHandle) -> Result<Vec<NetworkDiagnostic
                     proxy: if proxy.is_empty() { "未配置".to_string() } else { proxy },
                     error: if response.status().is_success() {
                         None
+                    } else if response.status().as_u16() == 403 && url.contains("github") {
+                        Some("HTTP 403：GitHub 拒绝请求，可能是 Token 无效、权限不足或 API 频率限制".to_string())
                     } else {
                         Some(format!("HTTP {}", response.status().as_u16()))
                     },
