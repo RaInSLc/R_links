@@ -54,12 +54,12 @@ fn check_system_toolchain() -> Vec<ToolchainCheck> {
         run_tool_version("git", &["--version"], "GitHub 或远程源码安装需要 Git。"),
     ];
     if cfg!(target_os = "windows") {
-        checks.push(run_tool_version("make", &["--version"], "Windows 源码包编译通常需要与 R 版本匹配的 Rtools。"));
-        checks.push(run_tool_version("gcc", &["--version"], "Windows 源码包编译需要 Rtools 提供的 GCC。"));
+        checks.push(run_tool_version("make", &["--version"], "Windows 源码包编译通常需要与 R 版本匹配的 Rtools；请从 CRAN Rtools 页面安装并将工具加入 PATH。"));
+        checks.push(run_tool_version("gcc", &["--version"], "Windows 源码包编译需要 Rtools 提供的 GCC；请检查 Rtools 安装和 PATH 配置。"));
     } else {
-        checks.push(run_tool_version("make", &["--version"], "请安装 make 及系统编译工具链。"));
-        checks.push(run_tool_version("gfortran", &["--version"], "涉及 Fortran 的 R 源码包需要 gfortran。"));
-        checks.push(run_tool_version("gcc", &["--version"], "请安装 gcc/g++ 等 C/C++ 编译工具。"));
+        checks.push(run_tool_version("make", &["--version"], "请安装 make：Debian/Ubuntu 可执行 `sudo apt-get install build-essential`，RHEL/Fedora 可执行 `sudo yum groupinstall 'Development Tools'`。"));
+        checks.push(run_tool_version("gfortran", &["--version"], "涉及 Fortran 的 R 源码包需要 gfortran：Debian/Ubuntu 可执行 `sudo apt-get install gfortran`，RHEL/Fedora 可执行 `sudo yum install gcc-gfortran`。"));
+        checks.push(run_tool_version("gcc", &["--version"], "请安装 gcc/g++：Debian/Ubuntu 可执行 `sudo apt-get install build-essential`，RHEL/Fedora 可执行 `sudo yum groupinstall 'Development Tools'`。"));
     }
     checks
 }

@@ -808,6 +808,7 @@ export function SettingsView({
               onClick={() => {
                 if (!window.confirm("确定恢复全部设置为默认值？此操作不可撤销。")) return;
                 onReplaceSettings({ ...defaultSettings, githubToken: settings.githubToken });
+                onSaveSettings();
                 onThemeChange("office");
                 onFontChange("system");
                 onFontSizeChange(14);

@@ -160,7 +160,7 @@ describe('SettingsView Component', () => {
       archiveGithubMajorGap: 1,
     }));
     expect(props.onFontChange).toHaveBeenCalledWith('system');
-    expect(props.onSaveSettings).not.toHaveBeenCalled();
+    expect(props.onSaveSettings).toHaveBeenCalledTimes(1);
   });
 
   it('导入配置时应裁剪设置范围并过滤非法字段', async () => {
