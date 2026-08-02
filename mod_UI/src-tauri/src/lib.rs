@@ -16,6 +16,7 @@ use std::sync::{
     Arc, Mutex, MutexGuard, OnceLock,
 };
 use std::time::{Duration, Instant};
+use std::process::{Command, Stdio};
 use tauri::{AppHandle, State};
 
 use models::{
@@ -26,6 +27,7 @@ use models::{
 const MAX_BROWSER_OPEN_REQUESTS: usize = 30;
 const BROWSER_OPEN_WINDOW: Duration = Duration::from_secs(60);
 const MAX_JS_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+const MAX_RSCRIPT_BYTES: usize = 64 * 1024;
 static SETTINGS_UPDATE_LOCK: Mutex<()> = Mutex::new(());
 static CACHE_FEEDBACK_LOCK: Mutex<()> = Mutex::new(());
 static HISTORY_EXTRACT_RE: OnceLock<Regex> = OnceLock::new();
@@ -62,6 +64,43 @@ fn check_system_toolchain() -> Vec<ToolchainCheck> {
         checks.push(run_tool_version("gcc", &["--version"], "请安装 gcc/g++：Debian/Ubuntu 可执行 `sudo apt-get install build-essential`，RHEL/Fedora 可执行 `sudo yum groupinstall 'Development Tools'`。"));
     }
     checks
+}
+
+#[derive(serde::Serialize)]
+struct ScriptExecutionResult {
+    success: bool,
+    code: Option<i32>,
+    stdout: String,
+    stderr: String,
+}
+
+#[tauri::command]
+async fn execute_r_script(script: String) -> Result<ScriptExecutionResult, String> {
+    if script.trim().is_empty() {
+        return Err("R 脚本不能为空".to_string());
+    }
+    if script.len() > MAX_RSCRIPT_BYTES {
+        return Err("R 脚本超过 64 KiB 安全上限".to_string());
+    }
+    if script.contains('\0') {
+        return Err("R 脚本包含非法控制字符".to_string());
+    }
+
+    let output = tokio::task::spawn_blocking(move || {
+        Command::new("Rscript")
+            .args(["--vanilla", "-e", &script])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+    }).await.map_err(|e| format!("Rscript 执行任务失败: {e}"))?
+        .map_err(|_| "无法启动 Rscript，请确认 R 已安装并加入 PATH".to_string())?;
+    Ok(ScriptExecutionResult {
+        success: output.status.success(),
+        code: output.status.code(),
+        stdout: String::from_utf8_lossy(&output.stdout[..output.stdout.len().min(MAX_RSCRIPT_BYTES)]).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr[..output.stderr.len().min(MAX_RSCRIPT_BYTES)]).to_string(),
+    })
 }
 
 pub struct SearchState {
@@ -948,6 +987,7 @@ pub fn run() {
             test_mirror_speed,
             test_network_connection,
             check_system_toolchain,
+            execute_r_script,
             fetch_reverse_dependencies,
             load_cached_results,
             rate_cache_result

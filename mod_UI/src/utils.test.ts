@@ -31,8 +31,10 @@ import {
   sanitizePublicSettings,
   countScriptCommands,
   countDuplicatePackages,
+  diagnoseDependencyGraph,
   MAX_STATUS_CHARS,
 } from "./utils";
+import type { DependencyNode } from "./utils";
 
 describe("safeText", () => {
   it("trims whitespace and strips control characters", () => {
@@ -311,6 +313,26 @@ describe("generateSystemRequirementsScript", () => {
 
   it("generates a reviewable Windows preparation script", () => {
     expect(generateSystemRequirementsScript("sf", "powershell")).toContain("Rtools");
+  });
+});
+
+describe("buildInputSmartSuggestions typo correction", () => {
+  it("suggests ggplot2 for a close typo", () => {
+    const suggestions = buildInputSmartSuggestions("gplot2", { total: 1, archiveUrls: 0, repositories: 0 }, "auto");
+    expect(suggestions.find((suggestion) => suggestion.id === "package-typo")).toMatchObject({ value: "ggplot2", action: "replaceInput" });
+  });
+
+  it("does not suggest corrections for URLs or repositories", () => {
+    const suggestions = buildInputSmartSuggestions("owner/gplot2", { total: 1, archiveUrls: 0, repositories: 1 }, "auto");
+    expect(suggestions.some((suggestion) => suggestion.id === "package-typo")).toBe(false);
+  });
+});
+
+describe("diagnoseDependencyGraph", () => {
+  const node = (pkg: string, version: string): DependencyNode => ({ package: pkg, source: "cran", version, depth: 0, rootPackages: [pkg], directDependencyCount: 0, heavyDependencyCount: 0, status: "resolved" });
+  it("detects cycles and version conflicts", () => {
+    const diagnostics = diagnoseDependencyGraph({ roots: ["a"], nodes: [node("a", "1.0"), node("b", "1.0"), node("A", "2.0")], edges: [{ from: "a", to: "b", relation: "Imports", strength: "heavy", depth: 1 }, { from: "b", to: "a", relation: "Imports", strength: "heavy", depth: 1 }], summary: { totalNodes: 3, totalEdges: 2, heavyNodes: 2, lightNodes: 0, sharedNodes: 0 } });
+    expect(diagnostics.map((item) => item.type)).toEqual(expect.arrayContaining(["cycle", "version-conflict"]));
   });
 });
 

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { PanelHeader, Metric, EmptyState } from "./components";
 import { sourceNames } from "./types";
-import type { SearchResult, DependencyGraph, DependencyNode, ReverseDependenciesInfo, SmartSuggestion } from "./utils";
+import { diagnoseDependencyGraph, type SearchResult, type DependencyGraph, type DependencyNode, type ReverseDependenciesInfo, type SmartSuggestion } from "./utils";
 
 const CACHE_FEEDBACK_SOURCES = new Set(["cran", "bioc", "biocGit", "github", "r-forge"]);
 
@@ -376,6 +376,7 @@ function DependencyGraphView({ graph }: { graph: DependencyGraph }) {
 function DependencyListView({ graph }: { graph: DependencyGraph }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "heavy" | "light" | "shared">("all");
+  const diagnostics = diagnoseDependencyGraph(graph);
 
   const filteredNodes = useMemo(() => {
     return graph.nodes.filter((node) => {
@@ -395,6 +396,12 @@ function DependencyListView({ graph }: { graph: DependencyGraph }) {
 
   return (
     <div className="dep-list-container">
+      {diagnostics.length > 0 && (
+        <div className="notice warning" style={{ marginBottom: "12px" }}>
+          <strong>依赖诊断</strong>
+          {diagnostics.map((diagnostic) => <div key={`${diagnostic.type}-${diagnostic.packages.join("-")}`}>{diagnostic.detail}</div>)}
+        </div>
+      )}
       <div
         className="dep-list-filters"
         style={{
@@ -660,6 +667,20 @@ export function ReportView({
   }, [results]);
 
   const maxStageDuration = Math.max(1, ...stageTimings.map((item) => item.durationMs));
+
+  function downloadDependencyDeclaration(kind: "renv" | "description") {
+    const found = results.filter((result) => result.found);
+    const content = kind === "renv"
+      ? JSON.stringify({ R: { Version: "4.4.0", Repositories: [{ Name: "CRAN", URL: "https://cloud.r-project.org" }] }, Packages: Object.fromEntries(found.map((result) => [result.package, { Package: result.package, Version: result.latestVersion || "unknown", Source: result.source, Repository: result.repository }])) }, null, 2)
+      : `Package: project\nType: Package\nTitle: Generated dependency declaration\nVersion: 0.0.0.9000\nImports:\n${found.map((result) => `    ${result.package}${result.latestVersion ? ` (== ${result.latestVersion})` : ""}`).join(",\n")}\n`;
+    const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = kind === "renv" ? "renv.lock" : "DESCRIPTION";
+    document.body.appendChild(anchor); anchor.click(); document.body.removeChild(anchor); URL.revokeObjectURL(url);
+    onStatusChange(`已导出 ${anchor.download}`);
+  }
 
   const taskSummary = useMemo(() => {
     const uniqueResultPackages = uniquePackages(results).length;
@@ -1102,6 +1123,12 @@ export function ReportView({
                     }}
                   >
                     复制为脚本
+                  </button>
+                  <button type="button" className="button ghost compact-btn" onClick={() => downloadDependencyDeclaration("renv")} disabled={!results.some((result) => result.found)}>
+                    导出 renv.lock
+                  </button>
+                  <button type="button" className="button ghost compact-btn" onClick={() => downloadDependencyDeclaration("description")} disabled={!results.some((result) => result.found)}>
+                    导出 DESCRIPTION
                   </button>
                   <button
                     type="button"

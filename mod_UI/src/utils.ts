@@ -60,6 +60,51 @@ export interface SearchResponse {
   dependencyGraph?: DependencyGraph;
 }
 
+export interface DependencyDiagnostic {
+  type: "cycle" | "version-conflict";
+  packages: string[];
+  detail: string;
+}
+
+export function diagnoseDependencyGraph(graph: DependencyGraph): DependencyDiagnostic[] {
+  const diagnostics: DependencyDiagnostic[] = [];
+  const adjacency = new Map<string, string[]>();
+  graph.edges.forEach((edge) => adjacency.set(edge.from, [...(adjacency.get(edge.from) ?? []), edge.to]));
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const cycles = new Set<string>();
+  function visit(node: string, path: string[]) {
+    if (visiting.has(node)) {
+      const cycle = path.slice(path.indexOf(node)).concat(node);
+      const key = [...cycle].sort().join("|");
+      if (!cycles.has(key)) {
+        cycles.add(key);
+        diagnostics.push({ type: "cycle", packages: cycle, detail: `检测到循环依赖：${cycle.join(" -> ")}` });
+      }
+      return;
+    }
+    if (visited.has(node)) return;
+    visiting.add(node);
+    (adjacency.get(node) ?? []).forEach((child) => visit(child, [...path, node]));
+    visiting.delete(node);
+    visited.add(node);
+  }
+  graph.nodes.forEach((node) => visit(node.package, []));
+
+  const versions = new Map<string, Set<string>>();
+  graph.nodes.forEach((node) => {
+    if (node.version !== "unknown") {
+      const set = versions.get(node.package.toLowerCase()) ?? new Set<string>();
+      set.add(node.version);
+      versions.set(node.package.toLowerCase(), set);
+    }
+  });
+  versions.forEach((set, packageKey) => {
+    if (set.size > 1) diagnostics.push({ type: "version-conflict", packages: [packageKey], detail: `${packageKey} 存在多个版本：${[...set].join(", ")}` });
+  });
+  return diagnostics;
+}
+
 export interface SearchStageTiming {
   stage: string;
   durationMs: number;
@@ -889,6 +934,34 @@ export function countDuplicatePackages(value: string): number {
   return items.length - new Set(items).size;
 }
 
+function levenshteinDistance(left: string, right: string): number {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= left.length; i += 1) {
+    let diagonal = previous[0];
+    previous[0] = i;
+    for (let j = 1; j <= right.length; j += 1) {
+      const top = previous[j];
+      previous[j] = left[i - 1] === right[j - 1]
+        ? diagonal
+        : Math.min(previous[j] + 1, previous[j - 1] + 1, diagonal + 1);
+      diagonal = top;
+    }
+  }
+  return previous[right.length];
+}
+
+const COMMON_R_PACKAGES = ["ggplot2", "dplyr", "tidyr", "readr", "stringr", "purrr", "tibble", "rlang", "Seurat", "DESeq2", "edgeR", "limma", "BiocManager", "Rcpp", "data.table", "shiny", "rmarkdown", "knitr", "xml2", "sf", "terra"];
+
+function findPackageTypoSuggestion(input: string): { wrong: string; correct: string } | null {
+  const lines = input.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length !== 1 || isHttpInputUrl(lines[0]) || lines[0].includes("/") || /\s/.test(lines[0])) return null;
+  const wrong = lines[0];
+  const candidate = COMMON_R_PACKAGES
+    .map((correct) => ({ correct, distance: levenshteinDistance(wrong.toLowerCase(), correct.toLowerCase()) }))
+    .sort((a, b) => a.distance - b.distance)[0];
+  return candidate && candidate.distance > 0 && candidate.distance <= 2 ? { wrong, correct: candidate.correct } : null;
+}
+
 export function buildInputSmartSuggestions(
   input: string,
   profile: { total: number; archiveUrls: number; repositories: number },
@@ -912,6 +985,18 @@ export function buildInputSmartSuggestions(
     const lower = items.map((s) => s.toLowerCase());
     return lower.length !== new Set(lower).size ? dedupePackageInput(input) : "";
   })();
+  const typo = findPackageTypoSuggestion(input);
+
+  if (typo) {
+    suggestions.push({
+      id: "package-typo",
+      title: `您是否指的是 ${typo.correct}？`,
+      detail: `检测到包名 ${typo.wrong} 与常用包 ${typo.correct} 相近。`,
+      actionLabel: "替换包名",
+      action: "replaceInput",
+      value: typo.correct,
+    });
+  }
 
   if (profile.archiveUrls === profile.total && method !== "remotes" && method !== "devtools") {
     suggestions.push({
