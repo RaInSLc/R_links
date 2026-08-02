@@ -24,6 +24,7 @@ import {
   dedupePackageInput,
   normalizePackageInputDisplay,
   parseProjectDependencyFile,
+  extractSystemRequirements,
   trimTrailingBlankLines,
   sanitizePublicSettings,
   countScriptCommands,
@@ -277,6 +278,16 @@ describe("parseProjectDependencyFile", () => {
 
   it("preserves Python requirements constraints and ignores directives", () => {
     expect(parseProjectDependencyFile("requirements.txt", "numpy>=1.26\n# comment\n-r base.txt\npandas==2.2.0 # note")).toBe("numpy>=1.26\npandas==2.2.0");
+  });
+});
+
+describe("extractSystemRequirements", () => {
+  it("extracts multiline DESCRIPTION system requirements", () => {
+    expect(extractSystemRequirements("DESCRIPTION", "Package: demo\nSystemRequirements: GDAL (>= 3.0),\n    PROJ\nImports: sf")).toBe("GDAL (>= 3.0), PROJ");
+  });
+
+  it("ignores system requirements in unrelated files", () => {
+    expect(extractSystemRequirements("requirements.txt", "SystemRequirements: gcc")).toBeNull();
   });
 });
 

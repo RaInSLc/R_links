@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-08-02 14:40:00 +08:00]
+
+### Added
+- **SystemRequirements 提示**：导入 R `DESCRIPTION` 时自动提取 `SystemRequirements` 字段，并在工作台反馈系统依赖信息。
+- **安全提示模式**：系统依赖仅作为提示展示，不自动执行 `apt-get`、`yum` 或其他系统命令。
+
+### Tests
+- **前端**：`npm test -- --run` 通过 141 项，`npm run build` 通过。
+- **Rust**：`cargo test` 通过 196 项。
+
 ## [2026-08-02 14:35:00 +08:00]
 
 ### Added

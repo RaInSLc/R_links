@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { PanelHeader, Toggle } from "./components";
-import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, buildSearchPlanPreview, dedupePackageInput, normalizePackageInputDisplay, parseProjectDependencyFile, trimTrailingBlankLines, type SmartSuggestion } from "./utils";
+import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, buildSearchPlanPreview, dedupePackageInput, extractSystemRequirements, normalizePackageInputDisplay, parseProjectDependencyFile, trimTrailingBlankLines, type SmartSuggestion } from "./utils";
 import type { Ecosystem, Method, Settings } from "./types";
 import { methods, defaultPinnedMethods } from "./types";
 
@@ -111,8 +111,9 @@ export function WorkspaceView({
     const text = await file.text();
     if (text) {
       const parsed = parseProjectDependencyFile(file.name, text) ?? text;
+      const systemRequirements = extractSystemRequirements(file.name, text);
       onInputChange(parsed, "clipboard");
-      setFileLoadHint(`已加载文件: ${file.name} (${parsed.split(/\r?\n/).filter(Boolean).length} 项)`);
+      setFileLoadHint(`已加载文件: ${file.name} (${parsed.split(/\r?\n/).filter(Boolean).length} 项)${systemRequirements ? `；系统依赖：${systemRequirements}` : ""}`);
       setTimeout(() => setFileLoadHint(null), 4000);
     }
   }
@@ -126,8 +127,9 @@ export function WorkspaceView({
     const text = await file.text();
     if (text) {
       const parsed = parseProjectDependencyFile(file.name, text) ?? text;
+      const systemRequirements = extractSystemRequirements(file.name, text);
       onInputChange(parsed, "clipboard");
-      setFileLoadHint(`已加载文件: ${file.name} (${parsed.split(/\r?\n/).filter(Boolean).length} 项)`);
+      setFileLoadHint(`已加载文件: ${file.name} (${parsed.split(/\r?\n/).filter(Boolean).length} 项)${systemRequirements ? `；系统依赖：${systemRequirements}` : ""}`);
       setTimeout(() => setFileLoadHint(null), 4000);
     }
   }

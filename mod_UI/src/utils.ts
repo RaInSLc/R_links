@@ -667,6 +667,17 @@ export function parseProjectDependencyFile(fileName: string, text: string): stri
   return null;
 }
 
+export function extractSystemRequirements(fileName: string, text: string): string | null {
+  if (!fileName.toLowerCase().endsWith("description")) return null;
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((line) => /^SystemRequirements:\s*/i.test(line));
+  if (start < 0) return null;
+  const first = lines[start].replace(/^SystemRequirements:\s*/i, "").trim();
+  const continuation = lines.slice(start + 1).filter((line) => /^\s+/.test(line)).map((line) => line.trim());
+  const value = [first, ...continuation].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  return value || null;
+}
+
 export function sanitizeHistoryRecord(value: unknown): HistoryRecord {
   const record = asRecord(value);
   return {
