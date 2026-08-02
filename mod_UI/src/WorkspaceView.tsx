@@ -216,6 +216,11 @@ export function WorkspaceView({
               }
             }}
             onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                if (!searching && input.trim() && !inputTooLarge) onStartSearch();
+                return;
+              }
               if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 const el = e.currentTarget;

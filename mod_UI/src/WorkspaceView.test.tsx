@@ -76,6 +76,28 @@ describe("WorkspaceView", () => {
     expect(handleInputChange).toHaveBeenCalledWith("dplyr\n", "manual");
   });
 
+  it("starts search with Ctrl+Enter without changing multiline input", () => {
+    const handleStartSearch = vi.fn();
+    const handleInputChange = vi.fn();
+    render(<WorkspaceView {...defaultProps} onStartSearch={handleStartSearch} onInputChange={handleInputChange} />);
+    const textarea = screen.getByRole("textbox", { name: "R 包输入列表" });
+
+    fireEvent.keyDown(textarea, { key: "Enter", ctrlKey: true });
+
+    expect(handleStartSearch).toHaveBeenCalledOnce();
+    expect(handleInputChange).not.toHaveBeenCalled();
+  });
+
+  it("does not start search for Ctrl+Enter while composing", () => {
+    const handleStartSearch = vi.fn();
+    render(<WorkspaceView {...defaultProps} onStartSearch={handleStartSearch} />);
+    const textarea = screen.getByRole("textbox", { name: "R 包输入列表" });
+
+    fireEvent.keyDown(textarea, { key: "Enter", ctrlKey: true, isComposing: true });
+
+    expect(handleStartSearch).not.toHaveBeenCalled();
+  });
+
   it("calls onClear when clear button is clicked", () => {
     const handleClear = vi.fn();
     render(<WorkspaceView {...defaultProps} onClear={handleClear} />);
