@@ -264,4 +264,18 @@ describe('SettingsView Component', () => {
 
     expect(props.onRLibPathChange).toHaveBeenCalledWith('D:/R/project-library');
   });
+
+  it('网络设置中可以运行 R 编译环境 Doctor', async () => {
+    const props = createProps();
+    const { invoke } = await import('@tauri-apps/api/core');
+    vi.mocked(invoke).mockImplementation(async (command: string) => {
+      if (command === 'check_system_toolchain') return [{ tool: 'Rscript', available: true, version: 'Rscript version 4.4.0', advice: '' }];
+      return command === 'load_package_cache' ? [] : undefined;
+    });
+    render(<SettingsView {...props} />);
+    fireEvent.click(screen.getByText('缓存'));
+    fireEvent.click(screen.getByText('检查编译环境'));
+
+    await waitFor(() => expect(screen.getByText(/Rscript version 4.4.0/)).toBeInTheDocument());
+  });
 });

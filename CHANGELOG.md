@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [2026-08-02 12:45:00 +08:00]
+
+### Added
+- **R 编译环境 Doctor**：缓存与诊断设置中新增只读系统工具链检查。
+- **跨平台探测**：检查 `Rscript`、`R`、`Git`、`make`、`gcc`；Windows 额外检查 `Rtools` 常用的 `make`/`gcc`，Linux/macOS 额外检查 `gfortran`。
+- **建议性修复提示**：缺失工具只展示安装或 PATH 配置建议，不阻止检索和安装脚本生成。
+- **诊断数据最小化**：检测结果仅返回工具名、截断版本文本和建议，不返回用户路径、Token 或代理凭据。
+
+### Tests
+- **前端**：`npm test -- --run` 通过 135 项，`npm run build` 通过。
+- **Rust**：`cargo test` 通过 193 项。
+- **桌面打包**：`npm run tauri build` 成功生成 MSI 和 NSIS 安装包。
+
 ## [2026-08-02 11:40:00 +08:00]
 
 ### Added

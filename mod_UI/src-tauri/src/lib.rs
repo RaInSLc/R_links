@@ -20,7 +20,7 @@ use tauri::{AppHandle, State};
 
 use models::{
     GenerateOptions, HistoryRecord, InputRules, MirrorSpeedResult, PublicSettings,
-    NetworkDiagnostic, ReverseDependenciesInfo, SearchResponse, SearchResult, Settings,
+    NetworkDiagnostic, ReverseDependenciesInfo, SearchResponse, SearchResult, Settings, ToolchainCheck,
 };
 
 const MAX_BROWSER_OPEN_REQUESTS: usize = 30;
@@ -29,6 +29,36 @@ const MAX_JS_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 static SETTINGS_UPDATE_LOCK: Mutex<()> = Mutex::new(());
 static CACHE_FEEDBACK_LOCK: Mutex<()> = Mutex::new(());
 static HISTORY_EXTRACT_RE: OnceLock<Regex> = OnceLock::new();
+
+fn run_tool_version(tool: &str, args: &[&str], advice: &str) -> ToolchainCheck {
+    let result = std::process::Command::new(tool).args(args).output();
+    match result {
+        Ok(output) if output.status.success() => {
+            let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let version = if text.is_empty() { String::from_utf8_lossy(&output.stderr).trim().to_string() } else { text };
+            ToolchainCheck { tool: tool.to_string(), available: true, version: version.chars().take(256).collect(), advice: String::new() }
+        }
+        _ => ToolchainCheck { tool: tool.to_string(), available: false, version: String::new(), advice: advice.to_string() },
+    }
+}
+
+#[tauri::command]
+fn check_system_toolchain() -> Vec<ToolchainCheck> {
+    let mut checks = vec![
+        run_tool_version("Rscript", &["--version"], "请安装 R，并将 Rscript 加入 PATH。"),
+        run_tool_version("R", &["--version"], "请安装 R，并将 R 加入 PATH。"),
+        run_tool_version("git", &["--version"], "GitHub 或远程源码安装需要 Git。"),
+    ];
+    if cfg!(target_os = "windows") {
+        checks.push(run_tool_version("make", &["--version"], "Windows 源码包编译通常需要与 R 版本匹配的 Rtools。"));
+        checks.push(run_tool_version("gcc", &["--version"], "Windows 源码包编译需要 Rtools 提供的 GCC。"));
+    } else {
+        checks.push(run_tool_version("make", &["--version"], "请安装 make 及系统编译工具链。"));
+        checks.push(run_tool_version("gfortran", &["--version"], "涉及 Fortran 的 R 源码包需要 gfortran。"));
+        checks.push(run_tool_version("gcc", &["--version"], "请安装 gcc/g++ 等 C/C++ 编译工具。"));
+    }
+    checks
+}
 
 pub struct SearchState {
     inner: Mutex<SearchStateInner>,
@@ -907,6 +937,7 @@ pub fn run() {
             save_input_rules,
             test_mirror_speed,
             test_network_connection,
+            check_system_toolchain,
             fetch_reverse_dependencies,
             load_cached_results,
             rate_cache_result

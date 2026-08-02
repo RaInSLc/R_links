@@ -262,6 +262,15 @@ pub struct NetworkDiagnostic {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ToolchainCheck {
+    pub tool: String,
+    pub available: bool,
+    pub version: String,
+    pub advice: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReverseDependenciesInfo {
     pub package: String,
     pub depends: usize,

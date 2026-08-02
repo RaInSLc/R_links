@@ -1,5 +1,5 @@
 import { PanelHeader, Toggle } from "./components";
-import { MAX_RESULT_FIELD_CHARS, MAX_TOKEN_CHARS, type MirrorSpeedResult, type NetworkDiagnostic } from "./utils";
+import { MAX_RESULT_FIELD_CHARS, MAX_TOKEN_CHARS, type MirrorSpeedResult, type NetworkDiagnostic, type ToolchainCheck } from "./utils";
 import { mirrors, defaultSettings, defaultInputRules, methods } from "./types";
 import type { InputRules, Settings } from "./types";
 import { useState, useRef } from "react";
@@ -170,6 +170,8 @@ export function SettingsView({
   const [speedResults, setSpeedResults] = useState<MirrorSpeedResult[]>([]);
   const [networkDiagnostics, setNetworkDiagnostics] = useState<NetworkDiagnostic[]>([]);
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
+  const [toolchainBusy, setToolchainBusy] = useState(false);
+  const [toolchainChecks, setToolchainChecks] = useState<ToolchainCheck[]>([]);
   const [cacheEntries, setCacheEntries] = useState<PackageCacheEntry[]>([]);
   const [cacheBusy, setCacheBusy] = useState(false);
   const fileConfigRef = useRef<HTMLInputElement>(null);
@@ -213,6 +215,18 @@ export function SettingsView({
       }]);
     } finally {
       setDiagnosticsBusy(false);
+    }
+  }
+
+  async function handleCheckToolchain() {
+    setToolchainBusy(true);
+    setToolchainChecks([]);
+    try {
+      setToolchainChecks(await invoke<ToolchainCheck[]>("check_system_toolchain"));
+    } catch (error) {
+      setToolchainChecks([{ tool: "Doctor", available: false, version: "", advice: `检测失败：${String(error)}` }]);
+    } finally {
+      setToolchainBusy(false);
     }
   }
 
@@ -864,6 +878,25 @@ export function SettingsView({
                      <small style={{ display: "block" }}>{entry.source} · {entry.version || "未知版本"} · {entry.invalidated ? "已失效" : entry.verifiedCount > 0 ? `已验证 ${entry.verifiedCount} 次` : "未验证"}</small>
                    </div>
                    <button className="button ghost" onClick={() => void handleDeleteCacheEntry(entry)} disabled={cacheBusy}>删除</button>
+                 </div>
+               ))}
+             </div>
+           )}
+         </div>
+         <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
+           <span>R 编译环境 Doctor</span>
+           <small>只读检查 R、Rscript、Git 和当前系统的源码包编译工具，不会安装或修改任何系统组件。</small>
+           <button className="button ghost" type="button" onClick={() => void handleCheckToolchain()} disabled={toolchainBusy} style={{ marginTop: "9px" }}>
+             {toolchainBusy ? "正在检查..." : "检查编译环境"}
+           </button>
+           {toolchainChecks.length > 0 && (
+             <div style={{ marginTop: "10px", fontSize: "12px" }}>
+               {toolchainChecks.map((item) => (
+                 <div key={item.tool} style={{ borderTop: "1px solid var(--line)", padding: "7px 0" }}>
+                   <strong>{item.available ? "✓" : "!"} {item.tool}</strong>
+                   <small style={{ display: "block", color: item.available ? "var(--muted)" : "#b91c1c" }}>
+                     {item.available ? item.version.split("\n")[0] : item.advice}
+                   </small>
                  </div>
                ))}
              </div>

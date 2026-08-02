@@ -134,6 +134,13 @@ export interface NetworkDiagnostic {
   error?: string;
 }
 
+export interface ToolchainCheck {
+  tool: string;
+  available: boolean;
+  version: string;
+  advice: string;
+}
+
 export interface SearchPlanPreview {
   total: number;
   cranLike: number;
