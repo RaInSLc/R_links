@@ -51,6 +51,8 @@ interface WorkspaceViewProps {
   onCopyScript: () => void;
   onCleanComments: () => void;
   onDownloadScript: () => void;
+  onDownloadPowerShellScript: () => void;
+  onDownloadBashScript: () => void;
   copyWithLineNumbers: boolean;
   onCopyWithLineNumbersChange: (v: boolean) => void;
   isMethodDisabled: (candidate: Method) => boolean;
@@ -68,7 +70,7 @@ export function WorkspaceView({
   onMethodChange, pinnedMethods, onPinnedMethodsChange, onApplySmartSuggestion, onConditionalChange, onInstallDependenciesChange,
   onShowRemoteVersionChange, onVerifyInstallChange, onFullSearchChange,
   onUseCacheChange, onTempFilter,
-  onCopyScript, onCleanComments, onDownloadScript, onTogglePause = () => {},
+  onCopyScript, onCleanComments, onDownloadScript, onDownloadPowerShellScript, onDownloadBashScript, onTogglePause = () => {},
   copyWithLineNumbers, onCopyWithLineNumbersChange, isMethodDisabled,
 }: WorkspaceViewProps) {
   const [filterText, setFilterText] = useState("");
@@ -563,6 +565,12 @@ export function WorkspaceView({
             </button>
             <button className="button ghost script-toolbar-btn" onClick={onDownloadScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+S">
               下载 .R<span className="kbd-hint">Ctrl+S</span>
+            </button>
+            <button className="button ghost script-toolbar-btn" onClick={onDownloadPowerShellScript} disabled={!script || script === "等待输入..." || scriptTooLarge}>
+              下载 .ps1
+            </button>
+            <button className="button ghost script-toolbar-btn" onClick={onDownloadBashScript} disabled={!script || script === "等待输入..." || scriptTooLarge}>
+              下载 .sh
             </button>
             <button className="button primary script-toolbar-btn" onClick={onCopyScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+Shift+C">
               复制脚本<span className="kbd-hint">Ctrl+⇧C</span>

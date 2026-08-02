@@ -52,6 +52,8 @@ describe("WorkspaceView", () => {
     onCopyScript: vi.fn(),
     onCleanComments: vi.fn(),
     onDownloadScript: vi.fn(),
+    onDownloadPowerShellScript: vi.fn(),
+    onDownloadBashScript: vi.fn(),
     copyWithLineNumbers: false,
     onCopyWithLineNumbersChange: vi.fn(),
     isMethodDisabled: () => false,
@@ -125,5 +127,17 @@ describe("WorkspaceView", () => {
     render(<WorkspaceView {...defaultProps} onCopyScript={handleCopy} />);
     fireEvent.click(screen.getByText(/复制脚本/));
     expect(handleCopy).toHaveBeenCalled();
+  });
+
+  it("triggers wrapper script download callbacks", () => {
+    const onPowerShell = vi.fn();
+    const onBash = vi.fn();
+    render(<WorkspaceView {...defaultProps} onDownloadPowerShellScript={onPowerShell} onDownloadBashScript={onBash} />);
+
+    fireEvent.click(screen.getByText("下载 .ps1"));
+    fireEvent.click(screen.getByText("下载 .sh"));
+
+    expect(onPowerShell).toHaveBeenCalledOnce();
+    expect(onBash).toHaveBeenCalledOnce();
   });
 });

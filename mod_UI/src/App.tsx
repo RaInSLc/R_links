@@ -439,6 +439,24 @@ function AppContent() {
     setStatus("已下载 R 脚本文件");
   }
 
+  function downloadWrapperScript(kind: "powershell" | "bash") {
+    const snapshot = latestScriptRef.current;
+    if (!snapshot || snapshot === "等待输入..." || scriptValueTooLarge(snapshot)) return;
+    const wrapper = kind === "powershell"
+      ? `# R links package installer\n$ErrorActionPreference = "Stop"\n$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path\n$rscript = Get-Command Rscript -ErrorAction SilentlyContinue\nif (-not $rscript) { Write-Error "Rscript was not found in PATH."; exit 127 }\n& $rscript.Source -f (Join-Path $scriptDir "install_packages.R")\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\nWrite-Host "R package installation completed."\n`
+      : `#!/usr/bin/env bash\nset -u\nSCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nif ! command -v Rscript >/dev/null 2>&1; then\n  printf '%s\\n' "Rscript was not found in PATH." >&2\n  exit 127\nfi\nRscript "$SCRIPT_DIR/install_packages.R"\nstatus=$?\nif [ "$status" -ne 0 ]; then\n  exit "$status"\nfi\nprintf '%s\\n' "R package installation completed."\n`;
+    const blob = new Blob([wrapper], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = kind === "powershell" ? "install_packages.ps1" : "install_packages.sh";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setStatus(`已下载 ${kind === "powershell" ? ".ps1" : ".sh"} 包装脚本，请与 install_packages.R 放在同一目录`);
+  }
+
   async function cleanComments() {
     const source = latestScriptRef.current;
     if (scriptValueTooLarge(source)) {
@@ -720,6 +738,8 @@ function AppContent() {
               copyWithLineNumbers={copyWithLineNumbers}
               onCopyWithLineNumbersChange={setCopyWithLineNumbers}
               onDownloadScript={downloadScript}
+              onDownloadPowerShellScript={() => downloadWrapperScript("powershell")}
+              onDownloadBashScript={() => downloadWrapperScript("bash")}
               isMethodDisabled={isMethodDisabled}
             />
           )}

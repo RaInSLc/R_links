@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [2026-08-02 11:20:00 +08:00]
+
+### Added
+- **脚本包装器导出**：工作台脚本预览新增 PowerShell `.ps1` 和 Bash `.sh` 下载入口，与现有 `install_packages.R` 配套使用。
+- **跨目录执行支持**：包装器按自身所在目录定位 `install_packages.R`，不依赖当前终端工作目录。
+- **运行前检查**：包装器检查 `Rscript` 是否存在，保留安装进程退出码，并在缺少运行时或安装失败时返回非零状态。
+
+### Tests
+- **前端**：`npm test -- --run` 通过 131 项，`npm run build` 通过。
+- **Rust**：`cargo test` 通过 192 项。
+- **桌面打包**：`npm run tauri build` 成功生成 MSI 和 NSIS 安装包。
+
 ## [2026-08-01 17:20:00 +08:00]
 
 ### Added
