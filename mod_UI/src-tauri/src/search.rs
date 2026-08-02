@@ -252,6 +252,7 @@ pub async fn search_packages(
     let mut results = Vec::new();
     let mut logs = Vec::new();
     let mut cache_update: HashMap<String, PackageCacheEntry> = HashMap::new();
+    let cache_stage_start = Instant::now();
 
     let cache = if settings.use_cache {
         match storage::load_cache(app) {
@@ -278,6 +279,8 @@ pub async fn search_packages(
 
     let total = packages.len();
     let mut cache = cache;
+    let cache_stage_ms = cache_stage_start.elapsed().as_millis() as u64;
+    let search_stage_start = Instant::now();
     let mut processed = 0usize;
 
     while processed < packages.len() {
@@ -435,6 +438,7 @@ pub async fn search_packages(
     for (key, entry) in &cache_update {
         cache.insert(key.clone(), entry.clone());
     }
+    let search_stage_ms = search_stage_start.elapsed().as_millis() as u64;
 
     let final_message = if timed_out.load(Ordering::SeqCst) {
         "检索任务已超时停止"
@@ -451,6 +455,7 @@ pub async fn search_packages(
         }
     }
 
+    let dependency_stage_start = Instant::now();
     let dependency_graph = if settings.resolve_dependencies && !search_stopped(cancelled, &budget) {
         log(app, run_id, &mut logs, "开始解析 R 包依赖关系图...");
         match crate::dependency::resolve_dependencies(app, &client, &results, settings, cancelled)
@@ -477,11 +482,17 @@ pub async fn search_packages(
         None
     };
 
+    let stage_timings = vec![
+        crate::models::SearchStageTiming { stage: "缓存与输入".to_string(), duration_ms: cache_stage_ms },
+        crate::models::SearchStageTiming { stage: "多源检索".to_string(), duration_ms: search_stage_ms },
+        crate::models::SearchStageTiming { stage: "依赖解析".to_string(), duration_ms: dependency_stage_start.elapsed().as_millis() as u64 },
+    ];
     Ok(SearchResponse {
         run_id,
         results,
         logs,
         stopped: timed_out.load(Ordering::SeqCst) || search_stopped(cancelled, &budget),
+        stage_timings,
         dependency_graph,
     })
 }
@@ -541,7 +552,7 @@ pub async fn search_binary_packages(
         results.push(result);
     }
     log(app, run_id, &mut logs, "R 二进制安装命令生成完成（未执行网络检索）");
-    Ok(SearchResponse { run_id, results, logs, stopped: cancelled.load(Ordering::SeqCst), dependency_graph: None })
+    Ok(SearchResponse { run_id, results, logs, stopped: cancelled.load(Ordering::SeqCst), stage_timings: Vec::new(), dependency_graph: None })
 }
 
 async fn search_one_package(

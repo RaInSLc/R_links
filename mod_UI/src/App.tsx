@@ -158,7 +158,7 @@ function AppContent() {
   const { results, setResults, logs, setLogs, dependencyGraph,
     searching, openingSearchTabs, searchingRef, hasSearchEvidenceRef,
     paused, togglePauseSearch, cancelSearchPackage,
-    searchDuration,
+    searchDuration, stageTimings,
      startSearch, startBinarySearch, stopSearch, openSearchTabs } = search;
   const { settings, showToken, setShowToken,
     tokenConfigured, settingsBusy, settingsLoaded, updateSettingsFromUser,
@@ -750,6 +750,7 @@ function AppContent() {
               smartSuggestions={resultSuggestions}
               searching={searching} onClearLogs={() => setLogs([])}
               searchDuration={searchDuration}
+              stageTimings={stageTimings}
               onStatusChange={setStatus}
               onApplySmartSuggestion={(suggestion) => {
                 if (suggestion.action === "openSettings") {

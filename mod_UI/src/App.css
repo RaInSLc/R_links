@@ -2879,3 +2879,52 @@ body {
   0% { left: -40%; }
   100% { left: 100%; }
 }
+.stage-timing-panel {
+  margin: 0 17px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%);
+}
+
+.stage-timing-header,
+.stage-timing-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stage-timing-header {
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.stage-timing-header small,
+.stage-timing-row code {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.stage-timing-row {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.stage-timing-row > span {
+  width: 82px;
+  flex: 0 0 82px;
+}
+
+.stage-timing-track {
+  height: 7px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--line);
+}
+
+.stage-timing-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}

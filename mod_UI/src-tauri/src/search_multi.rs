@@ -113,7 +113,7 @@ pub async fn search(
             stage: "final".to_string(),
         });
     }
-    Ok(SearchResponse { run_id: 0, results, logs, stopped: false, dependency_graph: None })
+    Ok(SearchResponse { run_id: 0, results, logs, stopped: false, stage_timings: Vec::new(), dependency_graph: None })
 }
 
 #[cfg(test)]

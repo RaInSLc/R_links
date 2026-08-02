@@ -56,7 +56,13 @@ export interface SearchResponse {
   results: SearchResult[];
   logs: string[];
   stopped: boolean;
+  stageTimings?: SearchStageTiming[];
   dependencyGraph?: DependencyGraph;
+}
+
+export interface SearchStageTiming {
+  stage: string;
+  durationMs: number;
 }
 
 export interface PublicSettings {
@@ -438,6 +444,15 @@ export function sanitizeSearchResponse(value: unknown): SearchResponse {
     ),
     logs: mapBounded(asArray(response.logs), MAX_SEARCH_LOGS, safeStatusText),
     stopped: safeBoolean(response.stopped),
+    stageTimings: Array.isArray(response.stageTimings)
+      ? response.stageTimings.slice(0, 10).map((item) => {
+        const timing = asRecord(item);
+        return {
+          stage: safeStatusText(String(timing.stage || "未知阶段")),
+          durationMs: Math.max(0, Math.min(86_400_000, Number(timing.durationMs) || 0)),
+        };
+      })
+      : [],
   };
 
   if (response.dependencyGraph) {

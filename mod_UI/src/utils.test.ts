@@ -244,6 +244,25 @@ describe("sanitizeSearchResponse", () => {
     expect(response.logs).toHaveLength(0);
     expect(response.stopped).toBe(false);
   });
+
+  it("sanitizes bounded stage timings and tolerates legacy responses", () => {
+    const response = sanitizeSearchResponse({
+      runId: 2,
+      results: [],
+      logs: [],
+      stopped: false,
+      stageTimings: [
+        { stage: "多源检索", durationMs: 1200 },
+        { stage: "恶意\u0000阶段", durationMs: -5 },
+      ],
+    });
+
+    expect(response.stageTimings).toEqual([
+      { stage: "多源检索", durationMs: 1200 },
+      { stage: "恶意阶段", durationMs: 0 },
+    ]);
+    expect(sanitizeSearchResponse({ runId: 2, results: [], logs: [], stopped: false }).stageTimings).toEqual([]);
+  });
 });
 
 describe("formatError", () => {

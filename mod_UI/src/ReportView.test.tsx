@@ -108,6 +108,7 @@ describe("ReportView", () => {
         smartSuggestions={[]}
         searching={false}
         searchDuration={1200}
+        stageTimings={[{ stage: "多源检索", durationMs: 800 }, { stage: "依赖解析", durationMs: 400 }]}
         onClearLogs={() => {}}
         onStatusChange={() => {}}
         onApplySmartSuggestion={() => {}}

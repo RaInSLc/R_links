@@ -6,7 +6,7 @@ import {
   nextSearchRunId, safeRunId, safeStatusText, sanitizeSearchResponse,
   sanitizeSearchResult, upsertBoundedResult,
   BROWSER_SEARCH_CONFIRM_THRESHOLD, MAX_SEARCH_LOGS, MAX_SEARCH_RESULTS, MAX_SEARCH_TABS,
-  type SearchResponse, type SearchResult, type DependencyGraph,
+  type SearchResponse, type SearchResult, type DependencyGraph, type SearchStageTiming,
 } from "./utils";
 import type { Settings, SearchLogBatchEvent, SearchProgressEvent } from "./types";
 
@@ -39,6 +39,7 @@ export function useSearch(setStatus: SetStatus) {
   const [paused, setPaused] = useState(false);
   const [openingSearchTabs, setOpeningSearchTabs] = useState(false);
   const [searchDuration, setSearchDuration] = useState<number | null>(null);
+  const [stageTimings, setStageTimings] = useState<SearchStageTiming[]>([]);
   const activeSearchRunId = useRef(0);
   const searchingRef = useRef(false);
   const hasSearchEvidenceRef = useRef(false);
@@ -116,6 +117,7 @@ export function useSearch(setStatus: SetStatus) {
     setSearching(true);
     setPaused(false);
     setSearchDuration(null);
+    setStageTimings([]);
     searchStartTime.current = Date.now();
     setResults([]);
     setLogs([]);
@@ -130,6 +132,7 @@ export function useSearch(setStatus: SetStatus) {
       setResults((current) => mergeSearchResults(current, clean.results));
       setLogs((current) => mergeSearchLogs(current, clean.logs));
       setDependencyGraph(clean.dependencyGraph || null);
+      setStageTimings(clean.stageTimings || []);
       setStatus(clean.stopped ? "检索任务已停止" : "检索完成，脚本已自动刷新");
       if (!clean.stopped) onSetMethodAuto();
     } catch (error) {
@@ -161,6 +164,7 @@ export function useSearch(setStatus: SetStatus) {
     await listenerReadyRef.current;
     searchingRef.current = true;
     setSearching(true); setPaused(false); setSearchDuration(null); setResults([]); setLogs([]); setDependencyGraph(null); setStatus("正在检索 R 二进制包"); onViewReport();
+    setStageTimings([]);
     searchStartTime.current = Date.now();
     try {
       const response = await invoke<SearchResponse>("start_binary_search", { runId, input, settings, mirror });
@@ -278,7 +282,7 @@ export function useSearch(setStatus: SetStatus) {
     openingSearchTabs,
     searchingRef,
     hasSearchEvidenceRef,
-    searchDuration,
+    searchDuration, stageTimings,
     startSearch,
     startBinarySearch,
     stopSearch,

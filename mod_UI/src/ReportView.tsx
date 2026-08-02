@@ -41,6 +41,7 @@ interface ReportViewProps {
   smartSuggestions: SmartSuggestion[];
   searching: boolean;
   searchDuration: number | null;
+  stageTimings?: Array<{ stage: string; durationMs: number }>;
   onClearLogs: () => void;
   onStatusChange: (status: string) => void;
   onApplySmartSuggestion: (suggestion: SmartSuggestion) => void;
@@ -556,6 +557,7 @@ export function ReportView({
   smartSuggestions,
   searching,
   searchDuration,
+  stageTimings = [],
   onClearLogs,
   onStatusChange,
   onApplySmartSuggestion,
@@ -656,6 +658,8 @@ export function ReportView({
     const error = uniquePackages(results.filter((r) => !r.found && r.status === "error"));
     return { missing, timeout, rateLimited, error };
   }, [results]);
+
+  const maxStageDuration = Math.max(1, ...stageTimings.map((item) => item.durationMs));
 
   const taskSummary = useMemo(() => {
     const uniqueResultPackages = uniquePackages(results).length;
@@ -892,6 +896,21 @@ export function ReportView({
       </div>
 
       <section className="panel report-panel">
+        {stageTimings.length > 0 && (
+          <div className="stage-timing-panel" aria-label="检索耗时分解">
+            <div className="stage-timing-header">
+              <strong>检索耗时分解</strong>
+              <small>后端真实阶段计时</small>
+            </div>
+            {stageTimings.map((item) => (
+              <div className="stage-timing-row" key={item.stage}>
+                <span>{item.stage}</span>
+                <div className="stage-timing-track"><div className="stage-timing-fill" style={{ width: `${Math.max(2, (item.durationMs / maxStageDuration) * 100)}%` }} /></div>
+                <code>{(item.durationMs / 1000).toFixed(2)}s</code>
+              </div>
+            ))}
+          </div>
+        )}
         {searching && (
           <div className="search-progress-wrapper">
             <div className="search-progress-bar" />

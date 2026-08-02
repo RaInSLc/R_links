@@ -345,8 +345,17 @@ pub struct SearchResponse {
     pub results: Vec<SearchResult>,
     pub logs: Vec<String>,
     pub stopped: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stage_timings: Vec<SearchStageTiming>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dependency_graph: Option<DependencyGraph>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchStageTiming {
+    pub stage: String,
+    pub duration_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
