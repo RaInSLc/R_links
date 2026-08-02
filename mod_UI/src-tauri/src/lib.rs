@@ -42,6 +42,10 @@ fn run_tool_version(tool: &str, args: &[&str], advice: &str) -> ToolchainCheck {
     }
 }
 
+fn configured_flag(value: &str) -> bool {
+    !value.trim().is_empty()
+}
+
 #[tauri::command]
 fn check_system_toolchain() -> Vec<ToolchainCheck> {
     let mut checks = vec![
@@ -588,8 +592,10 @@ fn export_diagnostics(
     let history_count = storage::load_history(&app)
         .map(|history| history.len())
         .unwrap_or(0);
+    let toolchain = check_system_toolchain();
 
     let diagnostics = serde_json::json!({
+        "schema_version": 2,
         "app_version": env!("CARGO_PKG_VERSION"),
         "timestamp": std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -600,11 +606,13 @@ fn export_diagnostics(
             "proxy": public_settings.proxy,
             "cran_mirror": public_settings.cran_mirror,
             "github_token_configured": public_settings.github_token_configured,
+            "r_lib_path_configured": configured_flag(&public_settings.r_lib_path),
         },
         "cache_entries": cache_count,
         "history_entries": history_count,
         "platform": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
+        "toolchain": toolchain,
         "search_summary": search_summary,
         "failed_categories": failed_categories,
         "update_status": update_status,
@@ -949,6 +957,12 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn diagnostics_only_exposes_path_configured_flag() {
+        assert!(configured_flag("D:/R/project-library"));
+        assert!(!configured_flag("  "));
+    }
 
     #[test]
     fn search_state_rejects_overlapping_runs() {
