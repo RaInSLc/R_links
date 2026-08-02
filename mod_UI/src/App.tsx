@@ -373,7 +373,7 @@ function AppContent() {
       }
       invoke<string>("generate_script", {
         input,
-         options: { method, conditional, installDependencies, mirror: ecosystem === "r-binary" ? rBinaryMirror : settings.cranMirror, archiveGithubMajorGap: settings.archiveGithubMajorGap, appendVerify: verifyInstall },
+         options: { method, conditional, installDependencies, mirror: ecosystem === "r-binary" ? rBinaryMirror : settings.cranMirror, rLibPath: settings.rLibPath, archiveGithubMajorGap: settings.archiveGithubMajorGap, appendVerify: verifyInstall },
         results,
         showRemoteVersion,
       })
@@ -811,6 +811,7 @@ function AppContent() {
                 updateAndPersistSettings((c) => ({ ...c, showRemoteVersion: v }));
               }}
               onCranMirrorChange={(v) => acceptSettingValue("cranMirror", v)}
+              onRLibPathChange={(v) => acceptSettingValue("rLibPath", v)}
               onMirrorSelect={(v) => updateAndPersistSettings((c) => ({ ...c, cranMirror: v }))}
               onResolveDependenciesChange={(v) => updateAndPersistSettings((c) => ({ ...c, resolveDependencies: v }))}
               onIncludeLightDependenciesChange={(v) => updateAndPersistSettings((c) => ({ ...c, includeLightDependencies: v }))}

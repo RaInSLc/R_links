@@ -541,10 +541,14 @@ fn generate_script_inner(
         output.push(format!(
             "# [RSPM 二进制镜像: {mirror} | 由 R 按当前平台选择预编译包]"
         ));
-        output.push(
-            "user_library <- file.path(path.expand(\"~\"), \"R\", \"library\")\nif (!dir.exists(user_library)) dir.create(user_library, recursive = TRUE, showWarnings = FALSE)\n.libPaths(unique(c(user_library, .libPaths())))"
-                .to_string(),
-        );
+        let user_library = if options.r_lib_path.trim().is_empty() {
+            "file.path(path.expand(\"~\"), \"R\", \"library\")".to_string()
+        } else {
+            format!("\"{}\"", escape_r(options.r_lib_path.trim()))
+        };
+        output.push(format!(
+            "user_library <- {user_library}\nif (!dir.exists(user_library)) dir.create(user_library, recursive = TRUE, showWarnings = FALSE)\n.libPaths(unique(c(user_library, .libPaths())))"
+        ));
         output.push(
             "options(pkgType = if (.Platform$OS.type == \"windows\") \"win.binary\" else if (identical(Sys.info()[[\"sysname\"]], \"Darwin\")) \"mac.binary\" else \"source\")"
                 .to_string(),
@@ -708,13 +712,14 @@ fn generate_script_inner(
             ));
             continue;
         }
-        output.push(generate_command(
+        output.push(generate_command_with_lib(
             &value,
             &method,
             &version,
             options.conditional,
             &command_mirror,
             options.install_dependencies,
+            options.r_lib_path.trim(),
         )?);
     }
 
@@ -1130,13 +1135,19 @@ fn truncate_utf8_bytes(value: &str, limit: usize) -> String {
     output
 }
 
-fn generate_command(
+#[cfg(test)]
+fn generate_command(value: &str, method: &str, version: &str, conditional: bool, mirror: &str, install_dependencies: bool) -> Result<String, String> {
+    generate_command_with_lib(value, method, version, conditional, mirror, install_dependencies, "")
+}
+
+fn generate_command_with_lib(
     value: &str,
     method: &str,
     version: &str,
     conditional: bool,
     mirror: &str,
     install_dependencies: bool,
+    r_lib_path: &str,
 ) -> Result<String, String> {
     let dependencies = if install_dependencies {
         "TRUE"
@@ -1146,6 +1157,11 @@ fn generate_command(
     let local_value = local_package_name(value);
     let escaped_value = escape_r(&local_value);
     let escaped_mirror = escape_r(mirror);
+    let lib_arg = if r_lib_path.is_empty() {
+        String::new()
+    } else {
+        format!(", lib = \"{}\"", escape_r(r_lib_path))
+    };
     let mut package_name = local_package_name(&extract_package_name(value));
     let mut effective_version = version.to_string();
 
@@ -1153,15 +1169,15 @@ fn generate_command(
         "devtools" => {
             let url = normalize_install_archive_url(value)?;
             format!(
-                "devtools::install_url(\"{}\", dependencies = {dependencies})",
-                escape_r(&url)
+                "devtools::install_url(\"{}\", dependencies = {dependencies}{lib_arg})",
+                escape_r(&url), lib_arg = lib_arg
             )
         }
         "remotes" => {
             let url = normalize_install_archive_url(value)?;
             format!(
-                "remotes::install_url(\"{}\", dependencies = {dependencies})",
-                escape_r(&url)
+                "remotes::install_url(\"{}\", dependencies = {dependencies}{lib_arg})",
+                escape_r(&url), lib_arg = lib_arg
             )
         }
         "github" => {
@@ -1192,7 +1208,7 @@ fn generate_command(
             )
         }
         "base" => format!(
-            "install.packages(\"{escaped_value}\", repos = \"{escaped_mirror}\", dependencies = {dependencies})"
+            "install.packages(\"{escaped_value}\", repos = \"{escaped_mirror}\", dependencies = {dependencies}{lib_arg})"
         ),
         "version" => return Ok(format!("packageVersion(\"{escaped_value}\")")),
         "remotesVersion" => {
@@ -1203,12 +1219,12 @@ fn generate_command(
                 return Err(format!("{value} 的版本号格式不适合 install_version: {version}"));
             }
             format!(
-                "remotes::install_version(\"{escaped_value}\", version = \"{}\", repos = \"{escaped_mirror}\", upgrade = \"never\", dependencies = {dependencies})",
-                escape_r(version)
+                "remotes::install_version(\"{escaped_value}\", version = \"{}\", repos = \"{escaped_mirror}\", upgrade = \"never\", dependencies = {dependencies}{lib_arg})",
+                escape_r(version), lib_arg = lib_arg
             )
         }
         "biocManager" => format!(
-            "BiocManager::install(\"{escaped_value}\", update = FALSE, ask = FALSE, dependencies = {dependencies})"
+            "BiocManager::install(\"{escaped_value}\", update = FALSE, ask = FALSE, dependencies = {dependencies}{lib_arg})"
         ),
         "rForge" => format!(
             "install.packages(\"{escaped_value}\", repos = \"http://R-Forge.R-project.org\", dependencies = {dependencies})"
@@ -1229,7 +1245,7 @@ fn generate_command(
             )
         }
         "auto" => format!(
-            "install.packages(\"{escaped_value}\", repos = \"{escaped_mirror}\", dependencies = {dependencies})"
+            "install.packages(\"{escaped_value}\", repos = \"{escaped_mirror}\", dependencies = {dependencies}{lib_arg})"
         ),
         _ => return Err(format!("不支持的安装方式: {method}")),
     };
@@ -3404,5 +3420,23 @@ mod tests {
         assert!(output.contains("user_library <- file.path(path.expand(\"~\"), \"R\", \"library\")"));
         assert!(output.contains(".libPaths(unique(c(user_library, .libPaths())))"));
         assert!(!output.contains("Would you like to use a personal library"));
+    }
+
+    #[test]
+    fn custom_r_library_path_is_used_by_generated_script() {
+        let script = generate_script(
+            "dplyr",
+            &GenerateOptions {
+                method: "base".to_string(),
+                conditional: false,
+                install_dependencies: true,
+                mirror: "https://cloud.r-project.org".to_string(),
+                r_lib_path: "D:/R/project-library".to_string(),
+                ..Default::default()
+            },
+            &[],
+        )
+        .expect("自定义 R 库路径应生成脚本");
+        assert!(script.contains("lib = \"D:/R/project-library\""));
     }
 }

@@ -31,6 +31,7 @@ interface SettingsViewProps {
   onUseFilterChange: (v: boolean) => void;
   onMaxCacheEntriesChange: (value: number) => void;
   onCranMirrorChange: (value: string) => void;
+  onRLibPathChange: (value: string) => void;
   onResolveDependenciesChange: (v: boolean) => void;
   onMaxDependencyDepthChange: (v: number) => void;
   onIncludeLightDependenciesChange: (v: boolean) => void;
@@ -115,6 +116,7 @@ function sanitizeImportedSettings(value: unknown, current: Settings): Settings {
     proxy: stringValue(raw.proxy, current.proxy),
     githubToken: stringValue(raw.githubToken, current.githubToken, MAX_TOKEN_CHARS),
     cranMirror: stringValue(raw.cranMirror, current.cranMirror),
+    rLibPath: stringValue(raw.rLibPath, current.rLibPath),
     fullSearch: booleanValue(raw.fullSearch, current.fullSearch),
     searchConcurrency: numberValue(raw.searchConcurrency, current.searchConcurrency, 1, 12),
     archiveGithubMajorGap: numberValue(raw.archiveGithubMajorGap, current.archiveGithubMajorGap, 0, 10),
@@ -155,7 +157,7 @@ export function SettingsView({
   onProxyChange, onTokenChange, onTokenToggle, onClearToken,
   onFullSearchChange, onSearchConcurrencyChange, onArchiveGithubMajorGapChange, onConditionalChange, onInstallDependenciesChange, onShowRemoteVersionChange,
   onUseCacheChange, onUseFilterChange, onMaxCacheEntriesChange,
-  onCranMirrorChange, onMirrorSelect,
+  onCranMirrorChange, onRLibPathChange, onMirrorSelect,
   onResolveDependenciesChange, onMaxDependencyDepthChange,
   onIncludeLightDependenciesChange, onMaxDependencyNodesChange,
   onSaveSettings, onReplaceSettings, onThemeChange, onFontChange,
@@ -408,6 +410,16 @@ export function SettingsView({
           <small>
             使用 Posit Package Manager（RSPM）时，生成脚本会启用 R 的 binary 包类型；R 会按当前操作系统、架构和 R 版本选择预编译包，普通 CRAN 镜像仍保持默认行为。
           </small>
+        </label>
+        <label className="field compact">
+          <span>R 库路径（可选）</span>
+          <input
+            value={settings.rLibPath}
+            onChange={(event) => onRLibPathChange(event.currentTarget.value)}
+            placeholder="留空使用当前 R 默认库路径"
+            maxLength={MAX_RESULT_FIELD_CHARS}
+          />
+          <small>指定后写入安装命令的 <code>lib</code> 参数，并自动创建目录；适合多 R 版本或项目级隔离。</small>
         </label>
         <button className="button primary save-button" onClick={() => onSaveSettings()} disabled={settingsBusy}>
           {settingsBusy ? "处理中..." : "保存设置"}

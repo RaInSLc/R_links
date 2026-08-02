@@ -14,6 +14,7 @@ describe('SettingsView Component', () => {
       proxy: '',
       githubToken: '',
       cranMirror: 'https://cloud.r-project.org',
+      rLibPath: '',
       fullSearch: false,
       searchConcurrency: 6,
       archiveGithubMajorGap: 1,
@@ -54,7 +55,8 @@ describe('SettingsView Component', () => {
     onUseCacheChange: vi.fn(),
     onUseFilterChange: vi.fn(),
     onMaxCacheEntriesChange: vi.fn(),
-    onCranMirrorChange: vi.fn(),
+     onCranMirrorChange: vi.fn(),
+     onRLibPathChange: vi.fn(),
     onMirrorSelect: vi.fn(),
     onResolveDependenciesChange: vi.fn(),
     onMaxDependencyDepthChange: vi.fn(),
@@ -253,5 +255,13 @@ describe('SettingsView Component', () => {
     fireEvent.change(gapInput, { target: { value: '2' } });
 
     expect(props.onArchiveGithubMajorGapChange).toHaveBeenCalledWith(2);
+  });
+
+  it('网络设置中编辑 R 库路径时应触发回调', () => {
+    const props = createProps();
+    render(<SettingsView {...props} />);
+    fireEvent.change(screen.getByPlaceholderText('留空使用当前 R 默认库路径'), { target: { value: 'D:/R/project-library' } });
+
+    expect(props.onRLibPathChange).toHaveBeenCalledWith('D:/R/project-library');
   });
 });

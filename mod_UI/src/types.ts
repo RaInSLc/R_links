@@ -16,6 +16,7 @@ export interface Settings {
   proxy: string;
   githubToken: string;
   cranMirror: string;
+  rLibPath: string;
   fullSearch: boolean;
   searchConcurrency: number;
   archiveGithubMajorGap: number;
@@ -64,6 +65,7 @@ export const defaultSettings: Settings = {
   proxy: "",
   githubToken: "",
   cranMirror: "https://cloud.r-project.org",
+  rLibPath: "",
   fullSearch: false,
   searchConcurrency: 6,
   archiveGithubMajorGap: 1,

@@ -16,6 +16,8 @@ pub struct Settings {
     pub proxy: String,
     pub github_token: String,
     pub cran_mirror: String,
+    #[serde(default)]
+    pub r_lib_path: String,
     pub full_search: bool,
     pub search_concurrency: usize,
     pub archive_github_major_gap: usize,
@@ -46,6 +48,7 @@ pub struct PublicSettings {
     pub proxy: String,
     pub github_token_configured: bool,
     pub cran_mirror: String,
+    pub r_lib_path: String,
     pub full_search: bool,
     pub search_concurrency: usize,
     pub archive_github_major_gap: usize,
@@ -77,6 +80,7 @@ impl Default for Settings {
             proxy: String::new(),
             github_token: String::new(),
             cran_mirror: "https://cloud.r-project.org".to_string(),
+            r_lib_path: String::new(),
             full_search: false,
             search_concurrency: 6,
             archive_github_major_gap: 1,
@@ -102,6 +106,7 @@ impl Settings {
         let proxy = normalize_proxy(&self.proxy)?;
         let github_token = normalize_token(&self.github_token)?;
         let cran_mirror = normalize_cran_mirror_url(&self.cran_mirror)?;
+        let r_lib_path = normalize_r_lib_path(&self.r_lib_path)?;
         let search_concurrency = self.search_concurrency.clamp(1, 12);
         let archive_github_major_gap = self.archive_github_major_gap.clamp(0, 10);
         let max_cache_entries = self.max_cache_entries.clamp(1, 10000);
@@ -113,6 +118,7 @@ impl Settings {
             proxy,
             github_token,
             cran_mirror,
+            r_lib_path,
             full_search: self.full_search,
             search_concurrency,
             archive_github_major_gap,
@@ -137,6 +143,7 @@ impl Settings {
             proxy: self.proxy.clone(),
             github_token_configured: !self.github_token.trim().is_empty(),
             cran_mirror: self.cran_mirror.clone(),
+            r_lib_path: self.r_lib_path.clone(),
             full_search: self.full_search,
             search_concurrency: self.search_concurrency,
             archive_github_major_gap: self.archive_github_major_gap,
@@ -163,6 +170,14 @@ impl Settings {
         }
         Ok(normalized)
     }
+}
+
+fn normalize_r_lib_path(value: &str) -> Result<String, String> {
+    let path = value.trim();
+    if path.len() > MAX_FIELD_CHARS || path.chars().any(|character| character.is_control()) {
+        return Err(format!("R 库路径无效，最多允许 {MAX_FIELD_CHARS} 字节且不能包含控制字符"));
+    }
+    Ok(path.to_string())
 }
 
 fn normalize_pinned_methods(values: &[String]) -> Vec<String> {
@@ -197,6 +212,8 @@ pub struct GenerateOptions {
     pub conditional: bool,
     pub install_dependencies: bool,
     pub mirror: String,
+    #[serde(default)]
+    pub r_lib_path: String,
     #[serde(default = "default_archive_github_major_gap")]
     pub archive_github_major_gap: usize,
     #[serde(default)]
@@ -214,6 +231,7 @@ impl Default for GenerateOptions {
             conditional: false,
             install_dependencies: false,
             mirror: String::new(),
+            r_lib_path: String::new(),
             archive_github_major_gap: default_archive_github_major_gap(),
             append_verify: false,
         }

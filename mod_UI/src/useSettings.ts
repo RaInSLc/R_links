@@ -10,7 +10,7 @@ import type { Settings } from "./types";
 import { defaultSettings } from "./types";
 
 type SettingsBoolField = "fullSearch" | "conditional" | "installDependencies" | "showRemoteVersion" | "useCache" | "useFilter" | "resolveDependencies" | "includeLightDependencies";
-type SettingsPersistOverrides = Partial<Pick<Settings, SettingsBoolField | "searchConcurrency" | "archiveGithubMajorGap" | "maxCacheEntries" | "maxDependencyDepth" | "maxDependencyNodes" | "proxy" | "githubToken" | "cranMirror" | "pinnedMethods">>;
+type SettingsPersistOverrides = Partial<Pick<Settings, SettingsBoolField | "searchConcurrency" | "archiveGithubMajorGap" | "maxCacheEntries" | "maxDependencyDepth" | "maxDependencyNodes" | "proxy" | "githubToken" | "cranMirror" | "rLibPath" | "pinnedMethods">>;
 
 type SetStatus = (s: string) => void;
 
@@ -40,7 +40,8 @@ export function useSettings(setStatus: SetStatus) {
         applySettings({
           proxy: clean.proxy,
           githubToken: "",
-          cranMirror: clean.cranMirror,
+           cranMirror: clean.cranMirror,
+           rLibPath: clean.rLibPath,
           fullSearch: clean.fullSearch,
           searchConcurrency: clean.searchConcurrency,
           archiveGithubMajorGap: clean.archiveGithubMajorGap,
@@ -95,7 +96,7 @@ export function useSettings(setStatus: SetStatus) {
   }
 
   function acceptSettingValue(
-    field: keyof Pick<Settings, "proxy" | "githubToken" | "cranMirror">,
+    field: keyof Pick<Settings, "proxy" | "githubToken" | "cranMirror" | "rLibPath">,
     value: string,
   ) {
     const nextValue = field === "proxy" ? value : value.trim();
@@ -134,7 +135,8 @@ export function useSettings(setStatus: SetStatus) {
       applySettings({
         proxy: publicSettings.proxy,
         githubToken: "",
-        cranMirror: publicSettings.cranMirror,
+         cranMirror: publicSettings.cranMirror,
+         rLibPath: publicSettings.rLibPath,
         fullSearch: publicSettings.fullSearch,
         searchConcurrency: publicSettings.searchConcurrency,
         archiveGithubMajorGap: publicSettings.archiveGithubMajorGap,
@@ -185,7 +187,8 @@ export function useSettings(setStatus: SetStatus) {
         ...latestSettingsRef.current,
         proxy: publicSettings.proxy,
         githubToken: "",
-        cranMirror: publicSettings.cranMirror,
+         cranMirror: publicSettings.cranMirror,
+         rLibPath: publicSettings.rLibPath,
         fullSearch: publicSettings.fullSearch,
         searchConcurrency: publicSettings.searchConcurrency,
         archiveGithubMajorGap: publicSettings.archiveGithubMajorGap,

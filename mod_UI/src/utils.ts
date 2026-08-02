@@ -63,6 +63,7 @@ export interface PublicSettings {
   proxy: string;
   githubTokenConfigured: boolean;
   cranMirror: string;
+  rLibPath: string;
   fullSearch: boolean;
   searchConcurrency: number;
   archiveGithubMajorGap: number;
@@ -531,7 +532,7 @@ export function githubTokenTextAllowed(value: string) {
   return /^[\x21-\x7E]*$/.test(value);
 }
 
-export function settingsFieldLabel(field: "proxy" | "githubToken" | "cranMirror") {
+export function settingsFieldLabel(field: "proxy" | "githubToken" | "cranMirror" | "rLibPath") {
   switch (field) {
     case "proxy":
       return "网络代理";
@@ -539,6 +540,8 @@ export function settingsFieldLabel(field: "proxy" | "githubToken" | "cranMirror"
       return "GitHub Token";
     case "cranMirror":
       return "CRAN 镜像";
+    case "rLibPath":
+      return "R 库路径";
   }
 }
 
@@ -579,6 +582,7 @@ export function sanitizePublicSettings(value: unknown): PublicSettings {
     proxy: safeText(s.proxy, MAX_RESULT_FIELD_CHARS),
     githubTokenConfigured: safeBoolean(s.githubTokenConfigured),
     cranMirror: safeText(s.cranMirror, MAX_RESULT_FIELD_CHARS) || "https://cloud.r-project.org",
+    rLibPath: safeText(s.rLibPath, MAX_RESULT_FIELD_CHARS),
     fullSearch: safeBoolean(s.fullSearch),
     searchConcurrency: typeof s.searchConcurrency === "number" && Number.isSafeInteger(s.searchConcurrency) && s.searchConcurrency >= 1 && s.searchConcurrency <= 12 ? s.searchConcurrency : 6,
     archiveGithubMajorGap: typeof s.archiveGithubMajorGap === "number" && Number.isSafeInteger(s.archiveGithubMajorGap) && s.archiveGithubMajorGap >= 0 && s.archiveGithubMajorGap <= 10 ? s.archiveGithubMajorGap : 1,

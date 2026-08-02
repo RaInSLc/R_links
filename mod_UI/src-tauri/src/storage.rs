@@ -67,6 +67,8 @@ fn default_max_dependency_nodes() -> usize {
 struct StoredSettings {
     proxy: String,
     cran_mirror: String,
+    #[serde(default)]
+    r_lib_path: String,
     full_search: bool,
     #[serde(default = "default_search_concurrency")]
     search_concurrency: usize,
@@ -121,6 +123,7 @@ impl StoredSettings {
             proxy: self.proxy,
             github_token,
             cran_mirror: self.cran_mirror,
+            r_lib_path: self.r_lib_path,
             full_search: self.full_search,
             search_concurrency: self.search_concurrency,
             archive_github_major_gap: self.archive_github_major_gap,
@@ -148,6 +151,7 @@ impl StoredSettings {
             github_token: String::new(),
             github_token_protected: secrets::protect_string(&settings.github_token)?,
             cran_mirror: settings.cran_mirror,
+            r_lib_path: settings.r_lib_path,
             full_search: settings.full_search,
             search_concurrency: settings.search_concurrency,
             archive_github_major_gap: settings.archive_github_major_gap,
