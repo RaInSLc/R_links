@@ -23,6 +23,7 @@ import {
   extractCanonicalInput,
   dedupePackageInput,
   normalizePackageInputDisplay,
+  parseProjectDependencyFile,
   trimTrailingBlankLines,
   sanitizePublicSettings,
   countScriptCommands,
@@ -262,6 +263,20 @@ describe("sanitizeSearchResponse", () => {
       { stage: "恶意阶段", durationMs: 0 },
     ]);
     expect(sanitizeSearchResponse({ runId: 2, results: [], logs: [], stopped: false }).stageTimings).toEqual([]);
+  });
+});
+
+describe("parseProjectDependencyFile", () => {
+  it("extracts package versions from renv.lock", () => {
+    expect(parseProjectDependencyFile("renv.lock", JSON.stringify({ Packages: { dplyr: { Package: "dplyr", Version: "1.1.4" }, rlang: { Package: "rlang" } } }))).toBe("dplyr 1.1.4\nrlang");
+  });
+
+  it("extracts R DESCRIPTION dependency fields", () => {
+    expect(parseProjectDependencyFile("DESCRIPTION", "Package: demo\nImports: dplyr (>= 1.0),\n    rlang\nDepends: R (>= 4.0)\nLinkingTo: Rcpp")).toBe("dplyr\nrlang\nR\nRcpp");
+  });
+
+  it("preserves Python requirements constraints and ignores directives", () => {
+    expect(parseProjectDependencyFile("requirements.txt", "numpy>=1.26\n# comment\n-r base.txt\npandas==2.2.0 # note")).toBe("numpy>=1.26\npandas==2.2.0");
   });
 });
 

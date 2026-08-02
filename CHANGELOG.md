@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [2026-08-02 14:35:00 +08:00]
+
+### Added
+- **科研配置导入**：工作台文件拖拽和选择导入新增 `renv.lock`、R `DESCRIPTION`、`requirements.txt` 支持。
+- **renv 依赖提取**：读取 `Packages` 节点，保留包名和精确版本。
+- **DESCRIPTION 依赖提取**：解析 `Imports`、`Depends`、`LinkingTo` 字段，移除版本约束并去重。
+- **Python 依赖提取**：保留 `requirements.txt` 版本约束，忽略注释、`-r` 文件引用和索引参数。
+- **导入反馈**：提示解析后的依赖项数量，不再展示配置文件原始字符数。
+
+### Tests
+- **前端**：`npm test -- --run` 通过 139 项，`npm run build` 通过。
+
 ## [2026-08-02 14:15:00 +08:00]
 
 ### Added

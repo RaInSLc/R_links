@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { PanelHeader, Toggle } from "./components";
-import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, buildSearchPlanPreview, dedupePackageInput, normalizePackageInputDisplay, trimTrailingBlankLines, type SmartSuggestion } from "./utils";
+import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, buildSearchPlanPreview, dedupePackageInput, normalizePackageInputDisplay, parseProjectDependencyFile, trimTrailingBlankLines, type SmartSuggestion } from "./utils";
 import type { Ecosystem, Method, Settings } from "./types";
 import { methods, defaultPinnedMethods } from "./types";
 
@@ -107,11 +107,12 @@ export function WorkspaceView({
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
     const name = file.name.toLowerCase();
-    if (!name.endsWith(".txt") && !name.endsWith(".csv") && !name.endsWith(".r")) return;
+    if (!name.endsWith(".txt") && !name.endsWith(".csv") && !name.endsWith(".r") && !name.endsWith("renv.lock") && !name.endsWith("description")) return;
     const text = await file.text();
     if (text) {
-      onInputChange(text, "clipboard");
-      setFileLoadHint(`已加载文件: ${file.name} (${text.length} 字符)`);
+      const parsed = parseProjectDependencyFile(file.name, text) ?? text;
+      onInputChange(parsed, "clipboard");
+      setFileLoadHint(`已加载文件: ${file.name} (${parsed.split(/\r?\n/).filter(Boolean).length} 项)`);
       setTimeout(() => setFileLoadHint(null), 4000);
     }
   }
@@ -124,8 +125,9 @@ export function WorkspaceView({
     if (!file) return;
     const text = await file.text();
     if (text) {
-      onInputChange(text, "clipboard");
-      setFileLoadHint(`已加载文件: ${file.name} (${text.length} 字符)`);
+      const parsed = parseProjectDependencyFile(file.name, text) ?? text;
+      onInputChange(parsed, "clipboard");
+      setFileLoadHint(`已加载文件: ${file.name} (${parsed.split(/\r?\n/).filter(Boolean).length} 项)`);
       setTimeout(() => setFileLoadHint(null), 4000);
     }
   }
@@ -253,7 +255,7 @@ export function WorkspaceView({
             onDragLeave={() => setDragOver(false)}
             onDrop={handleFileDrop}
             className={dragOver ? "drag-over" : ""}
-            placeholder={"每行一个包，例如：\nSeurat 5.2.1\nGSVA 1.50\nbuenrostrolab/FigR\nhttps://example.org/pkg_1.0.tar.gz\n\n可拖放 .txt / .csv / .r 文件"}
+             placeholder={"每行一个包，例如：\nSeurat 5.2.1\nGSVA 1.50\nbuenrostrolab/FigR\nhttps://example.org/pkg_1.0.tar.gz\n\n可拖放 .txt / .csv / .r / renv.lock / DESCRIPTION / requirements.txt"}
             aria-label="R 包输入列表"
             aria-describedby={inputTooLarge ? "input-limit-warning" : undefined}
             aria-invalid={inputTooLarge}

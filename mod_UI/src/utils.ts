@@ -624,6 +624,49 @@ export function sanitizePublicSettings(value: unknown): PublicSettings {
   };
 }
 
+export function parseProjectDependencyFile(fileName: string, text: string): string | null {
+  const name = fileName.toLowerCase();
+  if (name.endsWith("renv.lock")) {
+    try {
+      const raw = JSON.parse(text) as { Packages?: Record<string, { Package?: string; Version?: string }> };
+      const packages = Object.values(raw.Packages ?? {})
+        .map((item) => {
+          const packageName = typeof item?.Package === "string" ? item.Package.trim() : "";
+          const version = typeof item?.Version === "string" ? item.Version.trim() : "";
+          return packageName ? `${packageName}${version ? ` ${version}` : ""}` : "";
+        })
+        .filter(Boolean);
+      return packages.length > 0 ? packages.join("\n") : null;
+    } catch {
+      return null;
+    }
+  }
+  if (name.endsWith("description")) {
+    const fields = new Set(["imports", "depends", "linkingto"]);
+    const packages: string[] = [];
+    let currentField = "";
+    for (const line of text.split(/\r?\n/)) {
+      const field = line.match(/^([A-Za-z][A-Za-z0-9.-]*):\s*(.*)$/);
+      if (field) {
+        currentField = field[1].toLowerCase();
+        if (!fields.has(currentField)) continue;
+        packages.push(...field[2].split(",").map((item) => item.trim()));
+        continue;
+      }
+      if (fields.has(currentField) && /^\s+/.test(line)) packages.push(...line.trim().split(/,\s*/));
+    }
+    const normalized = packages.map((item) => item.replace(/\s*\([^)]*\)/g, "").trim()).filter(Boolean);
+    return normalized.length > 0 ? [...new Set(normalized)].join("\n") : null;
+  }
+  if (name.endsWith("requirements.txt")) {
+    const packages = text.split(/\r?\n/)
+      .map((line) => line.replace(/\s+#.*$/, "").trim())
+      .filter((line) => line && !line.startsWith("#") && !line.startsWith("-") && !line.startsWith("-r "));
+    return packages.length > 0 ? packages.join("\n") : null;
+  }
+  return null;
+}
+
 export function sanitizeHistoryRecord(value: unknown): HistoryRecord {
   const record = asRecord(value);
   return {
