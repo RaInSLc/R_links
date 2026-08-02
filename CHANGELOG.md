@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## [2026-08-02 15:30:00 +08:00]
+
+### Added
+- **系统依赖脚本导出**：R/RSPM 工作台新增 `setup_sysreqs.sh` 和 `setup_sysreqs.ps1` 导出按钮。
+- **常见依赖映射**：针对 `sf`、`terra`、`xml2`、`openssl`、`gsl` 等常见编译依赖生成 apt/yum/Homebrew 或 Windows Rtools/Chocolatey 准备提示。
+- **安全执行边界**：脚本仅导出，不在桌面应用内自动执行；生成文件包含人工复核提示。
+
+## [2026-08-02 15:15:00 +08:00]
+
+### Fixed
+- **跨生态下载一致性**：Pip/Conda 现在生成并下载对应 Shell 脚本，不再使用 `install_packages.R` 文件名。
+- **包装器路由**：Pip/Conda 的 PowerShell 包装器调用 Bash 脚本，Bash 下载直接使用生态脚本内容，不再错误调用 `Rscript`。
+- **多核编译**：R/RSPM 脚本可选注入 `options(Ncpus = parallel::detectCores())`，Pip/Conda 不注入 R 语句。
+
+### Tests
+- **前端**：`npm test -- --run` 通过 143 项。
+- **Rust**：新增多核脚本测试，完整 Rust 测试待本轮最终验证。
+
 ## [2026-08-02 14:50:00 +08:00]
 
 ### Fixed

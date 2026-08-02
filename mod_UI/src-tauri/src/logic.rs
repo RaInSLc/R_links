@@ -537,6 +537,9 @@ fn generate_script_inner(
     }
 
     let mut output = Vec::new();
+    if options.parallel_install {
+        output.push("options(Ncpus = parallel::detectCores())".to_string());
+    }
     if binary_mirror {
         output.push(format!(
             "# [RSPM 二进制镜像: {mirror} | 由 R 按当前平台选择预编译包]"
@@ -3438,5 +3441,11 @@ mod tests {
         )
         .expect("自定义 R 库路径应生成脚本");
         assert!(script.contains("lib = \"D:/R/project-library\""));
+    }
+
+    #[test]
+    fn parallel_install_adds_ncpus_option() {
+        let script = generate_script("dplyr", &GenerateOptions { method: "base".to_string(), parallel_install: true, ..Default::default() }, &[]).expect("应生成脚本");
+        assert!(script.contains("options(Ncpus = parallel::detectCores())"));
     }
 }

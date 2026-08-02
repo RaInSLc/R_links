@@ -218,6 +218,8 @@ pub struct GenerateOptions {
     pub archive_github_major_gap: usize,
     #[serde(default)]
     pub append_verify: bool,
+    #[serde(default)]
+    pub parallel_install: bool,
 }
 
 pub fn default_archive_github_major_gap() -> usize {
@@ -234,6 +236,7 @@ impl Default for GenerateOptions {
             r_lib_path: String::new(),
             archive_github_major_gap: default_archive_github_major_gap(),
             append_verify: false,
+            parallel_install: false,
         }
     }
 }

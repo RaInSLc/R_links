@@ -21,6 +21,7 @@ interface WorkspaceViewProps {
   installDependencies: boolean;
   showRemoteVersion: boolean;
   verifyInstall: boolean;
+  parallelInstall: boolean;
   settings: Settings;
   smartSuggestions: SmartSuggestion[];
   script: string;
@@ -45,6 +46,7 @@ interface WorkspaceViewProps {
   onInstallDependenciesChange: (v: boolean) => void;
   onShowRemoteVersionChange: (v: boolean) => void;
   onVerifyInstallChange: (v: boolean) => void;
+  onParallelInstallChange: (v: boolean) => void;
   onFullSearchChange: (v: boolean) => void;
   onUseCacheChange: (v: boolean) => void;
   onTempFilter: (text: string, mode: "chars" | "lines") => void;
@@ -53,6 +55,7 @@ interface WorkspaceViewProps {
   onDownloadScript: () => void;
   onDownloadPowerShellScript: () => void;
   onDownloadBashScript: () => void;
+  onDownloadSystemRequirements: (kind: "bash" | "powershell") => void;
   copyWithLineNumbers: boolean;
   onCopyWithLineNumbersChange: (v: boolean) => void;
   isMethodDisabled: (candidate: Method) => boolean;
@@ -60,7 +63,7 @@ interface WorkspaceViewProps {
 
 export function WorkspaceView({
   input, inputTooLarge, inputProfile, method,
-  conditional, installDependencies, showRemoteVersion, verifyInstall, settings,
+  conditional, installDependencies, showRemoteVersion, verifyInstall, parallelInstall, settings,
   ecosystem = "r", pipIndex = "", condaChannels = [], rBinaryMirror = "", onEcosystemChange = () => {}, onPipIndexChange = () => {}, onCondaChannelsChange = () => {}, onRBinaryMirrorChange = () => {},
   smartSuggestions,
   script, scriptTooLarge,
@@ -68,9 +71,9 @@ export function WorkspaceView({
   searching, paused, openingSearchTabs,
   onInputChange, onPaste, onClear, onOpenSearchTabs, onStartSearch, onStopSearch,
   onMethodChange, pinnedMethods, onPinnedMethodsChange, onApplySmartSuggestion, onConditionalChange, onInstallDependenciesChange,
-  onShowRemoteVersionChange, onVerifyInstallChange, onFullSearchChange,
+  onShowRemoteVersionChange, onVerifyInstallChange, onParallelInstallChange, onFullSearchChange,
   onUseCacheChange, onTempFilter,
-  onCopyScript, onCleanComments, onDownloadScript, onDownloadPowerShellScript, onDownloadBashScript, onTogglePause = () => {},
+  onCopyScript, onCleanComments, onDownloadScript, onDownloadPowerShellScript, onDownloadBashScript, onDownloadSystemRequirements, onTogglePause = () => {},
   copyWithLineNumbers, onCopyWithLineNumbersChange, isMethodDisabled,
 }: WorkspaceViewProps) {
   const [filterText, setFilterText] = useState("");
@@ -546,6 +549,7 @@ export function WorkspaceView({
               <Toggle checked={settings.fullSearch} label="全量检索" description="命中后仍继续查询 GitHub" onChange={onFullSearchChange} />
               <Toggle checked={settings.useCache} label="使用缓存" description="使用包结果缓存" onChange={onUseCacheChange} />
               <Toggle checked={verifyInstall} label="安装后验证" description="脚本末尾追加安装结果验证代码" onChange={onVerifyInstallChange} />
+              <Toggle checked={parallelInstall} label="多核编译" description="启用 parallel::detectCores() 加速源码包安装" onChange={onParallelInstallChange} />
             </div>
             <div className="strategy-drawer-actions">
               <button type="button" className="button primary" onClick={() => setStrategyExpanded(false)}>
@@ -573,7 +577,7 @@ export function WorkspaceView({
               移除注释
             </button>
             <button className="button ghost script-toolbar-btn" onClick={onDownloadScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+S">
-              下载 .R<span className="kbd-hint">Ctrl+S</span>
+              下载 {ecosystem === "r" || ecosystem === "r-binary" ? ".R" : ecosystem === "pip" ? ".sh" : "Conda .sh"}<span className="kbd-hint">Ctrl+S</span>
             </button>
             <button className="button ghost script-toolbar-btn" onClick={onDownloadPowerShellScript} disabled={!script || script === "等待输入..." || scriptTooLarge}>
               下载 .ps1
@@ -581,6 +585,14 @@ export function WorkspaceView({
             <button className="button ghost script-toolbar-btn" onClick={onDownloadBashScript} disabled={!script || script === "等待输入..." || scriptTooLarge}>
               下载 .sh
             </button>
+            {(ecosystem === "r" || ecosystem === "r-binary") && <>
+              <button className="button ghost script-toolbar-btn" onClick={() => onDownloadSystemRequirements("bash")} disabled={!input.trim()}>
+                系统依赖 .sh
+              </button>
+              <button className="button ghost script-toolbar-btn" onClick={() => onDownloadSystemRequirements("powershell")} disabled={!input.trim()}>
+                系统依赖 .ps1
+              </button>
+            </>}
             <button className="button primary script-toolbar-btn" onClick={onCopyScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+Shift+C">
               复制脚本<span className="kbd-hint">Ctrl+⇧C</span>
             </button>

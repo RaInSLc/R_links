@@ -18,6 +18,7 @@ describe("WorkspaceView", () => {
     installDependencies: false,
     showRemoteVersion: false,
     verifyInstall: false,
+    parallelInstall: false,
     settings: {
       ...defaultSettings,
       fullSearch: false,
@@ -46,6 +47,7 @@ describe("WorkspaceView", () => {
     onInstallDependenciesChange: vi.fn(),
     onShowRemoteVersionChange: vi.fn(),
     onVerifyInstallChange: vi.fn(),
+    onParallelInstallChange: vi.fn(),
     onFullSearchChange: vi.fn(),
     onUseCacheChange: vi.fn(),
     onTempFilter: vi.fn(),
@@ -54,6 +56,7 @@ describe("WorkspaceView", () => {
     onDownloadScript: vi.fn(),
     onDownloadPowerShellScript: vi.fn(),
     onDownloadBashScript: vi.fn(),
+    onDownloadSystemRequirements: vi.fn(),
     copyWithLineNumbers: false,
     onCopyWithLineNumbersChange: vi.fn(),
     isMethodDisabled: () => false,

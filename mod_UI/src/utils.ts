@@ -678,6 +678,39 @@ export function extractSystemRequirements(fileName: string, text: string): strin
   return value || null;
 }
 
+export function generateMultiEcosystemScript(input: string, ecosystem: "pip" | "conda", pipIndex: string, condaChannels: string[]) {
+  const packages = input.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#") && !line.startsWith("-"));
+  if (packages.length === 0) return "等待输入...";
+  if (ecosystem === "pip") {
+    const index = pipIndex.trim().replace(/\/+$/, "");
+    const lines = packages.map((pkg) => `pip install ${pkg}${index ? ` --index-url ${index}` : ""}`);
+    return `#!/usr/bin/env bash\nset -e\n${lines.join("\n")}\n`;
+  }
+  const channels = condaChannels.map((channel) => channel.trim()).filter(Boolean);
+  const channelArgs = channels.map((channel) => `-c ${channel}`).join(" ");
+  return `${packages.map((pkg) => `conda install ${channelArgs} ${pkg}`.replace(/\s+/g, " ").trim()).join("\n")}\n`;
+}
+
+export function generateSystemRequirementsScript(input: string, kind: "bash" | "powershell") {
+  const names = new Set(input.split(/\r?\n/).map((line) => line.trim().toLowerCase()).filter(Boolean));
+  const linuxPackages = new Set<string>();
+  const windowsPackages = new Set<string>();
+  if (["sf", "terra", "rgdal", "rgeos"].some((name) => names.has(name))) {
+    linuxPackages.add("libgdal-dev"); linuxPackages.add("libgeos-dev"); linuxPackages.add("libproj-dev");
+    windowsPackages.add("OSGeo4W (GDAL/GEOS/PROJ)");
+  }
+  if (["xml2", "rvest", "curl"].some((name) => names.has(name))) linuxPackages.add("libxml2-dev");
+  if (["openssl", "httr", "curl"].some((name) => names.has(name))) linuxPackages.add("libssl-dev");
+  if (["gsl"].some((name) => names.has(name))) linuxPackages.add("libgsl-dev");
+  if (kind === "bash") {
+    const packages = [...linuxPackages];
+    return `#!/usr/bin/env bash\nset -e\n# Generated system dependency preparation; review before running.\nif command -v apt-get >/dev/null 2>&1; then\n  sudo apt-get update\n  ${packages.length ? `sudo apt-get install -y ${packages.join(" ")}` : "echo 'No known system requirements detected.'"}\nelif command -v yum >/dev/null 2>&1; then\n  ${packages.length ? `sudo yum install -y ${packages.join(" ")}` : "echo 'No known system requirements detected.'"}\nelif command -v brew >/dev/null 2>&1; then\n  echo 'Review the detected requirements and install matching Homebrew formulae.'\nelse\n  echo 'No supported package manager detected; install system requirements manually.'\nfi\n`;
+  }
+  return `# Generated system dependency preparation; review before running.\n$ErrorActionPreference = "Stop"\nif (-not (Get-Command choco -ErrorAction SilentlyContinue)) { Write-Warning "Chocolatey not found. Install Rtools and required libraries manually."; exit 0 }\n${windowsPackages.size ? `choco install ${[...windowsPackages].join(" ")} -y` : "Write-Host 'No known system requirements detected.'"}\n`;
+}
+
 export function sanitizeHistoryRecord(value: unknown): HistoryRecord {
   const record = asRecord(value);
   return {

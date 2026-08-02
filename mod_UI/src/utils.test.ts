@@ -25,6 +25,8 @@ import {
   normalizePackageInputDisplay,
   parseProjectDependencyFile,
   extractSystemRequirements,
+  generateMultiEcosystemScript,
+  generateSystemRequirementsScript,
   trimTrailingBlankLines,
   sanitizePublicSettings,
   countScriptCommands,
@@ -288,6 +290,27 @@ describe("extractSystemRequirements", () => {
 
   it("ignores system requirements in unrelated files", () => {
     expect(extractSystemRequirements("requirements.txt", "SystemRequirements: gcc")).toBeNull();
+  });
+});
+
+describe("generateMultiEcosystemScript", () => {
+  it("generates pip install commands with the configured index", () => {
+    expect(generateMultiEcosystemScript("numpy==1.26\npandas", "pip", "https://pypi.org/simple", [])).toContain("pip install numpy==1.26 --index-url https://pypi.org/simple");
+  });
+
+  it("generates conda install commands with configured channels", () => {
+    expect(generateMultiEcosystemScript("numpy=1.26", "conda", "", ["conda-forge", "bioconda"])).toContain("conda install -c conda-forge -c bioconda numpy=1.26");
+  });
+});
+
+describe("generateSystemRequirementsScript", () => {
+  it("generates Linux dependency preparation commands", () => {
+    expect(generateSystemRequirementsScript("sf\nxml2", "bash")).toContain("libgdal-dev");
+    expect(generateSystemRequirementsScript("sf\nxml2", "bash")).toContain("libxml2-dev");
+  });
+
+  it("generates a reviewable Windows preparation script", () => {
+    expect(generateSystemRequirementsScript("sf", "powershell")).toContain("Rtools");
   });
 });
 
