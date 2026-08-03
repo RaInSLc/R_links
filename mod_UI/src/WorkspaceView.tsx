@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { PanelHeader, Toggle } from "./components";
-import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS, buildSearchPlanPreview, dedupePackageInput, extractSystemRequirements, normalizePackageInputDisplay, parseProjectDependencyFile, trimTrailingBlankLines, type SmartSuggestion } from "./utils";
+import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, buildSearchPlanPreview, dedupePackageInput, extractSystemRequirements, normalizePackageInputDisplay, parseProjectDependencyFile, trimTrailingBlankLines, type SmartSuggestion } from "./utils";
 import type { Ecosystem, Method, Settings } from "./types";
 import { methods, defaultPinnedMethods } from "./types";
+import { ScriptPreview } from "./ScriptPreview";
 
 interface WorkspaceViewProps {
   input: string;
@@ -79,7 +80,6 @@ export function WorkspaceView({
   const [filterText, setFilterText] = useState("");
   const [strategyExpanded, setStrategyExpanded] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [scriptCollapsed, setScriptCollapsed] = useState(false);
   const [pasteHint, setPasteHint] = useState(false);
   const [rScriptHint, setRScriptHint] = useState<string | null>(null);
   const [fileLoadHint, setFileLoadHint] = useState<string | null>(null);
@@ -560,103 +560,20 @@ export function WorkspaceView({
         </div>
       )}
 
-      <section className="panel script-panel">
-        <header className="panel-header" style={{ gridTemplateColumns: "auto auto 1fr auto" }}>
-          <span>03</span>
-          <h2>脚本预览</h2>
-          <div className="script-toolbar">
-            <label className="line-num-toggle" title="复制时在每行前添加行号">
-              <input
-                type="checkbox"
-                checked={copyWithLineNumbers}
-                onChange={(e) => onCopyWithLineNumbersChange(e.target.checked)}
-              />
-              <span>行号</span>
-            </label>
-            <button className="button ghost script-toolbar-btn" onClick={onCleanComments} disabled={scriptTooLarge}>
-              移除注释
-            </button>
-            <button className="button ghost script-toolbar-btn" onClick={onDownloadScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+S">
-              下载 {ecosystem === "r" || ecosystem === "r-binary" ? ".R" : ecosystem === "pip" ? ".sh" : "Conda .sh"}<span className="kbd-hint">Ctrl+S</span>
-            </button>
-            <button className="button ghost script-toolbar-btn" onClick={onDownloadPowerShellScript} disabled={!script || script === "等待输入..." || scriptTooLarge}>
-              下载 .ps1
-            </button>
-            <button className="button ghost script-toolbar-btn" onClick={onDownloadBashScript} disabled={!script || script === "等待输入..." || scriptTooLarge}>
-              下载 .sh
-            </button>
-            {(ecosystem === "r" || ecosystem === "r-binary") && <>
-              <button className="button ghost script-toolbar-btn" onClick={() => onDownloadSystemRequirements("bash")} disabled={!input.trim()}>
-                系统依赖 .sh
-              </button>
-              <button className="button ghost script-toolbar-btn" onClick={() => onDownloadSystemRequirements("powershell")} disabled={!input.trim()}>
-                系统依赖 .ps1
-              </button>
-            </>}
-            <button className="button primary script-toolbar-btn" onClick={onCopyScript} disabled={!script || script === "等待输入..." || scriptTooLarge} title="Ctrl+Shift+C">
-              复制脚本<span className="kbd-hint">Ctrl+⇧C</span>
-            </button>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <small>
-              {scriptCommandCount > 0 ? (() => {
-                const cranCount = (script.match(/install\.packages/g) || []).length;
-                const biocCount = (script.match(/BiocManager::install/g) || []).length;
-                const githubCount = (script.match(/(?:remotes|devtools)::install_github/g) || []).length;
-                return `${scriptCommandCount} 条 · CRAN ${cranCount} · Bioc ${biocCount} · GitHub ${githubCount}`;
-              })() : "R Script"}
-            </small>
-            <button
-              type="button"
-              className="button ghost script-toolbar-btn"
-              onClick={() => setScriptCollapsed((v) => !v)}
-              title={scriptCollapsed ? "展开脚本" : "折叠脚本"}
-            >
-              {scriptCollapsed ? "▴" : "▾"}
-            </button>
-          </div>
-        </header>
-        {!scriptCollapsed && (
-        <pre aria-label="生成的 R 脚本" tabIndex={0}>
-          {script === "等待输入..." || !script ? (
-            script
-          ) : (
-            script.split("\n").map((line, i) => (
-              <div className="script-line" key={i}>
-                <span className="line-no" aria-hidden="true">{i + 1}</span>
-                <span className="line-text">{highlightRLine(line)}</span>
-              </div>
-            ))
-          )}
-        </pre>
-        )}
-        {scriptTooLarge && (
-          <div className="inline-warning">
-            脚本内容超出限制：最多 {MAX_SCRIPT_CHARS} 字节。
-          </div>
-        )}
-      </section>
+      <ScriptPreview
+        ecosystem={ecosystem}
+        script={script}
+        scriptTooLarge={scriptTooLarge}
+        scriptCommandCount={scriptCommandCount}
+        copyWithLineNumbers={copyWithLineNumbers}
+        onCopyWithLineNumbersChange={onCopyWithLineNumbersChange}
+        onCleanComments={onCleanComments}
+        onDownloadScript={onDownloadScript}
+        onDownloadPowerShellScript={onDownloadPowerShellScript}
+        onDownloadBashScript={onDownloadBashScript}
+        onDownloadSystemRequirements={onDownloadSystemRequirements}
+        onCopyScript={onCopyScript}
+      />
     </div>
   );
-}
-
-function highlightRLine(line: string) {
-  const trimmed = line.trimStart();
-  if (trimmed.startsWith("#")) {
-    return <span className="r-comment">{line}</span>;
-  }
-  const regex = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(\b(?:if|else|for|while|function|return|TRUE|FALSE|NULL|NA|library|require|cat|message|warning|stop|invisible)\b)|([A-Za-z_][A-Za-z0-9_.]*(?=\s*\())|(\b\d+\.?\d*\b)/g;
-  const tokens: { text: string; cls: string }[] = [];
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = regex.exec(line)) !== null) {
-    if (m.index > last) tokens.push({ text: line.slice(last, m.index), cls: "" });
-    if (m[1]) tokens.push({ text: m[1], cls: "r-string" });
-    else if (m[2]) tokens.push({ text: m[2], cls: "r-keyword" });
-    else if (m[3]) tokens.push({ text: m[3], cls: "r-func" });
-    else if (m[4]) tokens.push({ text: m[4], cls: "r-number" });
-    last = regex.lastIndex;
-  }
-  if (last < line.length) tokens.push({ text: line.slice(last), cls: "" });
-  return tokens.map((t, i) => t.cls ? <span key={i} className={t.cls}>{t.text}</span> : t.text);
 }

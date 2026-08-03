@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-08-03 23:20:00 +08:00]
+
+### Refactored
+- **前端页面拆分第一阶段**：将 `ReportView.tsx` 的依赖图和依赖列表视图抽离至 `DependencyViews.tsx`，将 `WorkspaceView.tsx` 的脚本预览与 R 语法高亮抽离至 `ScriptPreview.tsx`，保持页面对外 props 和功能行为不变。
+- **生产文件规模**：`ReportView.tsx` 从 2036 行降至 1586 行，`WorkspaceView.tsx` 从 660 行降至 578 行；新增子组件分别为 208 行和 65 行。
+
+### Tests
+- **前端**：`npm test -- --run` 通过 150 项。
+- **构建**：`npm run build` 通过。
+
 ## [2026-08-03 02:30:00 +08:00]
 
 ### Added
