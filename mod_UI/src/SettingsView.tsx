@@ -4,6 +4,7 @@ import { mirrors, defaultSettings, defaultInputRules, methods } from "./types";
 import type { InputRules, Settings } from "./types";
 import { useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { CacheSettingsPanel, type PackageCacheEntry } from "./CacheSettingsPanel";
 
 interface SettingsViewProps {
   settings: Settings;
@@ -51,19 +52,6 @@ interface SettingsViewProps {
   onReplaceInputRules: (rules: InputRules) => void;
   onSaveInputRules: () => void;
   inputRulesBusy: boolean;
-}
-
-interface PackageCacheEntry {
-  packageName: string;
-  source: string;
-  version: string;
-  repository: string;
-  realName: string;
-  cachedAt: string;
-  verifiedCount: number;
-  upVotes: number;
-  downVotes: number;
-  invalidated: boolean;
 }
 
 type SettingsMenuKey = "network" | "strategy" | "cache" | "input" | "appearance" | "backup";
@@ -175,7 +163,6 @@ export function SettingsView({
   const [cacheEntries, setCacheEntries] = useState<PackageCacheEntry[]>([]);
   const [cacheBusy, setCacheBusy] = useState(false);
   const fileConfigRef = useRef<HTMLInputElement>(null);
-  const fileCacheRef = useRef<HTMLInputElement>(null);
 
   async function handleTestSpeed() {
     setSpeedTesting(true);
@@ -848,9 +835,25 @@ export function SettingsView({
 
       {activeMenu === "cache" && (
       <>
-
-      <section className="panel settings-panel">
-         <PanelHeader step="缓存" title="包结果缓存" meta="避免重复检索" />
+      <CacheSettingsPanel
+         settings={settings}
+         cacheEntries={cacheEntries}
+         cacheBusy={cacheBusy}
+         toolchainBusy={toolchainBusy}
+         toolchainChecks={toolchainChecks}
+         onLoadCache={() => void loadCacheEntries()}
+         onClearInvalidated={() => void handleClearInvalidatedCache()}
+         onExportCache={() => void handleExportCache()}
+         onImportCache={(event) => void handleImportCache(event)}
+         onDeleteCacheEntry={(entry) => void handleDeleteCacheEntry(entry)}
+         onCheckToolchain={() => void handleCheckToolchain()}
+         onUseCacheChange={onUseCacheChange}
+         onMaxCacheEntriesChange={onMaxCacheEntriesChange}
+         onClearCache={onClearCache}
+         onExportDiagnostics={onExportDiagnostics}
+      />
+      {/* legacy cache markup removed */}
+      {/*
          <div className="field" style={{ margin: "0 17px", marginTop: "12px" }}>
            <span>缓存条目</span>
            <small>显示当前有效缓存；失效条目不会参与离线命中。缓存默认保留 7 天。</small>
@@ -942,7 +945,7 @@ export function SettingsView({
             <button className="button ghost" onClick={onExportDiagnostics}>导出诊断</button>
           </div>
         </div>
-      </section>
+       </section> */}
       </>
       )}
       </div>

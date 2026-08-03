@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-08-03 23:40:00 +08:00]
+
+### Refactored
+- **设置缓存区域拆分**：新增 `CacheSettingsPanel.tsx`，承接缓存列表、缓存导入导出、失效清理、R 工具链检查和缓存容量配置；`SettingsView` 保持原有对外接口和异步行为。
+
+### Tests
+- **前端**：`npm test -- --run` 通过 150 项。
+- **构建**：`npm run build` 通过。
+
 ## [2026-08-03 23:20:00 +08:00]
 
 ### Refactored
