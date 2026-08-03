@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-08-03 23:45:00 +08:00]
+
+### Refactored
+- **设置导入校验拆分**：新增 `settingsSanitize.ts`，承接设置备份和输入规则导入的类型、范围、正则及方法白名单校验；`SettingsView.tsx` 从 950 行降至 877 行。
+
+### Tests
+- **前端**：`npm test -- --run` 通过 150 项。
+- **构建**：`npm run build` 通过。
+
 ## [2026-08-03 23:55:00 +08:00]
 
 ### Refactored
