@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## [2026-08-04 00:10:00 +08:00]
+
+### Refactored
+- **单文件规模约束推进**：新增 `mod_UI/src-tauri/src/search_multi/tests.rs`，将 Conda/Pip 多生态检索单元测试移出实现文件；`search_multi.rs` 从 535 行降至 478 行，满足生产 Rust 文件小于 500 行。
+- **设置逻辑模块化**：新增 `mod_UI/src/settingsSanitize.ts`，将设置和输入规则导入校验从页面组件移出。
+
+### Tests
+- **Rust**：`cargo test` 通过 206 项。
+- **前端**：`npm test -- --run` 通过 150 项，`npm run build` 通过。
+
+## [2026-08-03]
+
+### Refactored
+- **Rust 模块入口拆分**：将 `src-tauri/src` 中超长模块的实现迁移至独立实现文件，保留原 Tauri command、函数签名和模块行为；入口 Rust 文件均控制在 500 行以内。
+
+### Tests
+- **Rust**：`cargo test` 通过 206 项。
+
 ## [2026-08-03 23:45:00 +08:00]
 
 ### Refactored
