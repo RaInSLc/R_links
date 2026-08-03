@@ -582,7 +582,7 @@ function AppContent() {
       return;
     }
     if (ecosystem === "pip" || ecosystem === "conda") {
-      void startMultiEcosystemSearch(input, ecosystem, pipIndex, condaChannels, inputTooLarge, () => setView("report"));
+      void startMultiEcosystemSearch(input, ecosystem, settings, inputTooLarge, () => setView("report"));
       return;
     }
     startSearch(input, settings, inputTooLarge, () => setView("report"), () => setMethod("auto"));
@@ -724,7 +724,7 @@ function AppContent() {
                searching={searching} paused={paused} openingSearchTabs={openingSearchTabs}
               onInputChange={acceptInputValue} onPaste={pasteInput}
               onClear={() => acceptInputValue("", "manual")}
-              onOpenSearchTabs={() => openSearchTabs(input, inputTooLarge, inputRules.separators)}
+              onOpenSearchTabs={() => openSearchTabs(input, inputTooLarge, ecosystem, inputRules.separators)}
                onStartSearch={handleStartSearch} onStopSearch={stopSearch} onTogglePause={togglePauseSearch}
               onMethodChange={setMethod}
               pinnedMethods={pinnedMethods}

@@ -751,7 +751,7 @@ fn cache_entry_matches_result(entry: &PackageCacheEntry, result: &SearchResult) 
         && entry.real_name.eq_ignore_ascii_case(&result.real_name)
 }
 
-fn cache_entry_from_result(
+pub fn cache_entry_from_result(
     result: &SearchResult,
     existing: Option<&PackageCacheEntry>,
     cached_at: String,
@@ -784,7 +784,7 @@ fn cache_entry_from_result(
     }
 }
 
-fn build_client(settings: &Settings) -> Result<Client, String> {
+pub fn build_client(settings: &Settings) -> Result<Client, String> {
     let mut builder = Client::builder()
         .user_agent("RLinkModUI/0.1")
         .connect_timeout(Duration::from_secs(15))

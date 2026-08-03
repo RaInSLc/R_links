@@ -180,12 +180,20 @@ export function useSearch(setStatus: SetStatus) {
   async function startMultiEcosystemSearch(
     input: string,
     ecosystem: "pip" | "conda",
-    pipIndex: string,
-    condaChannels: string[],
+    settings: Settings,
     inputTooLarge: boolean,
     onViewReport: () => void,
   ) {
     if (!input.trim() || searchingRef.current || inputTooLarge) return;
+    const runId = nextSearchRunId();
+    activeSearchRunId.current = runId;
+    try {
+      await listenerReadyRef.current;
+    } catch (error) {
+      activeSearchRunId.current = 0;
+      setStatus(`检索监听初始化失败: ${formatError(error)}`);
+      return;
+    }
     searchingRef.current = true;
     setSearching(true);
     setPaused(false);
@@ -198,19 +206,25 @@ export function useSearch(setStatus: SetStatus) {
     onViewReport();
     searchStartTime.current = Date.now();
     try {
-      const response = await invoke<SearchResponse>("search_multi_ecosystem", { input, ecosystem, pipIndex, condaChannels });
+      const response = await invoke<SearchResponse>("search_multi_ecosystem", { runId, input, ecosystem, settings });
       const clean = sanitizeSearchResponse(response);
+      if (clean.runId !== activeSearchRunId.current) return;
       setResults(clean.results);
       setLogs(clean.logs);
       setDependencyGraph(null);
-      setStatus(ecosystem === "pip" ? "Python 包检索完成" : "Conda 包检索完成");
+      setStatus(clean.stopped ? "检索任务已停止" : (ecosystem === "pip" ? "Python 包检索完成" : "Conda 包检索完成"));
     } catch (error) {
-      setStatus(`${ecosystem === "pip" ? "Python" : "Conda"} 包检索失败: ${formatError(error)}`);
+      if (runId === activeSearchRunId.current) {
+        setStatus(`${ecosystem === "pip" ? "Python" : "Conda"} 包检索失败: ${formatError(error)}`);
+      }
     } finally {
-      setSearchDuration(Date.now() - searchStartTime.current);
-      setSearching(false);
-      setPaused(false);
-      searchingRef.current = false;
+      if (runId === activeSearchRunId.current) {
+        setSearchDuration(Date.now() - searchStartTime.current);
+        setSearching(false);
+        setPaused(false);
+        searchingRef.current = false;
+        activeSearchRunId.current = 0;
+      }
     }
   }
 
@@ -259,7 +273,7 @@ export function useSearch(setStatus: SetStatus) {
     }
   }
 
-  async function openSearchTabs(input: string, inputTooLarge: boolean, separators?: string[]) {
+  async function openSearchTabs(input: string, inputTooLarge: boolean, ecosystem?: string, separators?: string[]) {
     if (browserOpenInProgress.current) return;
     if (inputTooLarge) {
       setStatus("输入超出限制，无法打开浏览器搜索");
@@ -289,7 +303,7 @@ export function useSearch(setStatus: SetStatus) {
     try {
       for (let i = 0; i < names.length; i += 1) {
         try {
-          await invoke("open_package_search", { packageName: names[i] });
+          await invoke("open_package_search", { packageName: names[i], ecosystem: ecosystem || "r" });
           opened += 1;
         } catch (error) {
           failed += 1;

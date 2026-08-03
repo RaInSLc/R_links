@@ -514,12 +514,31 @@ fn import_package_cache(app: AppHandle, content: String) -> Result<usize, String
 
 #[tauri::command]
 async fn search_multi_ecosystem(
+    app: AppHandle,
+    state: State<'_, SearchState>,
+    run_id: u64,
     input: String,
     ecosystem: String,
-    pip_index: String,
-    conda_channels: Vec<String>,
+    settings: Settings,
 ) -> Result<SearchResponse, String> {
-    search_multi::search(&input, &ecosystem, &pip_index, &conda_channels).await
+    logic::validate_input_size(&input)?;
+    let run = state.try_begin(run_id)?;
+    let existing = load_existing_settings_for_runtime(&app)?;
+    let settings = merge_runtime_settings(settings, &existing)?;
+    let result = search_multi::search(
+        &app,
+        run_id,
+        run.cancelled(),
+        &state,
+        &input,
+        &ecosystem,
+        &settings.pip_index,
+        &settings.conda_channels,
+        &settings,
+    )
+    .await;
+    drop(run);
+    result
 }
 
 #[tauri::command]
@@ -553,8 +572,9 @@ fn open_package_search(
     app: AppHandle,
     limiter: State<'_, BrowserOpenLimiter>,
     package_name: String,
+    ecosystem: Option<String>,
 ) -> Result<(), String> {
-    let url = browser_search_url_for_package(&package_name)?;
+    let url = browser_search_url_for_package(&package_name, ecosystem.as_deref())?;
     limiter.try_acquire(Instant::now())?;
     tauri_plugin_opener::OpenerExt::opener(&app)
         .open_url(url, None::<&str>)
@@ -579,14 +599,19 @@ fn open_package_page(
         .map_err(|error| format!("打开浏览器失败: {error}"))
 }
 
-fn browser_search_url_for_package(package_name: &str) -> Result<String, String> {
+fn browser_search_url_for_package(package_name: &str, ecosystem: Option<&str>) -> Result<String, String> {
     let package_name = package_name.trim();
     if !logic::is_valid_package_name(package_name) || package_name.contains('/') {
         return Err("无效包名，无法打开浏览器搜索".to_string());
     }
+    let prefix = match ecosystem {
+        Some("pip") => "Python package",
+        Some("conda") => "Conda package",
+        _ => "R package",
+    };
     let url = format!(
         "https://www.google.com/search?q={}",
-        urlencoding::encode(&format!("R package {package_name}"))
+        urlencoding::encode(&format!("{prefix} {package_name}"))
     );
     if !logic::is_allowed_browser_search_url(&url) {
         return Err("浏览器搜索 URL 不在允许范围内".to_string());
@@ -1131,7 +1156,7 @@ mod tests {
     #[test]
     fn browser_search_url_rejects_invalid_package_without_echoing_value() {
         let package_name = format!("bad/{}", "x".repeat(4096));
-        let error = browser_search_url_for_package(&package_name).expect_err("非法包名应被拒绝");
+        let error = browser_search_url_for_package(&package_name, None).expect_err("非法包名应被拒绝");
 
         assert_eq!(error, "无效包名，无法打开浏览器搜索");
         assert!(!error.contains(&package_name));
@@ -1139,7 +1164,7 @@ mod tests {
 
     #[test]
     fn browser_search_url_encodes_valid_package() {
-        let url = browser_search_url_for_package("GSVA").expect("合法包名应可生成搜索 URL");
+        let url = browser_search_url_for_package("GSVA", None).expect("合法包名应可生成搜索 URL");
 
         assert_eq!(url, "https://www.google.com/search?q=R%20package%20GSVA");
     }

@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## [2026-08-03 02:30:00 +08:00]
+
+### Added
+- **Pip/Conda 流式检索架构**：`search_multi` 完整重写为与 R 搜索对等的流式架构，支持停止/暂停/取消、并发批量检索、逐包实时进度推送、结果缓存、代理、超时预算和 runId 竞态保护。
+- **浏览器搜索前缀**：浏览器搜索按生态区分，Pip 搜 "Python package"、Conda 搜 "Conda package"、R 搜 "R package"。
+- **缓存键隔离**：Pip/Conda 缓存键使用 `{ecosystem}:{name}` 前缀，避免与 R 包缓存冲突。
+
+### Changed
+- **search_multi_ecosystem 命令签名**：接受 `app`、`state`、`run_id`、`settings` 参数，与其他搜索命令一致。
+- **build_client / cache_entry_from_result 公开**：供 search_multi 模块复用代理感知客户端和缓存条目构建逻辑。
+
+### Fixed
+- **停止/暂停按钮失效**：Pip/Conda 检索期间停止和暂停按钮现在可以正常工作（runId 管理修复）。
+- **代理不支持**：Pip/Conda 检索现在使用 `build_client(settings)` 读取代理配置。
+
+### Tests
+- **Rust**：新增 RequestBudget、输入解析、未找到结果构建等回归测试，共 206 项通过。
+- **前端**：150 项全部通过。
+
 ## [2026-08-03 01:00:00 +08:00]
 
 ### Fixed
