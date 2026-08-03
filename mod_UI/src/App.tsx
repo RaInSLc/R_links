@@ -10,6 +10,7 @@ import { SettingsView } from "./SettingsView";
 import { useSettings } from "./useSettings";
 import { useHistory } from "./useHistory";
 import { useSearch } from "./useSearch";
+import { useScriptGeneration } from "./useScriptGeneration";
 import {
   formatError, scriptValueTooLarge, activeInputLineCount,
   nonEmptyLineBytesExceeds, methodSupportsInput, classifyInputProfile,
@@ -19,7 +20,6 @@ import {
   MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS, utf8Length,
   dedupePackageInput, normalizePackageInputDisplay, trimTrailingBlankLines,
   type HistoryRecord, type SearchResult,
-  generateMultiEcosystemScript,
   generateSystemRequirementsScript,
 } from "./utils";
 import { type View, type Method, type InputRules, type Settings, type Ecosystem, methods, defaultInputRules, defaultSettings } from "./types";
@@ -116,7 +116,6 @@ function AppContent() {
     return localStorage.getItem("rlinks_verify_install") === "1";
   });
   const [parallelInstall, setParallelInstallState] = useState(() => localStorage.getItem("rlinks_parallel_install") === "1");
-  const [script, setScriptState] = useState("等待输入...");
   const [status, setStatus] = useState("就绪");
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
@@ -150,8 +149,6 @@ function AppContent() {
   }
 
   const latestInputRef = useRef(localStorage.getItem("rlinks_input") || "");
-  const latestScriptRef = useRef("等待输入...");
-  const scriptRequestSeq = useRef(0);
   const copyWithLineNumbersRef = useRef(false);
   useEffect(() => { copyWithLineNumbersRef.current = copyWithLineNumbers; }, [copyWithLineNumbers]);
 
@@ -173,11 +170,6 @@ function AppContent() {
     sanitizeHistoryList, enqueueHistorySave,
     copyHistoryRecord, deleteHistoryRecord, clearAllHistory } = historyHook;
 
-  function setScript(next: string) {
-    latestScriptRef.current = next;
-    setScriptState(next);
-  }
-
   const packageCount = useMemo(() => activeInputLineCount(input, inputRules.separators), [input, inputRules.separators]);
   const inputProfile = useMemo(() => classifyInputProfile(input, inputRules.separators), [input, inputRules.separators]);
   const smartSuggestions = useMemo(
@@ -193,6 +185,7 @@ function AppContent() {
     inputBytes > MAX_INPUT_CHARS ||
     packageCount > MAX_PACKAGE_LINES ||
     nonEmptyLineBytesExceeds(input, MAX_INPUT_LINE_BYTES);
+  const { script, latestScriptRef, requestSeq, setScript } = useScriptGeneration(input, ecosystem, pipIndex, condaChannels, method, conditional, installDependencies, showRemoteVersion, verifyInstall, parallelInstall, settings, rBinaryMirror, results, inputTooLarge, setStatus);
   const scriptTooLarge = useMemo(() => scriptValueTooLarge(script), [script]);
   const scriptCommandCount = useMemo(() => countScriptCommands(script), [script]);
   const duplicateCount = useMemo(() => countDuplicatePackages(input), [input]);
@@ -366,30 +359,6 @@ function AppContent() {
     }
   }
 
-  useEffect(() => {
-    let active = true;
-    const timer = window.setTimeout(() => {
-      const seq = scriptRequestSeq.current + 1;
-      scriptRequestSeq.current = seq;
-      if (inputTooLarge) {
-        setScript("输入超出限制，无法生成脚本。");
-        return;
-      }
-      if (ecosystem === "pip" || ecosystem === "conda") {
-        setScript(generateMultiEcosystemScript(input, ecosystem, pipIndex, condaChannels));
-        return;
-      }
-      invoke<string>("generate_script", {
-        input,
-         options: { method, conditional, installDependencies, mirror: ecosystem === "r-binary" ? rBinaryMirror : settings.cranMirror, rLibPath: settings.rLibPath, archiveGithubMajorGap: settings.archiveGithubMajorGap, appendVerify: verifyInstall, parallelInstall },
-        results,
-        showRemoteVersion,
-      })
-        .then((next) => { if (active && seq === scriptRequestSeq.current) setScript(next); })
-        .catch((error) => { if (active && seq === scriptRequestSeq.current) setStatus(`生成失败: ${formatError(error)}`); });
-    }, 120);
-    return () => { active = false; window.clearTimeout(timer); };
-  }, [input, method, conditional, installDependencies, showRemoteVersion, verifyInstall, parallelInstall, settings.cranMirror, settings.rLibPath, rBinaryMirror, ecosystem, pipIndex, condaChannels, results, inputTooLarge]);
 
   useEffect(() => {
     if (inputProfile.total === 0 || methodSupportsInput(method, inputProfile)) return;
@@ -489,15 +458,15 @@ function AppContent() {
       setStatus(`脚本内容过长，最多允许 ${MAX_SCRIPT_CHARS} 字节`);
       return;
     }
-    const seq = scriptRequestSeq.current + 1;
-    scriptRequestSeq.current = seq;
+    const seq = requestSeq.current + 1;
+    requestSeq.current = seq;
     try {
       const cleaned = await invoke<string>("clean_script", { script: source });
-      if (seq !== scriptRequestSeq.current || source !== latestScriptRef.current) return;
+      if (seq !== requestSeq.current || source !== latestScriptRef.current) return;
       setScript(cleaned);
       setStatus("已移除脚本注释");
     } catch (error) {
-      if (seq === scriptRequestSeq.current && source === latestScriptRef.current) {
+      if (seq === requestSeq.current && source === latestScriptRef.current) {
         setStatus(`清理失败: ${formatError(error)}`);
       }
     }

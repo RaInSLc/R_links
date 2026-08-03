@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-08-03 23:55:00 +08:00]
+
+### Refactored
+- **脚本生成逻辑拆分**：新增 `useScriptGeneration.ts`，承接 R/Pip/Conda 脚本生成、异步竞态序号和脚本状态；`App.tsx` 仅保留应用级脚本复制、下载和历史记录编排。
+- **应用容器规模**：`App.tsx` 从 910 行降至 879 行，脚本生成 effect 已从页面容器移除。
+
+### Tests
+- **前端**：`npm test -- --run` 通过 150 项。
+- **构建**：`npm run build` 通过。
+
 ## [2026-08-03 23:40:00 +08:00]
 
 ### Refactored
