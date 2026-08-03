@@ -7,25 +7,11 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::AppHandle;
 
-const CORE_PACKAGES: &[&str] = &[
-    "R",
-    "base",
-    "compiler",
-    "datasets",
-    "grDevices",
-    "graphics",
-    "grid",
-    "methods",
-    "parallel",
-    "splines",
-    "stats",
-    "stats4",
-    "tcltk",
-    "tools",
-    "utils",
-];
-const BIOC_DEPENDENCY_CATEGORIES: &[&str] =
-    &["bioc", "data/annotation", "data/experiment", "workflows"];
+#[path = "dependency_fetch.rs"] mod dependency_fetch;
+#[path = "dependency_parse.rs"] mod dependency_parse;
+
+use dependency_fetch::fetch_description;
+use dependency_parse::parse_package_dependencies;
 
 #[derive(Clone)]
 struct DependencyRequest {
@@ -54,165 +40,6 @@ fn merge_roots(target: &mut Vec<String>, roots: Vec<String>) {
     }
 }
 
-/// 解析 Debian control (RFC 822) 格式的 DESCRIPTION 文件
-pub fn parse_description(content: &str) -> HashMap<String, String> {
-    let mut map = HashMap::new();
-    let mut current_key = String::new();
-
-    for line in content.lines() {
-        if line.trim().is_empty() {
-            continue;
-        }
-        if line.starts_with(' ') || line.starts_with('\t') {
-            if !current_key.is_empty() {
-                let val = map.entry(current_key.clone()).or_insert_with(String::new);
-                if !val.is_empty() && !val.ends_with(' ') {
-                    val.push(' ');
-                }
-                val.push_str(line.trim());
-            }
-        } else if let Some(pos) = line.find(':') {
-            let key = line[..pos].trim().to_string();
-            let val = line[pos + 1..].trim().to_string();
-            current_key = key.clone();
-            map.insert(key, val);
-        }
-    }
-    map
-}
-
-/// 清洗依赖包名并去除版本约束，如 "ggplot2 (>= 3.0.0)" -> "ggplot2"
-fn clean_package_name(dep: &str) -> String {
-    let dep = dep.trim();
-    if let Some(pos) = dep.find('(') {
-        dep[..pos].trim().to_string()
-    } else {
-        dep.to_string()
-    }
-}
-
-/// 解析依赖字段（如 Depends, Imports, Suggests, LinkingTo）
-fn parse_dependency_field(field_value: &str) -> Vec<String> {
-    field_value
-        .split(',')
-        .map(clean_package_name)
-        .filter(|name| !name.is_empty() && !CORE_PACKAGES.contains(&name.as_str()))
-        .collect()
-}
-
-/// 发送请求获取包的 DESCRIPTION 文本
-async fn fetch_description(
-    client: &reqwest::Client,
-    package: &str,
-    source: &str,
-    version: &str,
-    repository: &str,
-    mirror: &str,
-) -> Result<String, String> {
-    let mut urls: Vec<(String, bool)> = Vec::new();
-    let mirror_clean = mirror.trim_end_matches('/');
-
-    if source.eq_ignore_ascii_case("cran") || source.eq_ignore_ascii_case("none") {
-        urls.push((
-            format!("{}/web/packages/{}/DESCRIPTION", mirror_clean, package),
-            false,
-        ));
-    } else if source.eq_ignore_ascii_case("bioc") || source.eq_ignore_ascii_case("biocGit") {
-        let bioc_versions =
-            if source.eq_ignore_ascii_case("biocGit") && !repository.trim().is_empty() {
-                vec![
-                    repository.trim().trim_matches('/').to_string(),
-                    "release".to_string(),
-                ]
-            } else {
-                vec!["release".to_string()]
-            };
-        for bioc_version in bioc_versions {
-            for category in BIOC_DEPENDENCY_CATEGORIES {
-                urls.push((format!(
-                    "https://bioconductor.org/packages/{bioc_version}/{category}/src/contrib/PACKAGES",
-                ), true));
-            }
-        }
-    } else if source.eq_ignore_ascii_case("github") {
-        let github_repo = if !repository.trim().is_empty() {
-            repository.trim()
-        } else if package.contains('/') {
-            package
-        } else {
-            ""
-        };
-        if !github_repo.is_empty() {
-            urls.push((
-                format!(
-                    "https://raw.githubusercontent.com/{}/master/DESCRIPTION",
-                    github_repo
-                ),
-                false,
-            ));
-            urls.push((
-                format!(
-                    "https://raw.githubusercontent.com/{}/main/DESCRIPTION",
-                    github_repo
-                ),
-                false,
-            ));
-        }
-        urls.push((
-            format!(
-                "https://raw.githubusercontent.com/cran/{}/master/DESCRIPTION",
-                package
-            ),
-            false,
-        ));
-    } else {
-        urls.push((
-            format!("{}/web/packages/{}/DESCRIPTION", mirror_clean, package),
-            false,
-        ));
-    }
-
-    for (url, is_packages_index) in urls {
-        match client.get(&url).send().await {
-            Ok(resp) if resp.status().is_success() => {
-                if let Ok(text) = resp.text().await {
-                    if is_packages_index {
-                        if let Some(entry) = extract_packages_index_entry(&text, package, version) {
-                            return Ok(entry);
-                        }
-                    } else if !text.trim().is_empty() {
-                        return Ok(text);
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    Err(format!("无法获取包 {} 的 DESCRIPTION 元数据", package))
-}
-
-fn extract_packages_index_entry(text: &str, package: &str, version: &str) -> Option<String> {
-    for entry in text.split("\n\n") {
-        let meta = parse_description(entry);
-        let Some(entry_package) = meta.get("Package") else {
-            continue;
-        };
-        if !entry_package.eq_ignore_ascii_case(package) {
-            continue;
-        }
-        if !version.is_empty()
-            && meta
-                .get("Version")
-                .is_some_and(|entry_version| entry_version != version)
-        {
-            continue;
-        }
-        return Some(entry.to_string());
-    }
-    None
-}
-
 fn enqueue_dependency(
     queue: &mut VecDeque<DependencyRequest>,
     visited: &mut HashSet<String>,
@@ -237,34 +64,6 @@ fn enqueue_dependency(
         return;
     }
     queue.push_back(request);
-}
-
-/// 解析单包的依赖项，返回 (heavy_deps, light_deps, version)
-fn parse_package_dependencies(content: &str) -> (Vec<String>, Vec<String>, String) {
-    let meta = parse_description(content);
-    let mut heavy_deps = Vec::new();
-    let mut light_deps = Vec::new();
-    let version = meta.get("Version").cloned().unwrap_or_default();
-
-    if let Some(depends) = meta.get("Depends") {
-        heavy_deps.extend(parse_dependency_field(depends));
-    }
-    if let Some(imports) = meta.get("Imports") {
-        heavy_deps.extend(parse_dependency_field(imports));
-    }
-    if let Some(linking_to) = meta.get("LinkingTo") {
-        heavy_deps.extend(parse_dependency_field(linking_to));
-    }
-    if let Some(suggests) = meta.get("Suggests") {
-        light_deps.extend(parse_dependency_field(suggests));
-    }
-
-    heavy_deps.sort();
-    heavy_deps.dedup();
-    light_deps.sort();
-    light_deps.dedup();
-
-    (heavy_deps, light_deps, version)
 }
 
 /// 拓扑依赖解析主入口
@@ -332,9 +131,7 @@ pub async fn resolve_dependencies(
     }
 
     while !queue.is_empty() && !cancelled.load(Ordering::SeqCst) {
-        if nodes_map.len() >= settings.max_dependency_nodes {
-            break;
-        }
+        if nodes_map.len() >= settings.max_dependency_nodes { break; }
 
         let level_size = queue.len();
         let mut level_tasks = Vec::new();
@@ -413,9 +210,7 @@ pub async fn resolve_dependencies(
             if cancelled.load(Ordering::SeqCst) {
                 break;
             }
-            if nodes_map.len() >= settings.max_dependency_nodes {
-                break;
-            }
+            if nodes_map.len() >= settings.max_dependency_nodes { break; }
 
             let mut path_roots = path_roots;
             if let Some(extra_roots) = pending_roots.remove(&pkg) {
@@ -577,6 +372,8 @@ pub async fn resolve_dependencies(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::dependency_fetch::extract_packages_index_entry;
+    use super::dependency_parse::{clean_package_name, parse_description};
 
     #[test]
     fn test_parse_description_debian_control() {

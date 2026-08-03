@@ -1,5 +1,4 @@
-use serde::{Deserialize, Serialize};
-use url::{Host, Url};
+use url::Url;
 
 pub const MAX_INPUT_CHARS: usize = 100_000;
 pub const MAX_PACKAGE_LINES: usize = 500;
@@ -10,434 +9,30 @@ pub const MAX_HISTORY_RECORDS: usize = 10000;
 pub const MAX_HISTORY_COMMAND_CHARS: usize = 8_000;
 pub const MAX_SCRIPT_CHARS: usize = 1_000_000;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Settings {
-    pub proxy: String,
-    pub github_token: String,
-    pub cran_mirror: String,
-    #[serde(default)]
-    pub r_lib_path: String,
-    pub full_search: bool,
-    pub search_concurrency: usize,
-    pub archive_github_major_gap: usize,
-    pub conditional: bool,
-    pub install_dependencies: bool,
-    pub show_remote_version: bool,
-    pub use_cache: bool,
-    pub max_cache_entries: usize,
-    pub use_filter: bool,
-    pub resolve_dependencies: bool,
-    pub max_dependency_depth: usize,
-    pub include_light_dependencies: bool,
-    pub max_dependency_nodes: usize,
-    #[serde(default = "default_pinned_methods")]
-    pub pinned_methods: Vec<String>,
-    #[serde(default = "default_pip_index")]
-    pub pip_index: String,
-    #[serde(default = "default_conda_channels")]
-    pub conda_channels: Vec<String>,
-}
+#[path = "dependency_model.rs"]
+mod dependency_model;
+#[path = "history_model.rs"]
+mod history_model;
+#[path = "search_model.rs"]
+mod search_model;
+#[path = "settings_model.rs"]
+mod settings_model;
 
-fn default_pip_index() -> String { "https://pypi.org".to_string() }
-fn default_conda_channels() -> Vec<String> { vec!["conda-forge".to_string(), "bioconda".to_string()] }
+pub use dependency_model::*;
+pub use history_model::*;
+pub use search_model::*;
+pub use settings_model::*;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct PublicSettings {
-    pub proxy: String,
-    pub github_token_configured: bool,
-    pub cran_mirror: String,
-    pub r_lib_path: String,
-    pub full_search: bool,
-    pub search_concurrency: usize,
-    pub archive_github_major_gap: usize,
-    pub conditional: bool,
-    pub install_dependencies: bool,
-    pub show_remote_version: bool,
-    pub use_cache: bool,
-    pub max_cache_entries: usize,
-    pub use_filter: bool,
-    pub resolve_dependencies: bool,
-    pub max_dependency_depth: usize,
-    pub include_light_dependencies: bool,
-    pub max_dependency_nodes: usize,
-    pub pinned_methods: Vec<String>,
-    pub pip_index: String,
-    pub conda_channels: Vec<String>,
-}
-
-fn default_pinned_methods() -> Vec<String> {
-    ["auto", "base", "biocManager", "github"]
-        .into_iter()
-        .map(str::to_string)
-        .collect()
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            proxy: String::new(),
-            github_token: String::new(),
-            cran_mirror: "https://cloud.r-project.org".to_string(),
-            r_lib_path: String::new(),
-            full_search: false,
-            search_concurrency: 6,
-            archive_github_major_gap: 1,
-            conditional: true,
-            install_dependencies: true,
-            show_remote_version: true,
-            use_cache: true,
-            max_cache_entries: 1000,
-            use_filter: true,
-            resolve_dependencies: true,
-            max_dependency_depth: 2,
-            include_light_dependencies: false,
-            max_dependency_nodes: 100,
-            pinned_methods: default_pinned_methods(),
-            pip_index: default_pip_index(),
-            conda_channels: default_conda_channels(),
-        }
-    }
-}
-
-impl Settings {
-    pub fn normalized(&self) -> Result<Self, String> {
-        let proxy = normalize_proxy(&self.proxy)?;
-        let github_token = normalize_token(&self.github_token)?;
-        let cran_mirror = normalize_cran_mirror_url(&self.cran_mirror)?;
-        let r_lib_path = normalize_r_lib_path(&self.r_lib_path)?;
-        let search_concurrency = self.search_concurrency.clamp(1, 12);
-        let archive_github_major_gap = self.archive_github_major_gap.clamp(0, 10);
-        let max_cache_entries = self.max_cache_entries.clamp(1, 10000);
-        let max_dependency_depth = self.max_dependency_depth.clamp(1, 5);
-        let max_dependency_nodes = self.max_dependency_nodes.clamp(1, 500);
-        let pinned_methods = normalize_pinned_methods(&self.pinned_methods);
-
-        Ok(Self {
-            proxy,
-            github_token,
-            cran_mirror,
-            r_lib_path,
-            full_search: self.full_search,
-            search_concurrency,
-            archive_github_major_gap,
-            conditional: self.conditional,
-            install_dependencies: self.install_dependencies,
-            show_remote_version: self.show_remote_version,
-            use_cache: self.use_cache,
-            max_cache_entries,
-            use_filter: self.use_filter,
-            resolve_dependencies: self.resolve_dependencies,
-            max_dependency_depth,
-            include_light_dependencies: self.include_light_dependencies,
-            max_dependency_nodes,
-            pinned_methods,
-            pip_index: self.pip_index.trim().to_string(),
-            conda_channels: self.conda_channels.iter().map(|v| v.trim().to_string()).filter(|v| !v.is_empty()).take(20).collect(),
-        })
-    }
-
-    pub fn public_view(&self) -> PublicSettings {
-        PublicSettings {
-            proxy: self.proxy.clone(),
-            github_token_configured: !self.github_token.trim().is_empty(),
-            cran_mirror: self.cran_mirror.clone(),
-            r_lib_path: self.r_lib_path.clone(),
-            full_search: self.full_search,
-            search_concurrency: self.search_concurrency,
-            archive_github_major_gap: self.archive_github_major_gap,
-            conditional: self.conditional,
-            install_dependencies: self.install_dependencies,
-            show_remote_version: self.show_remote_version,
-            use_cache: self.use_cache,
-            max_cache_entries: self.max_cache_entries,
-            use_filter: self.use_filter,
-            resolve_dependencies: self.resolve_dependencies,
-            max_dependency_depth: self.max_dependency_depth,
-            include_light_dependencies: self.include_light_dependencies,
-            max_dependency_nodes: self.max_dependency_nodes,
-            pinned_methods: self.pinned_methods.clone(),
-            pip_index: self.pip_index.clone(),
-            conda_channels: self.conda_channels.clone(),
-        }
-    }
-
-    pub fn merged_with_existing_token(&self, existing: &Settings) -> Result<Self, String> {
-        let mut normalized = self.normalized()?;
-        if normalized.github_token.is_empty() {
-            normalized.github_token = existing.github_token.clone();
-        }
-        Ok(normalized)
-    }
-}
-
-fn normalize_r_lib_path(value: &str) -> Result<String, String> {
-    let path = value.trim();
-    if path.len() > MAX_FIELD_CHARS || path.chars().any(|character| character.is_control()) {
-        return Err(format!("R 库路径无效，最多允许 {MAX_FIELD_CHARS} 字节且不能包含控制字符"));
-    }
-    Ok(path.to_string())
-}
-
-fn normalize_pinned_methods(values: &[String]) -> Vec<String> {
-    let mut normalized = Vec::new();
-    for value in values {
-        if matches!(
-            value.as_str(),
-            "auto"
-                | "devtools"
-                | "remotes"
-                | "github"
-                | "base"
-                | "version"
-                | "biocManager"
-                | "checkSystem"
-        ) && !normalized.iter().any(|existing| existing == value)
-        {
-            normalized.push(value.clone());
-        }
-    }
-    if normalized.is_empty() {
-        default_pinned_methods()
-    } else {
-        normalized
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GenerateOptions {
-    pub method: String,
-    pub conditional: bool,
-    pub install_dependencies: bool,
-    pub mirror: String,
-    #[serde(default)]
-    pub r_lib_path: String,
-    #[serde(default = "default_archive_github_major_gap")]
-    pub archive_github_major_gap: usize,
-    #[serde(default)]
-    pub append_verify: bool,
-    #[serde(default)]
-    pub parallel_install: bool,
-}
-
-pub fn default_archive_github_major_gap() -> usize {
-    1
-}
-
-impl Default for GenerateOptions {
-    fn default() -> Self {
-        Self {
-            method: String::new(),
-            conditional: false,
-            install_dependencies: false,
-            mirror: String::new(),
-            r_lib_path: String::new(),
-            archive_github_major_gap: default_archive_github_major_gap(),
-            append_verify: false,
-            parallel_install: false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MirrorSpeedResult {
-    pub mirror: String,
-    pub label: String,
-    pub latency_ms: u64,
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NetworkDiagnostic {
-    pub target: String,
-    pub url: String,
-    pub success: bool,
-    pub status_code: Option<u16>,
-    pub latency_ms: u64,
-    pub proxy: String,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ToolchainCheck {
-    pub tool: String,
-    pub available: bool,
-    pub version: String,
-    pub advice: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReverseDependenciesInfo {
-    pub package: String,
-    pub depends: usize,
-    pub imports: usize,
-    pub suggests: usize,
-    pub linking_to: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct SearchResult {
-    pub package: String,
-    pub requested_version: String,
-    pub latest_version: String,
-    pub repository: String,
-    pub real_name: String,
-    pub source: String,
-    pub found: bool,
-    pub message: String,
-    #[serde(default)]
-    pub status: String,
-    #[serde(default)]
-    pub stage: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct DependencyGraph {
-    pub roots: Vec<String>,
-    pub nodes: Vec<DependencyNode>,
-    pub edges: Vec<DependencyEdge>,
-    pub summary: DependencySummary,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct DependencyNode {
-    pub package: String,
-    pub source: String,
-    pub version: String,
-    pub depth: usize,
-    pub root_packages: Vec<String>,
-    pub direct_dependency_count: usize,
-    pub heavy_dependency_count: usize,
-    pub status: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct DependencyEdge {
-    pub from: String,
-    pub to: String,
-    pub relation: String,
-    pub strength: String,
-    pub depth: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct DependencySummary {
-    pub total_nodes: usize,
-    pub total_edges: usize,
-    pub heavy_nodes: usize,
-    pub light_nodes: usize,
-    pub shared_nodes: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SearchResponse {
-    pub run_id: u64,
-    pub results: Vec<SearchResult>,
-    pub logs: Vec<String>,
-    pub stopped: bool,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub stage_timings: Vec<SearchStageTiming>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dependency_graph: Option<DependencyGraph>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SearchStageTiming {
-    pub stage: String,
-    pub duration_ms: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct HistoryRecord {
-    pub id: String,
-    pub command: String,
-    pub package_name: String,
-    pub version: String,
-    pub tool_name: String,
-    pub created_at: String,
-    #[serde(default)]
-    pub input: String,
-    #[serde(default)]
-    pub method: String,
-    #[serde(default)]
-    pub conditional: bool,
-    #[serde(default)]
-    pub install_dependencies: bool,
-    #[serde(default)]
-    pub show_remote_version: bool,
-    #[serde(default)]
-    pub verify_install: bool,
-    #[serde(default)]
-    pub cran_mirror: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PackageCacheEntry {
-    pub package_name: String,
-    pub source: String,
-    pub version: String,
-    pub repository: String,
-    pub real_name: String,
-    pub cached_at: String,
-    #[serde(default)]
-    pub verified_count: u32,
-    #[serde(default)]
-    pub up_votes: u32,
-    #[serde(default)]
-    pub down_votes: u32,
-    #[serde(default)]
-    pub invalidated: bool,
-}
-
-impl PackageCacheEntry {
-    pub fn is_trusted(&self) -> bool {
-        self.verified_count >= CACHE_TRUST_THRESHOLD
-            && self.up_votes >= self.down_votes
-            && !self.invalidated
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PackageInput {
-    pub raw: String,
-    pub name: String,
-    pub version: String,
-    pub source_hint: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InputRules {
-    /// 行内分隔符，用于将一行拆分为多个包名（如逗号、分号）
     pub separators: Vec<String>,
-    /// 是否去除包名两端的引号（" 和 '）
     pub strip_quotes: bool,
-    /// 是否去除 R 的 c(...) 或 list(...) 包裹
     pub strip_c_parens: bool,
-    /// 注释字符前缀列表
     pub comment_chars: Vec<String>,
-    /// 是否将空格也作为分隔符（开启后将禁用版本号提取）
     pub split_spaces: bool,
-    /// 自定义排除正则列表，匹配的行/段在解析时将被静默忽略
     #[serde(default)]
     pub exclude_regex: Vec<String>,
-    /// 自定义排除包名关键词列表，被匹配的包名在解析时将被静默忽略
     #[serde(default)]
     pub exclude_keywords: Vec<String>,
 }
@@ -468,7 +63,6 @@ impl InputRules {
         if separators.is_empty() {
             separators = vec![",".to_string(), ";".to_string()];
         }
-
         let mut comment_chars: Vec<String> = self
             .comment_chars
             .iter()
@@ -479,7 +73,6 @@ impl InputRules {
         if comment_chars.is_empty() {
             comment_chars = vec!["#".to_string()];
         }
-
         let exclude_regex: Vec<String> = self
             .exclude_regex
             .iter()
@@ -488,7 +81,6 @@ impl InputRules {
             .filter(|s| regex::Regex::new(s).is_ok())
             .take(10)
             .collect();
-
         let exclude_keywords: Vec<String> = self
             .exclude_keywords
             .iter()
@@ -496,7 +88,6 @@ impl InputRules {
             .filter(|s| !s.is_empty() && s.len() <= 64 && !s.chars().any(char::is_control))
             .take(50)
             .collect();
-
         Self {
             separators,
             strip_quotes: self.strip_quotes,
@@ -519,7 +110,6 @@ pub fn normalize_http_url(value: &str, field_name: &str) -> Result<String, Strin
     if trimmed.len() > MAX_FIELD_CHARS || trimmed.chars().any(|character| character.is_control()) {
         return Err(format!("{field_name}包含非法字符或长度过长"));
     }
-
     let parsed = Url::parse(trimmed).map_err(|_| format!("{field_name}必须是有效 URL"))?;
     match parsed.scheme() {
         "http" | "https" => {}
@@ -539,8 +129,11 @@ pub fn normalize_http_url(value: &str, field_name: &str) -> Result<String, Strin
 
 pub fn normalize_https_url(value: &str, field_name: &str) -> Result<String, String> {
     let normalized = normalize_http_url(value, field_name)?;
-    let parsed = Url::parse(&normalized).map_err(|_| format!("{field_name}必须是有效 URL"))?;
-    if parsed.scheme() != "https" {
+    if Url::parse(&normalized)
+        .map_err(|_| format!("{field_name}必须是有效 URL"))?
+        .scheme()
+        != "https"
+    {
         return Err(format!("{field_name}仅支持 https"));
     }
     Ok(normalized)
@@ -552,64 +145,7 @@ pub fn normalize_cran_mirror_url(value: &str) -> Result<String, String> {
     if parsed.query().is_some() || parsed.fragment().is_some() {
         return Err("CRAN 镜像不允许包含查询参数或片段".to_string());
     }
-    let mut mirror = normalized.trim_end_matches('/').to_string();
-    mirror.push('/');
-    Ok(mirror)
-}
-
-fn normalize_proxy(value: &str) -> Result<String, String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Ok(String::new());
-    }
-    if trimmed.len() > MAX_FIELD_CHARS || trimmed.chars().any(|character| character.is_control()) {
-        return Err("网络代理包含非法字符或长度过长".to_string());
-    }
-
-    let candidate = if trimmed.contains("://") {
-        trimmed.to_string()
-    } else {
-        format!("http://{trimmed}")
-    };
-    let parsed = Url::parse(&candidate).map_err(|_| "网络代理格式无效".to_string())?;
-    match parsed.scheme() {
-        "http" | "https" | "socks5" | "socks5h" => {}
-        _ => return Err("网络代理仅支持 http、https、socks5 或 socks5h".to_string()),
-    }
-    let host = match parsed.host() {
-        Some(Host::Domain(domain)) => {
-            Host::parse(domain).map_err(|_| "网络代理主机名无效".to_string())?
-        }
-        Some(Host::Ipv4(address)) => Host::Ipv4(address),
-        Some(Host::Ipv6(address)) => Host::Ipv6(address),
-        None => return Err("网络代理缺少主机名".to_string()),
-    };
-    if !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err("网络代理不允许包含用户名或密码".to_string());
-    }
-    if !matches!(parsed.path(), "" | "/") || parsed.query().is_some() || parsed.fragment().is_some()
-    {
-        return Err("网络代理不允许包含路径、查询参数或片段".to_string());
-    }
-    let port = parsed
-        .port()
-        .map(|port| format!(":{port}"))
-        .unwrap_or_default();
-    Ok(format!("{}://{host}{port}", parsed.scheme()))
-}
-
-fn normalize_token(value: &str) -> Result<String, String> {
-    let trimmed = value.trim();
-    if trimmed.len() > MAX_TOKEN_CHARS {
-        return Err("GitHub Token 长度超过限制".to_string());
-    }
-    if trimmed
-        .chars()
-        .any(|character| !character.is_ascii_graphic())
-    {
-        return Err("GitHub Token 包含非法字符".to_string());
-    }
-    Ok(trimmed.to_string())
+    Ok(format!("{}/", normalized.trim_end_matches('/')))
 }
 
 pub fn url_has_explicit_port(value: &str) -> bool {
@@ -627,7 +163,6 @@ pub fn url_has_explicit_port(value: &str) -> bool {
         .rsplit_once('@')
         .map(|(_, host_port)| host_port)
         .unwrap_or(authority);
-
     if let Some(rest) = host_port.strip_prefix('[') {
         return rest
             .find(']')
@@ -647,11 +182,10 @@ mod tests {
             ..Settings::default()
         };
         assert_eq!(
-            settings.normalized().expect("代理应合法").proxy,
+            settings.normalized().unwrap().proxy,
             "http://127.0.0.1:7890"
         );
     }
-
     #[test]
     fn canonicalizes_proxy_authority_before_use() {
         for (proxy, expected) in [
@@ -666,13 +200,9 @@ mod tests {
                 proxy: proxy.to_string(),
                 ..Settings::default()
             };
-            assert_eq!(
-                settings.normalized().expect("代理应可规范化").proxy,
-                expected
-            );
+            assert_eq!(settings.normalized().unwrap().proxy, expected);
         }
     }
-
     #[test]
     fn rejects_credentialed_or_scoped_proxy_url() {
         for proxy in [
@@ -683,24 +213,22 @@ mod tests {
             r"socks5://example.com\redirect:1080",
             "socks5h://example.com%2Fredirect:1080",
         ] {
-            let settings = Settings {
+            assert!(Settings {
                 proxy: proxy.to_string(),
                 ..Settings::default()
-            };
-            assert!(settings.normalized().is_err());
+            }
+            .normalized()
+            .is_err());
         }
     }
-
     #[test]
     fn rejects_credentialed_mirror_url() {
         assert!(normalize_http_url("https://user:pass@example.com/CRAN/", "CRAN 镜像").is_err());
     }
-
     #[test]
     fn normalizes_cran_mirror_directory_url() {
         assert_eq!(
-            normalize_cran_mirror_url(" https://cloud.r-project.org ")
-                .expect("CRAN 镜像应可规范化"),
+            normalize_cran_mirror_url(" https://cloud.r-project.org ").unwrap(),
             "https://cloud.r-project.org/"
         );
         assert!(normalize_cran_mirror_url("https://cloud.r-project.org?token=secret").is_err());
@@ -708,28 +236,23 @@ mod tests {
         assert!(normalize_cran_mirror_url("https://user:pass@example.com/CRAN/").is_err());
         assert!(normalize_cran_mirror_url("https://cloud.r-project.org:443/").is_err());
     }
-
     #[test]
     fn accepts_rspm_mirror_as_https_cran_repository() {
         assert_eq!(
-            normalize_cran_mirror_url("https://packagemanager.posit.co/cran/latest")
-                .expect("RSPM 应作为 CRAN 兼容仓库接受"),
+            normalize_cran_mirror_url("https://packagemanager.posit.co/cran/latest").unwrap(),
             "https://packagemanager.posit.co/cran/latest/"
         );
     }
-
     #[test]
     fn rejects_plain_http_package_source_url() {
         assert!(normalize_https_url("http://example.com/pkg_1.0.tar.gz", "安装 URL").is_err());
         assert!(normalize_https_url("https://example.com/pkg_1.0.tar.gz", "安装 URL").is_ok());
         assert!(normalize_https_url("https://example.com:443/pkg_1.0.tar.gz", "安装 URL").is_err());
     }
-
     #[test]
     fn canonicalizes_valid_urls_before_use() {
         assert_eq!(
-            normalize_https_url(r"https://example.com\src\demo_1.0.tar.gz", "安装 URL")
-                .expect("反斜杠路径应规范化"),
+            normalize_https_url(r"https://example.com\src\demo_1.0.tar.gz", "安装 URL").unwrap(),
             "https://example.com/src/demo_1.0.tar.gz"
         );
         assert_eq!(
@@ -737,16 +260,14 @@ mod tests {
                 "https://example.com/src package/demo_1.0.tar.gz",
                 "安装 URL"
             )
-            .expect("空格应编码"),
+            .unwrap(),
             "https://example.com/src%20package/demo_1.0.tar.gz"
         );
         assert_eq!(
-            normalize_https_url("https://example.com/src/../demo_1.0.tar.gz", "安装 URL")
-                .expect("点路径应规范化"),
+            normalize_https_url("https://example.com/src/../demo_1.0.tar.gz", "安装 URL").unwrap(),
             "https://example.com/demo_1.0.tar.gz"
         );
     }
-
     #[test]
     fn detects_explicit_url_ports_before_url_normalization() {
         assert!(url_has_explicit_port("https://example.com:443/path"));
@@ -757,7 +278,6 @@ mod tests {
         assert!(!url_has_explicit_port("https://example.com/path"));
         assert!(!url_has_explicit_port("https://[::1]/path"));
     }
-
     #[test]
     fn public_settings_do_not_expose_token() {
         let settings = Settings {
@@ -766,12 +286,11 @@ mod tests {
         };
         let public = settings.public_view();
         assert!(public.github_token_configured);
-        let encoded = serde_json::to_string(&public).expect("公开设置应可序列化");
+        let encoded = serde_json::to_string(&public).unwrap();
         assert!(!encoded.contains("ghp_secret"));
         assert!(!encoded.contains("githubToken\":\""));
         assert!(encoded.contains("githubTokenConfigured"));
     }
-
     #[test]
     fn normalizes_and_exposes_pinned_methods() {
         let settings = Settings {
@@ -783,16 +302,13 @@ mod tests {
             ],
             ..Settings::default()
         };
-
-        let normalized = settings.normalized().expect("常用策略应可规范化");
-
+        let normalized = settings.normalized().unwrap();
         assert_eq!(normalized.pinned_methods, vec!["github", "base"]);
         assert_eq!(
             normalized.public_view().pinned_methods,
             vec!["github", "base"]
         );
     }
-
     #[test]
     fn empty_token_preserves_existing_saved_token() {
         let existing = Settings {
@@ -803,12 +319,14 @@ mod tests {
             github_token: String::new(),
             ..Settings::default()
         };
-        let merged = incoming
-            .merged_with_existing_token(&existing)
-            .expect("空 Token 应保留旧值");
-        assert_eq!(merged.github_token, "ghp_existing");
+        assert_eq!(
+            incoming
+                .merged_with_existing_token(&existing)
+                .unwrap()
+                .github_token,
+            "ghp_existing"
+        );
     }
-
     #[test]
     fn rejects_token_with_whitespace_or_non_ascii() {
         assert_eq!(
@@ -817,11 +335,10 @@ mod tests {
                 ..Settings::default()
             }
             .normalized()
-            .expect("首尾空白应被清理")
+            .unwrap()
             .github_token,
             "ghp_demo"
         );
-
         for token in [
             "ghp_demo token",
             "ghp_demo\tvalue",
@@ -829,70 +346,75 @@ mod tests {
             "ghp_demo\u{7f}value",
             "ghp_令牌",
         ] {
-            let settings = Settings {
-                github_token: token.to_string(),
-                ..Settings::default()
-            };
-            assert!(settings.normalized().is_err(), "{token:?}");
+            assert!(
+                Settings {
+                    github_token: token.to_string(),
+                    ..Settings::default()
+                }
+                .normalized()
+                .is_err(),
+                "{token:?}"
+            );
         }
     }
-
     #[test]
     fn test_normalizes_cache_entries_limit() {
-        let settings = Settings {
-            max_cache_entries: 0,
-            ..Settings::default()
-        };
         assert_eq!(
-            settings.normalized().expect("应能规范化").max_cache_entries,
+            Settings {
+                max_cache_entries: 0,
+                ..Settings::default()
+            }
+            .normalized()
+            .unwrap()
+            .max_cache_entries,
             1
         );
-
-        let settings = Settings {
-            max_cache_entries: 20000,
-            ..Settings::default()
-        };
         assert_eq!(
-            settings.normalized().expect("应能规范化").max_cache_entries,
+            Settings {
+                max_cache_entries: 20000,
+                ..Settings::default()
+            }
+            .normalized()
+            .unwrap()
+            .max_cache_entries,
             10000
         );
     }
-
     #[test]
     fn normalizes_search_concurrency_limit() {
-        let settings = Settings {
-            search_concurrency: 0,
-            ..Settings::default()
-        };
         assert_eq!(
-            settings.normalized().expect("应能规范化").search_concurrency,
+            Settings {
+                search_concurrency: 0,
+                ..Settings::default()
+            }
+            .normalized()
+            .unwrap()
+            .search_concurrency,
             1
         );
-
-        let settings = Settings {
-            search_concurrency: 99,
-            ..Settings::default()
-        };
         assert_eq!(
-            settings.normalized().expect("应能规范化").search_concurrency,
+            Settings {
+                search_concurrency: 99,
+                ..Settings::default()
+            }
+            .normalized()
+            .unwrap()
+            .search_concurrency,
             12
         );
     }
-
     #[test]
     fn normalizes_archive_github_major_gap_limit() {
-        let settings = Settings {
-            archive_github_major_gap: 99,
-            ..Settings::default()
-        };
         assert_eq!(
-            settings
-                .normalized()
-                .expect("应能规范化")
-                .archive_github_major_gap,
+            Settings {
+                archive_github_major_gap: 99,
+                ..Settings::default()
+            }
+            .normalized()
+            .unwrap()
+            .archive_github_major_gap,
             10
         );
-
         assert_eq!(GenerateOptions::default().archive_github_major_gap, 1);
     }
 }

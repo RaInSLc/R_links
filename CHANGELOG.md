@@ -1,5 +1,71 @@
 # CHANGELOG
 
+## [2026-08-04 02:05:00 +08:00]
+
+### Refactored
+- **生产文件规模收敛**：完成 `AppContent.tsx`、`ReportView.tsx`、`SettingsView.tsx`、`utils.ts` 以及 Tauri `lib.rs`、`search.rs`、`storage.rs`、`logic.rs`、`models.rs`、`dependency.rs` 的职责拆分；生产 `ts/tsx/rs` 文件均小于 500 行。
+- **模块边界**：前端按页面、操作编排、设置面板、报告操作、输入/脚本/结果工具拆分；Rust 按 command、state、search、storage、logic、model 和测试职责拆分。
+- **行为保持**：保留 Tauri command 注册、前端公开导出路径、报告筛选/导出/缓存反馈/键盘交互及设置功能。
+
+### Tests
+- **Rust**：`cargo test` 通过 206 项。
+- **前端**：`npm test -- --run` 通过 150 项；`npm run build` 通过。
+- **规模检查**：生产文件无超过 500 行；超标文件仅为 `src/utils.test.ts` 测试文件 723 行。
+
+## [2026-08-04]
+
+### Refactored
+- **AppContent 职责拆分**：新增 `mod_UI/src/AppPages.tsx` 和 `mod_UI/src/useAppActions.ts`，分别承接页面路由布局及输入、搜索、脚本、历史和规则操作编排；`AppContent.tsx` 从 835 行降至 63 行，新增生产文件均小于 500 行，未修改测试、README 或删除文档。
+
+### Tests
+- **前端**：`npm test -- --run` 通过 150 项；`npm run build` 通过。
+
+## [2026-08-04]
+
+### Refactored
+- **Tauri 命令入口拆分**：将 `mod_UI/src-tauri/src/lib.rs` 的状态、设置、搜索、缓存、浏览器、诊断和历史职责迁移至独立模块；保留全部 Tauri command 名称、参数及 `generate_handler!` 注册，未使用 `include!`。
+- **文件规模**：`lib.rs` 及本轮新增生产和测试 Rust 文件均小于 500 行。
+
+### Tests
+- **Rust**：`cargo test` 未能执行，工作区既有搜索模块拆分存在编译错误（重复导入、缺失搜索类型/常量及未闭合测试文件）；本轮未提交。
+
+## [2026-08-04]
+
+### Fixed
+- **ReportView 行为恢复**：以 Git HEAD 为基准恢复结果搜索、过滤、排序、来源筛选、版本和仓库列开关、缓存反馈、复制与打开页面、上下文菜单、行选择与 Shift 多选、展开详情、键盘导航、取消包、重试及结果导出/操作，并拆分至小于 500 行的生产组件。
+
+### Tests
+- **前端**：`npm test -- --run` 通过 150 项；`npm run build` 通过。
+
+### Refactored
+- **ReportView 职责拆分**：将报告页拆分为结果概览、结果操作与导出、结果表格、日志面板及报告工具模块；`ReportView.tsx` 保持原有 props 和导出入口并降至 500 行以内，新增生产文件均小于 500 行。
+
+### Tests
+- **前端**：`npm run build` 通过；`npm test -- --run` 当前剩余 1 项既有 App 集成测试失败，原因待继续处理。
+
+## [2026-08-04]
+
+### Fixed
+- **拆分测试恢复**：从 Git HEAD 恢复 `storage.rs` 中完整的 32 项存储测试，拆分至 `storage_tests_1.rs` 和 `storage_tests_2.rs`；挂载遗漏的 `logic_tests_5.rs`，恢复逻辑侧全部 78 项测试行为。
+
+### Tests
+- **Rust**：`cargo test` 通过 206 项，0 失败；新增存储测试文件均小于 500 行。
+
+### Refactored
+- **检索模块职责拆分**：将 `search.rs` 拆分为上下文、二进制包、CRAN、Bioconductor、GitHub、HTTP、缓存、结果编排及分片测试模块；保留 `crate::search::*` 路径、事件结构和检索行为，不使用 `include!`，生产与测试 Rust 文件均小于 500 行。
+
+### Tests
+- **Rust**：`cargo test` 通过 206 项，0 失败。
+
+- **存储职责拆分进行中**：将 `storage.rs` 拆分为原子存储、设置存储、缓存存储、历史存储和测试模块，保留 `crate::storage::*` 门面路径，不使用 `include!`；当前原测试迁移和最终验证尚未完成。
+- **逻辑职责拆分**：将 `mod_UI/src-tauri/src/logic.rs` 拆分为输入解析、脚本生成、命令生成、结果校验、历史解析和 URL 校验模块；`logic.rs` 保留同路径 re-export facade，不使用 `include!`。
+- **测试文件拆分**：将逻辑测试迁移至 `logic_tests.rs` 及分片测试文件，生产和测试 Rust 文件均控制在 500 行以内。
+- **模型职责拆分**：将 `mod_UI/src-tauri/src/models.rs` 拆分为设置、检索、依赖图和历史缓存模型文件，保留 `crate::models::*` re-export facade，不使用 `include!`。
+- **文件规模约束**：`models.rs` 及新增生产 Rust 文件均小于 500 行。
+
+### Tests
+- **Rust**：已执行 `cargo test`，200 项测试通过。
+
 ## [2026-08-04 00:10:00 +08:00]
 
 ### Refactored

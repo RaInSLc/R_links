@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { PanelHeader, Toggle } from "./components";
+import { PanelHeader } from "./components";
 import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, buildSearchPlanPreview, dedupePackageInput, extractSystemRequirements, normalizePackageInputDisplay, parseProjectDependencyFile, trimTrailingBlankLines, type SmartSuggestion } from "./utils";
 import type { Ecosystem, Method, Settings } from "./types";
-import { methods, defaultPinnedMethods } from "./types";
 import { ScriptPreview } from "./ScriptPreview";
+import { WorkspaceStrategyPanel } from "./WorkspaceStrategyPanel";
 
 interface WorkspaceViewProps {
   input: string;
@@ -78,7 +78,6 @@ export function WorkspaceView({
   copyWithLineNumbers, onCopyWithLineNumbersChange, isMethodDisabled,
 }: WorkspaceViewProps) {
   const [filterText, setFilterText] = useState("");
-  const [strategyExpanded, setStrategyExpanded] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [pasteHint, setPasteHint] = useState(false);
   const [rScriptHint, setRScriptHint] = useState<string | null>(null);
@@ -94,15 +93,6 @@ export function WorkspaceView({
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
-
-  useEffect(() => {
-    if (!strategyExpanded) return;
-    function onKeydown(e: KeyboardEvent) {
-      if (e.key === "Escape") { e.preventDefault(); setStrategyExpanded(false); }
-    }
-    window.addEventListener("keydown", onKeydown);
-    return () => window.removeEventListener("keydown", onKeydown);
-  }, [strategyExpanded]);
 
   async function handleFileDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -452,113 +442,17 @@ export function WorkspaceView({
         </div>
       </section>
 
-      <section className={`panel method-panel compact-method-panel ${ecosystem !== "r" ? "multi-method-panel" : ""}`}>
-        <PanelHeader step="02" title={ecosystem === "r-binary" ? "二进制命令" : "安装策略"} meta={ecosystem === "r-binary" ? "不执行网络检索" : settings.fullSearch ? "全量检索" : "快速检索"} />
-        {ecosystem !== "r" && <div className="multi-ecosystem-note"><strong>{ecosystem === "r-binary" ? "R 二进制命令生成" : ecosystem === "pip" ? "Pip 批量检索" : "Conda 批量检索"}</strong><span>{ecosystem === "r-binary" ? "根据输入直接生成 RSPM 安装代码，不混合默认 R 多源搜索。" : "源地址和版本会写入检索结果，复制命令即可安装。"}</span></div>}
-        <div className="method-grid pinned-method-grid" aria-label="常用安装策略">
-          {pinnedMethods.map((id) => {
-            const item = methods.find((m) => m.id === id);
-            if (!item) return null;
-            return (
-              <button
-                key={item.id}
-                className={`method-card ${method === item.id ? "selected" : ""}`}
-                disabled={isMethodDisabled(item.id)}
-                aria-pressed={method === item.id}
-                onClick={() => onMethodChange(item.id)}
-              >
-                <span>{item.title}</span>
-                <small>{item.description}</small>
-              </button>
-            );
-          })}
-        </div>
-        <div className="strategy-footer">
-          <div className="strategy-chips" aria-label="当前策略选项">
-            {conditional && <span>条件安装</span>}
-            {installDependencies && <span>安装依赖</span>}
-            {showRemoteVersion && <span>同步版本</span>}
-            {settings.fullSearch && <span>全量检索</span>}
-            {settings.useCache && <span>使用缓存</span>}
-            {verifyInstall && <span>安装后验证</span>}
-          </div>
-          <button type="button" className="button ghost compact-btn" onClick={() => setStrategyExpanded(true)}>
-            配置策略
-          </button>
-        </div>
-      </section>
-
-      {strategyExpanded && (
-        <div className="strategy-overlay" role="presentation" onClick={() => setStrategyExpanded(false)}>
-          <section className="panel strategy-drawer" role="dialog" aria-modal="true" aria-label="安装策略配置" onClick={(event) => event.stopPropagation()}>
-            <PanelHeader step="02" title="安装策略" meta={settings.fullSearch ? "全量检索" : "快速检索"} />
-            <div className="method-grid">
-              {methods.map((item) => (
-                <button
-                  key={item.id}
-                  className={`method-card ${method === item.id ? "selected" : ""}`}
-                  disabled={isMethodDisabled(item.id)}
-                  aria-pressed={method === item.id}
-                  onClick={() => onMethodChange(item.id)}
-                >
-                  <span>{item.title}</span>
-                  <small>{item.description}</small>
-                </button>
-              ))}
-            </div>
-            <div className="pin-section">
-              <p className="pin-section-title">面板常用策略</p>
-              <div className="pin-chips">
-                {methods.map((item) => {
-                  const pinned = pinnedMethods.includes(item.id);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`pin-chip ${pinned ? "active" : ""}`}
-                      onClick={() => {
-                        if (pinned) {
-                          if (pinnedMethods.length <= 1) return;
-                          onPinnedMethodsChange(pinnedMethods.filter((m) => m !== item.id));
-                        } else {
-                          onPinnedMethodsChange([...pinnedMethods, item.id]);
-                        }
-                      }}
-                      aria-pressed={pinned}
-                      title={pinned ? "从面板移除" : "添加到面板"}
-                    >
-                      {item.title}
-                    </button>
-                  );
-                })}
-              </div>
-              {pinnedMethods.length < defaultPinnedMethods.length && (
-                <button
-                  type="button"
-                  className="text-button pin-reset"
-                  onClick={() => onPinnedMethodsChange([...defaultPinnedMethods])}
-                >
-                  恢复默认常用
-                </button>
-              )}
-            </div>
-            <div className="toggle-row">
-              <Toggle checked={conditional} label="条件安装" description="已安装时自动跳过" onChange={onConditionalChange} />
-              <Toggle checked={installDependencies} label="安装依赖" description="dependencies = TRUE" onChange={onInstallDependenciesChange} />
-              <Toggle checked={showRemoteVersion} label="同步远程版本" description="显示版本并生成精确版本安装" onChange={onShowRemoteVersionChange} />
-              <Toggle checked={settings.fullSearch} label="全量检索" description="命中后仍继续查询 GitHub" onChange={onFullSearchChange} />
-              <Toggle checked={settings.useCache} label="使用缓存" description="使用包结果缓存" onChange={onUseCacheChange} />
-              <Toggle checked={verifyInstall} label="安装后验证" description="脚本末尾追加安装结果验证代码" onChange={onVerifyInstallChange} />
-              <Toggle checked={parallelInstall} label="多核编译" description="启用 parallel::detectCores() 加速源码包安装" onChange={onParallelInstallChange} />
-            </div>
-            <div className="strategy-drawer-actions">
-              <button type="button" className="button primary" onClick={() => setStrategyExpanded(false)}>
-                完成
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
+      <WorkspaceStrategyPanel
+        ecosystem={ecosystem} method={method} settings={settings} conditional={conditional}
+        installDependencies={installDependencies} showRemoteVersion={showRemoteVersion}
+        verifyInstall={verifyInstall} parallelInstall={parallelInstall} searching={searching}
+        pinnedMethods={pinnedMethods} onMethodChange={onMethodChange}
+        onPinnedMethodsChange={onPinnedMethodsChange} onConditionalChange={onConditionalChange}
+        onInstallDependenciesChange={onInstallDependenciesChange} onShowRemoteVersionChange={onShowRemoteVersionChange}
+        onVerifyInstallChange={onVerifyInstallChange} onParallelInstallChange={onParallelInstallChange}
+        onFullSearchChange={onFullSearchChange} onUseCacheChange={onUseCacheChange}
+        isMethodDisabled={isMethodDisabled}
+      />
 
       <ScriptPreview
         ecosystem={ecosystem}
