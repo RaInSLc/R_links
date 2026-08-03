@@ -16,7 +16,8 @@ struct PypiResponse {
 
 #[derive(Debug, Deserialize)]
 struct CondaResponse {
-    version: Option<String>,
+    latest_version: Option<String>,
+    versions: Option<Vec<String>>,
 }
 
 fn valid_name(value: &str) -> bool {
@@ -42,6 +43,26 @@ fn inputs(input: &str) -> Vec<(String, String)> {
         .map(split_requirement)
         .filter(|(name, _)| valid_name(name))
         .collect()
+}
+
+fn conda_version(payload: &CondaResponse, requested: &str) -> Option<String> {
+    let mut versions = payload.versions.clone().unwrap_or_default();
+    if let Some(latest) = payload.latest_version.as_deref().filter(|value| !value.is_empty()) {
+        versions.push(latest.to_string());
+    }
+    versions.sort_by(|left, right| {
+        let left_parts = left.split('.').map(|part| part.parse::<u64>().unwrap_or(0));
+        let right_parts = right.split('.').map(|part| part.parse::<u64>().unwrap_or(0));
+        left_parts.cmp(right_parts)
+    });
+    versions.dedup();
+    versions.reverse();
+
+    versions.into_iter().find(|version| {
+        requested.is_empty()
+            || version == requested
+            || (requested.matches('.').count() >= 1 && version.starts_with(&format!("{requested}.")))
+    })
 }
 
 pub async fn search(
@@ -88,11 +109,13 @@ pub async fn search(
                 match client.get(&url).send().await {
                     Ok(response) if response.status().is_success() => {
                         if let Ok(payload) = response.json::<CondaResponse>().await {
-                            version = payload.version.unwrap_or_default();
-                            found = !version.is_empty();
+                            if let Some(matched_version) = conda_version(&payload, &requested) {
+                                version = matched_version;
+                                found = true;
+                                repository = channel.to_string();
+                                break;
+                            }
                         }
-                        repository = channel.to_string();
-                        break;
                     }
                     Ok(response) if response.status() == StatusCode::NOT_FOUND => {}
                     Ok(response) => logs.push(format!("Conda {}/{} 返回 HTTP {}", channel, name, response.status().as_u16())),
@@ -124,5 +147,25 @@ mod tests {
     fn parses_pip_requirements() {
         assert_eq!(split_requirement("numpy==1.26.4"), ("numpy".to_string(), "1.26.4".to_string()));
         assert_eq!(split_requirement("pandas"), ("pandas".to_string(), String::new()));
+    }
+
+    #[test]
+    fn selects_conda_latest_version_from_metadata() {
+        let payload = CondaResponse {
+            latest_version: Some("1.10.0".to_string()),
+            versions: Some(vec!["1.2.0".to_string(), "1.10.0".to_string()]),
+        };
+        assert_eq!(conda_version(&payload, ""), Some("1.10.0".to_string()));
+        assert_eq!(conda_version(&payload, "1.2"), Some("1.2.0".to_string()));
+        assert_eq!(conda_version(&payload, "9.0"), None);
+    }
+
+    #[test]
+    fn empty_conda_metadata_is_not_a_hit() {
+        let payload = CondaResponse {
+            latest_version: None,
+            versions: Some(Vec::new()),
+        };
+        assert_eq!(conda_version(&payload, ""), None);
     }
 }
