@@ -177,6 +177,43 @@ export function useSearch(setStatus: SetStatus) {
     }
   }
 
+  async function startMultiEcosystemSearch(
+    input: string,
+    ecosystem: "pip" | "conda",
+    pipIndex: string,
+    condaChannels: string[],
+    inputTooLarge: boolean,
+    onViewReport: () => void,
+  ) {
+    if (!input.trim() || searchingRef.current || inputTooLarge) return;
+    searchingRef.current = true;
+    setSearching(true);
+    setPaused(false);
+    setSearchDuration(null);
+    setStageTimings([]);
+    setResults([]);
+    setLogs([]);
+    setDependencyGraph(null);
+    setStatus(ecosystem === "pip" ? "正在检索 Python 包" : "正在检索 Conda 包");
+    onViewReport();
+    searchStartTime.current = Date.now();
+    try {
+      const response = await invoke<SearchResponse>("search_multi_ecosystem", { input, ecosystem, pipIndex, condaChannels });
+      const clean = sanitizeSearchResponse(response);
+      setResults(clean.results);
+      setLogs(clean.logs);
+      setDependencyGraph(null);
+      setStatus(ecosystem === "pip" ? "Python 包检索完成" : "Conda 包检索完成");
+    } catch (error) {
+      setStatus(`${ecosystem === "pip" ? "Python" : "Conda"} 包检索失败: ${formatError(error)}`);
+    } finally {
+      setSearchDuration(Date.now() - searchStartTime.current);
+      setSearching(false);
+      setPaused(false);
+      searchingRef.current = false;
+    }
+  }
+
   async function stopSearch() {
     const runId = activeSearchRunId.current;
     if (!runId) return;
@@ -285,6 +322,7 @@ export function useSearch(setStatus: SetStatus) {
     searchDuration, stageTimings,
     startSearch,
     startBinarySearch,
+    startMultiEcosystemSearch,
     stopSearch,
     togglePauseSearch,
     cancelSearchPackage,

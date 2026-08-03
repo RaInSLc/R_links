@@ -503,10 +503,12 @@ function DependencyListView({ graph }: { graph: DependencyGraph }) {
 function getInstallCommand(result: SearchResult): string {
   if (!result.found) return result.package;
   if (result.source === "pip") {
-    return `pip install ${result.package}${result.requestedVersion ? `==${result.requestedVersion}` : ""}`;
+    const version = result.requestedVersion || result.latestVersion;
+    return `pip install ${result.package}${version ? `==${version}` : ""}`;
   }
   if (result.source === "conda") {
-    return `conda install ${result.repository || "conda-forge"}::${result.package}${result.requestedVersion ? `=${result.requestedVersion}` : ""}`;
+    const version = result.requestedVersion || result.latestVersion;
+    return `conda install ${result.repository || "conda-forge"}::${result.package}${version ? `=${version}` : ""}`;
   }
   if (result.source === "cran") {
     if (result.requestedVersion) {
@@ -824,7 +826,7 @@ export function ReportView({
 
   const handleOpenPage = async (result: SearchResult) => {
     if (!result.found) return;
-    if (result.source !== "cran" && result.source !== "bioc" && result.source !== "github" && result.source !== "r-forge") return;
+    if (result.source !== "cran" && result.source !== "bioc" && result.source !== "github" && result.source !== "r-forge" && result.source !== "pip" && result.source !== "conda") return;
     try {
       await invoke("open_package_page", {
         package: result.realName || result.package,

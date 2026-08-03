@@ -275,4 +275,80 @@ describe("ReportView", () => {
     });
     expect(vi.mocked(writeText)).toHaveBeenCalledWith(expect.stringContaining('install_version("dplyr", version = "1.0.0"'));
   });
+
+  it("uses latestVersion in conda command when no requested version", async () => {
+    const writeText = await import("@tauri-apps/plugin-clipboard-manager").then((module) => module.writeText);
+    const condaResult: SearchResult = {
+      package: "numpy",
+      requestedVersion: "",
+      latestVersion: "1.26.4",
+      repository: "conda-forge",
+      realName: "numpy",
+      source: "conda",
+      found: true,
+      message: "检索成功",
+      status: "found",
+    };
+    render(
+      <ReportView
+        results={[condaResult]}
+        logs={[]}
+        dependencyGraph={null}
+        packageCount={1}
+        uniqueFoundCount={1}
+        smartSuggestions={[]}
+        searching={false}
+        searchDuration={500}
+        onClearLogs={() => {}}
+        onStatusChange={() => {}}
+        onApplySmartSuggestion={() => {}}
+        onRetryMissing={() => {}}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByTitle(/复制安装指令/)[0]);
+    });
+    expect(vi.mocked(writeText)).toHaveBeenCalledWith(
+      expect.stringContaining("conda install conda-forge::numpy=1.26.4"),
+    );
+  });
+
+  it("uses latestVersion in pip command when no requested version", async () => {
+    const writeText = await import("@tauri-apps/plugin-clipboard-manager").then((module) => module.writeText);
+    const pipResult: SearchResult = {
+      package: "requests",
+      requestedVersion: "",
+      latestVersion: "2.31.0",
+      repository: "https://pypi.org",
+      realName: "requests",
+      source: "pip",
+      found: true,
+      message: "检索成功",
+      status: "found",
+    };
+    render(
+      <ReportView
+        results={[pipResult]}
+        logs={[]}
+        dependencyGraph={null}
+        packageCount={1}
+        uniqueFoundCount={1}
+        smartSuggestions={[]}
+        searching={false}
+        searchDuration={500}
+        onClearLogs={() => {}}
+        onStatusChange={() => {}}
+        onApplySmartSuggestion={() => {}}
+        onRetryMissing={() => {}}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByTitle(/复制安装指令/)[0]);
+    });
+    expect(vi.mocked(writeText)).toHaveBeenCalledWith(
+      expect.stringContaining("pip install requests==2.31.0"),
+    );
+  });
 });

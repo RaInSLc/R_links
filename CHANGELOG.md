@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [2026-08-03 01:00:00 +08:00]
+
+### Fixed
+- **Pip/Conda 搜索状态**：多生态搜索现在通过 `useSearch` hook 管理 `searching` 状态，检索期间显示加载指示器，防止重复触发搜索。
+- **Conda/Pip 安装命令版本回填**：用户未指定版本时，安装命令回填检索到的 `latestVersion`，与 GitHub 来源行为一致。
+- **Conda/Pip 来源页打开**：报告页右键菜单和操作支持打开 `pypi.org` 和 `anaconda.org` 来源页面。
+- **来源页 URL 安全校验**：后端 `build_package_page_url` 和 `is_allowed_package_page_url` 新增 pip/conda 白名单路径校验。
+
+### Tests
+- **Rust**：新增 pip/conda 来源页 URL 构建与安全校验回归测试。
+- **前端**：新增 Conda/Pip 安装命令版本回填测试。
+
 ## [2026-08-03 00:00:00 +08:00]
 
 ### Fixed

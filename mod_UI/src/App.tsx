@@ -18,7 +18,7 @@ import {
   MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES,
   MAX_SCRIPT_CHARS, MAX_HISTORY_RECORDS, utf8Length,
   dedupePackageInput, normalizePackageInputDisplay, trimTrailingBlankLines,
-  type HistoryRecord, type SearchResult, type SearchResponse,
+  type HistoryRecord, type SearchResult,
   generateMultiEcosystemScript,
   generateSystemRequirementsScript,
 } from "./utils";
@@ -163,7 +163,7 @@ function AppContent() {
     searching, openingSearchTabs, searchingRef, hasSearchEvidenceRef,
     paused, togglePauseSearch, cancelSearchPackage,
     searchDuration, stageTimings,
-     startSearch, startBinarySearch, stopSearch, openSearchTabs } = search;
+     startSearch, startBinarySearch, startMultiEcosystemSearch, stopSearch, openSearchTabs } = search;
   const { settings, showToken, setShowToken,
     tokenConfigured, settingsBusy, settingsLoaded, updateSettingsFromUser,
     replaceSettingsFromUser, acceptSettingValue, persistSettings, clearSavedToken } = settingsHook;
@@ -581,11 +581,8 @@ function AppContent() {
       void startBinarySearch(input, settings, inputTooLarge, rBinaryMirror, () => setView("report"));
       return;
     }
-    if (ecosystem !== "r") {
-      setView("report");
-      void invoke<SearchResponse>("search_multi_ecosystem", { input, ecosystem, pipIndex, condaChannels })
-        .then((response) => { setResults(response.results); setLogs(response.logs); setStatus("多生态检索完成"); })
-        .catch((error) => setStatus(`多生态检索失败: ${formatError(error)}`));
+    if (ecosystem === "pip" || ecosystem === "conda") {
+      void startMultiEcosystemSearch(input, ecosystem, pipIndex, condaChannels, inputTooLarge, () => setView("report"));
       return;
     }
     startSearch(input, settings, inputTooLarge, () => setView("report"), () => setMethod("auto"));

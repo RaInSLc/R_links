@@ -1776,6 +1776,22 @@ pub fn build_package_page_url(
             }
             Ok(format!("https://r-forge.r-project.org/projects/{package}/"))
         }
+        "pip" => {
+            if !is_valid_package_name(package) {
+                return Err(format!("无效的 PyPI 包名: {package}"));
+            }
+            Ok(format!("https://pypi.org/project/{package}/"))
+        }
+        "conda" => {
+            let channel = repository.trim();
+            if !is_valid_package_name(package) {
+                return Err(format!("无效的 Conda 包名: {package}"));
+            }
+            if channel.is_empty() || !channel.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+                return Err("无效的 Conda channel".to_string());
+            }
+            Ok(format!("https://anaconda.org/{channel}/{package}"))
+        }
         _ => Err(format!("不支持的来源类型: {source}")),
     }
 }
@@ -1811,6 +1827,16 @@ pub fn is_allowed_package_page_url(value: &str) -> bool {
         Some("r-forge.r-project.org") => {
             let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
             segs.len() == 2 && segs[0] == "projects" && is_valid_package_name(segs[1])
+        }
+        Some("pypi.org") => {
+            let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            segs.len() == 2 && segs[0] == "project" && is_valid_package_name(segs[1])
+        }
+        Some("anaconda.org") => {
+            let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            segs.len() == 2
+                && segs[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                && is_valid_package_name(segs[1])
         }
         _ => false,
     }
@@ -3447,5 +3473,32 @@ mod tests {
     fn parallel_install_adds_ncpus_option() {
         let script = generate_script("dplyr", &GenerateOptions { method: "base".to_string(), parallel_install: true, ..Default::default() }, &[]).expect("应生成脚本");
         assert!(script.contains("options(Ncpus = parallel::detectCores())"));
+    }
+
+    #[test]
+    fn builds_pip_package_page_url() {
+        let url = build_package_page_url("numpy", "pip", "").expect("应生成 PyPI URL");
+        assert_eq!(url, "https://pypi.org/project/numpy/");
+        assert!(is_allowed_package_page_url(&url));
+    }
+
+    #[test]
+    fn builds_conda_package_page_url() {
+        let url = build_package_page_url("numpy", "conda", "conda-forge").expect("应生成 Conda URL");
+        assert_eq!(url, "https://anaconda.org/conda-forge/numpy");
+        assert!(is_allowed_package_page_url(&url));
+    }
+
+    #[test]
+    fn rejects_conda_page_url_with_invalid_channel() {
+        assert!(build_package_page_url("numpy", "conda", "").is_err());
+        assert!(build_package_page_url("numpy", "conda", "evil/path").is_err());
+    }
+
+    #[test]
+    fn rejects_disallowed_pip_conda_page_urls() {
+        assert!(!is_allowed_package_page_url("https://pypi.org/project/numpy/../../etc"));
+        assert!(!is_allowed_package_page_url("https://anaconda.org/conda-forge/numpy?evil=1"));
+        assert!(!is_allowed_package_page_url("https://evil.com/project/numpy"));
     }
 }
