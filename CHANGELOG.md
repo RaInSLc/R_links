@@ -1,10 +1,11 @@
 # CHANGELOG
 
-## [2026-08-04 15:30:00 +08:00] - Release v0.2.3
+## [2026-08-04 18:20:00 +08:00] - Release v0.2.3
 
 ### Fixed
-- **Release workflow 缺少 releaseName 修复**：在 `tauri-action` 步骤中补全 `releaseName: "R Package Command Center ${{ env.RELEASE_TAG }}"` 与 `releaseBody` 配置，解决重新创建 GitHub Release 时因缺失 Release 名称抛出 `"releaseName" not set but required to create release` 导致资产上传中断的问题。
-- **构建产物 Artifacts 自动保存**：在 `release.yml` 末尾添加 `Preserve Windows installers` 兜底步骤，使用 `actions/upload-artifact@v4` 保存 MSI/NSIS 安装包及签名。
+- **Release workflow 缺少 releaseName 修复**：在 `tauri-action` 步骤中补全 `releaseName: "R Package Command Center ${{ env.RELEASE_TAG }}"` 与 `releaseBody` 配置，解决了重新创建 GitHub Release 时因缺失 Release 名称抛出 `"releaseName" not set but required to create release` 导致资产上传中断的问题。
+- **构建产物 Artifacts 自动保存**：在 `release.yml` 末尾添加 `Preserve Windows installers` 兜底步骤，使用 `actions/upload-artifact@v4` 将编译出的 MSI 和 NSIS Setup 安装包上传至 GitHub Actions Artifacts。
+- **自动更新清单校验防御增强**：当仓库 Secret 未配置 `TAURI_SIGNING_PRIVATE_KEY` 导致 `tauri-action` 跳过 `latest.json` 自动更新清单生成时，`release.yml` 校验步骤能够智能识别并跳过，避免因未配置签名密钥而误报失败。
 
 ## [2026-08-04 13:30:00 +08:00]
 
