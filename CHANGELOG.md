@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [2026-08-04 10:35:00 +08:00]
+
+### Fixed
+- **Release workflow 防止重复打包**：移除 `release.yml` 的 `workflow_dispatch` 入口，仅保留版本 tag push 触发；同一 tag 不再因自动触发和手动触发同时执行两次 Tauri 发布打包。
+- **CI/Release 职责明确**：保留 CI 的 `tauri build -- --no-bundle` 编译校验；MSI、NSIS 和 updater 资产仅由 Release workflow 生成。
+
 ## [2026-08-04 10:20:00 +08:00]
 
 ### Fixed

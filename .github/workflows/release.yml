@@ -4,12 +4,6 @@ on:
   push:
     tags:
       - "v*.*.*"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Release tag, for example v0.1.10"
-        required: true
-        type: string
 
 # Requires repo Settings > Actions > General > Workflow permissions
 # set to "Read and write permissions" for GITHUB_TOKEN to create releases.
@@ -21,7 +15,7 @@ jobs:
     name: Build Windows release
     runs-on: windows-latest
     env:
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+      RELEASE_TAG: ${{ github.ref_name }}
 
     steps:
       - name: Checkout
