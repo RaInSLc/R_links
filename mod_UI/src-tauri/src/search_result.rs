@@ -1,10 +1,8 @@
 use super::*;
 
 use crate::search_sanitize::{
-    clean_result_package_name, clean_result_real_name, clean_result_repository,
-    clean_result_source, clean_version, sanitize_log_message, sanitize_search_result_for_emit,
+    clean_result_package_name, clean_version,
 };
-use crate::search_urls::validate_search_request_url;
 
 pub(crate) fn extract_html_version(html: &str) -> Option<String> {
     let regex = HTML_VERSION_RE.get_or_init(|| {

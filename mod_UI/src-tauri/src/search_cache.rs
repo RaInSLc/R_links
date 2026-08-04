@@ -1,5 +1,4 @@
 use super::*;
-use super::log;
 
 pub(crate) fn cache_entry_matches_result(entry: &PackageCacheEntry, result: &SearchResult) -> bool {
     entry.source == result.source
