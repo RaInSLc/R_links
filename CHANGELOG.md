@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-08-04 11:50:00 +08:00]
+
+### Fixed
+- **命令历史标签页渲染崩溃修复**：修复 `AppContent.tsx` 中解构 `historyHook` 时遗漏 `historySearch` 与 `setHistorySearch` 导致其未透传给 `props`，进而导致 `HistoryView` 点击时对 `undefined` 调用 `.toLowerCase()` 抛出 `TypeError: Cannot read properties of undefined (reading 'toLowerCase')` 触发白屏保护的问题。
+- **防御性兜底强化**：在 `HistoryView.tsx` 中为 `historySearch` 增加 `historySearch = ""` 及 `(historySearch || "").toLowerCase()` 双重空值保护，并补充单工测试校验。
+
+### Tests
+- **前端**：`npm test -- --run` 通过 151 项（新增 1 项 `historySearch` 缺失防崩溃测试）；`npm run build` 成功通过。
+
 ## [2026-08-04 11:45:00 +08:00]
 
 ### Fixed

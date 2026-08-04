@@ -14,7 +14,7 @@ interface HistoryViewProps {
 }
 
 export function HistoryView({
-  history, historySearch, onHistorySearchChange,
+  history = [], historySearch = "", onHistorySearchChange = () => {},
   onApplyRecord, onCopyRecord, onDeleteRecord, onClearAll,
 }: HistoryViewProps) {
   const [sortBy, setSortBy] = useState<"time" | "name">("time");
@@ -41,7 +41,7 @@ export function HistoryView({
   };
 
   const filtered = useMemo(() => {
-    const query = historySearch.toLowerCase();
+    const query = (historySearch || "").toLowerCase();
     return history.filter((record) =>
       (record.packageName || "").toLowerCase().includes(query) ||
       (record.toolName || "").toLowerCase().includes(query) ||

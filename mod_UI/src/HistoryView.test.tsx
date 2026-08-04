@@ -99,4 +99,20 @@ describe("HistoryView", () => {
     fireEvent.click(screen.getByText("清空全部"));
     expect(handleClearAll).toHaveBeenCalled();
   });
+
+  it("renders safely when historySearch is undefined", () => {
+    render(
+      <HistoryView
+        history={mockHistory}
+        historySearch={undefined as any}
+        onHistorySearchChange={() => {}}
+        onApplyRecord={() => {}}
+        onCopyRecord={() => {}}
+        onDeleteRecord={() => {}}
+        onClearAll={() => {}}
+      />
+    );
+
+    expect(screen.getByText("dplyr")).toBeInTheDocument();
+  });
 });
