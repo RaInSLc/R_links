@@ -57,22 +57,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $releaseExists = $false
           try {
             $null = gh release view $env:RELEASE_TAG --json isDraft 2>&1
             if ($LASTEXITCODE -eq 0) {
-              $releaseExists = $true
+              Write-Host "Found existing release for $env:RELEASE_TAG. Deleting release to allow clean re-publish..."
+              gh release delete $env:RELEASE_TAG --yes 2>&1 | Out-Null
+            } else {
+              Write-Host "No existing release found for $env:RELEASE_TAG. Proceeding with fresh release..."
             }
           } catch {
-            $releaseExists = $false
+            Write-Host "No existing release found or check failed. Proceeding with fresh release..."
           }
-
-          if ($releaseExists) {
-            Write-Host "Found existing release for $env:RELEASE_TAG. Deleting release to allow clean re-publish..."
-            gh release delete $env:RELEASE_TAG --yes 2>&1 | Out-Null
-          } else {
-            Write-Host "No existing release found for $env:RELEASE_TAG. Proceeding with fresh release..."
-          }
+          $global:LASTEXITCODE = 0
+          exit 0
 
       - name: Build and upload Tauri assets
         uses: tauri-apps/tauri-action@v0
@@ -174,3 +171,5 @@ jobs:
             }
           }
           Write-Host "latest.json updater manifest validated successfully!"
+          $global:LASTEXITCODE = 0
+          exit 0
