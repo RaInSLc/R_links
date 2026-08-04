@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import { PanelHeader, EmptyState } from "./components";
 import type { HistoryRecord } from "./utils";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -40,16 +40,20 @@ export function HistoryView({
       : "未知时间";
   };
 
-  const filtered = history
-    .filter(record =>
-      (record.packageName && record.packageName.toLowerCase().includes(historySearch.toLowerCase())) ||
-      (record.toolName && record.toolName.toLowerCase().includes(historySearch.toLowerCase())) ||
-      (record.command && record.command.toLowerCase().includes(historySearch.toLowerCase()))
+  const filtered = useMemo(() => {
+    const query = historySearch.toLowerCase();
+    return history.filter((record) =>
+      (record.packageName || "").toLowerCase().includes(query) ||
+      (record.toolName || "").toLowerCase().includes(query) ||
+      (record.command || "").toLowerCase().includes(query),
     );
+  }, [history, historySearch]);
 
-  const sorted = sortBy === "name"
-    ? [...filtered].sort((a, b) => (a.packageName || "").localeCompare(b.packageName || ""))
-    : [...filtered].sort((a, b) => parseCreatedAt(b.createdAt) - parseCreatedAt(a.createdAt));
+  const sorted = useMemo(() => (
+    sortBy === "name"
+      ? [...filtered].sort((a, b) => (a.packageName || "").localeCompare(b.packageName || ""))
+      : [...filtered].sort((a, b) => parseCreatedAt(b.createdAt) - parseCreatedAt(a.createdAt))
+  ), [filtered, sortBy]);
 
   useEffect(() => { setHistNavIndex(-1); }, [filtered]);
 
