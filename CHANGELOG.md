@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [2026-08-04 11:25:00 +08:00]
+
+### Fixed
+- **Release updater manifest 校验失败**：移除对本地 `target\release\bundle\latest.json` 的错误假设。`tauri-action` 通过 `includeUpdaterJson: true` 负责生成并上传 `latest.json`，workflow 仅在 Release 资产上传完成后从 GitHub 下载并校验该文件。
+
 ## [2026-08-04 11:00:00 +08:00]
 
 ### Release
