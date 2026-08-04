@@ -1,21 +1,13 @@
-use futures_util::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
-use reqwest::{Client, RequestBuilder, StatusCode};
+use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::OnceLock;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
-use tokio::time::sleep;
-use url::Url;
-use crate::logic::{infer_bioc_version, normalize_github_repository, parse_inputs_filtered};
-use crate::models::{InputRules, PackageCacheEntry, PackageInput, SearchResponse, SearchResult, Settings, MAX_FIELD_CHARS, MAX_PACKAGE_LINES};
-use crate::storage;
-use crate::search_urls::{validate_search_request_url, validate_search_request_url_with_mirror};
-use crate::search_sanitize::{clean_result_package_name, clean_result_real_name, clean_result_repository, clean_result_source, clean_version, sanitize_log_message, sanitize_search_result_for_emit};
+use crate::models::{SearchResult, Settings, MAX_PACKAGE_LINES};
+use crate::search_sanitize::sanitize_log_message;
 pub(crate) const BIOC_VERSIONS: &[&str] = &[
     "3.23", "3.22", "3.21", "3.20", "3.19", "3.18", "3.17", "3.16", "3.15", "3.14", "3.13", "3.12",
     "3.11", "3.10", "3.9", "3.8", "3.7", "3.6", "3.5", "3.4", "3.3", "3.2", "3.1", "3.0",

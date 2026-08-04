@@ -1,38 +1,8 @@
-use regex::Regex;
-use std::collections::HashSet;
-use std::sync::OnceLock;
-use std::time::{SystemTime, UNIX_EPOCH};
-use url::Url;
-
-use crate::models::{
-    normalize_cran_mirror_url, url_has_explicit_port, GenerateOptions,
-    HistoryRecord, InputRules, PackageInput, ReverseDependenciesInfo, SearchResult,
-    MAX_FIELD_CHARS, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_INPUT_CHARS,
-    MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
-};
-
-const MAX_GENERATE_METHOD_CHARS: usize = 32;
-const MAX_GENERATE_SEARCH_RESULTS: usize = MAX_PACKAGE_LINES * 16;
+use crate::models::{SearchResult, MAX_FIELD_CHARS};
+const MAX_GENERATE_SEARCH_RESULTS: usize = 8_000;
 const MAX_VERSION_CHARS: usize = 64;
 const MAX_RESULT_SOURCE_CHARS: usize = 16;
 const MAX_RESULT_MESSAGE_CHARS: usize = 512;
-const MAX_INSTALL_ARCHIVE_FILE_CHARS: usize = 256;
-const MAX_INPUT_LINE_BYTES: usize = 2_048;
-const MAX_HISTORY_SCAN_LINES: usize = MAX_HISTORY_RECORDS;
-const INSTALL_ARCHIVE_EXTENSIONS: &[&str] = &[".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".zip"];
-
-static INPUT_URL_RE: OnceLock<Regex> = OnceLock::new();
-static INPUT_PACKAGE_RE: OnceLock<Regex> = OnceLock::new();
-static INPUT_VERSION_RE: OnceLock<Regex> = OnceLock::new();
-static QUOTED_VALUE_RE: OnceLock<Regex> = OnceLock::new();
-static SOURCE_HINT_RE: OnceLock<Regex> = OnceLock::new();
-static HISTORY_VERSION_RE: OnceLock<Regex> = OnceLock::new();
-static BASE_HISTORY_RE: OnceLock<[Regex; 4]> = OnceLock::new();
-static INSTALL_URL_HISTORY_RE: OnceLock<Regex> = OnceLock::new();
-static LOCAL_ARCHIVE_RE: OnceLock<Regex> = OnceLock::new();
-static CRAN_HISTORY_RE: OnceLock<[Regex; 2]> = OnceLock::new();
-static REVERSE_DEPS_RE: OnceLock<Regex> = OnceLock::new();
-
 use crate::logic::*;
 
 pub(crate) fn validate_search_results_count(results: &[SearchResult]) -> Result<(), String> {

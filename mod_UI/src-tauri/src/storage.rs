@@ -36,15 +36,14 @@ pub(crate) use settings_storage::{
 pub(crate) use atomic_storage::{
     atomic_write, backup_corrupt_path, ensure_storage_directory, path_entry_exists,
     prune_corrupt_backups, read_limited_to_string, read_storage_path_with_recovery,
-    replace_storage_file, unique_file_suffix, write_new, MAX_HISTORY_FILE_BYTES,
+    replace_storage_file, unique_file_suffix, MAX_HISTORY_FILE_BYTES,
     MAX_SETTINGS_FILE_BYTES, MALFORMED_SETTINGS_BACKUP_NOTICE,
 };
 #[cfg(test)]
 pub(crate) use cache_storage::sorted_cache_entries;
 #[cfg(test)]
-pub(crate) use history_storage::{test_sanitize_history, test_validate_history};
 #[cfg(test)]
-pub(crate) use settings_storage::{redact_settings_backup_content, test_into_settings, test_stored_settings, StoredSettings};
+pub(crate) use settings_storage::{redact_settings_backup_content, StoredSettings};
 
 #[cfg(test)]
 #[path = "storage_tests_1.rs"]

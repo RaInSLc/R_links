@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [2026-08-04 10:05:00 +08:00]
+
+### Fixed
+- **Tauri release 编译警告清理**：移除拆分后复制到 `input.rs`、`script_generation.rs`、`result_validation.rs`、`command_generation.rs`、`history_parser.rs`、`url_validation.rs`、`search.rs` 和 `search_context.rs` 的无效导入、未使用常量及静态正则定义。
+- **测试构建兼容性**：恢复 `sanitize_log_message` 的测试专用重导出，保留 release 构建零警告和测试模块的完整调用路径。
+
+### Tests
+- **Release 检查**：`cargo check --release` 通过，0 个 warning。
+- **Rust**：`cargo test` 通过 206 项。
+- **前端**：`npm test -- --run` 通过 150 项；`npm run build` 通过。
+- **完整打包**：`npm run tauri build` 通过，生成 MSI 和 NSIS 安装包。
+
 ## [2026-08-04 02:05:00 +08:00]
 
 ### Refactored
