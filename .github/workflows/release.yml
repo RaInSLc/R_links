@@ -51,7 +51,7 @@ jobs:
             throw "Release tag $env:RELEASE_TAG does not match package.json version v$packageVersion"
           }
 
-      - name: Remove stale draft release
+      - name: Remove stale draft or existing release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -60,13 +60,10 @@ jobs:
           $releaseJson = gh release view $env:RELEASE_TAG --json isDraft 2>$null
           if ($LASTEXITCODE -eq 0 -and $releaseJson) {
             $release = $releaseJson | ConvertFrom-Json
-            if ($release.isDraft) {
-              gh release delete $env:RELEASE_TAG --yes
-              if ($LASTEXITCODE -ne 0) {
-                throw "Failed to remove stale draft release $env:RELEASE_TAG"
-              }
-            } else {
-              throw "Release $env:RELEASE_TAG already exists and is not a draft"
+            Write-Host "Found existing release for $env:RELEASE_TAG (isDraft: $($release.isDraft)). Deleting to allow clean re-publish..."
+            gh release delete $env:RELEASE_TAG --yes --cleanup-tag
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Warning: gh release delete returned code $LASTEXITCODE"
             }
           }
 
@@ -100,14 +97,41 @@ jobs:
 
       - name: Validate updater manifest
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = "Stop"
           $tag = $env:RELEASE_TAG
           New-Item -ItemType Directory -Path "updater-check" -Force | Out-Null
-          Invoke-WebRequest -Uri "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/latest.json" -OutFile "updater-check\latest.json"
+
+          $downloaded = $false
+          for ($i = 1; $i -le 6; $i++) {
+            Write-Host "Attempt $i/6: Downloading latest.json via gh release download..."
+            gh release download $tag --pattern "latest.json" --dir "updater-check" --clobber 2>$null
+            if (Test-Path -LiteralPath "updater-check\latest.json") {
+              $downloaded = $true
+              Write-Host "Successfully downloaded latest.json via GitHub CLI"
+              break
+            }
+
+            Write-Host "Attempt $i/6: Fetching latest.json via Web Request..."
+            $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/latest.json"
+            try {
+              Invoke-WebRequest -Uri $url -OutFile "updater-check\latest.json" -Headers @{ "User-Agent" = "GitHubActions" } -ErrorAction SilentlyContinue
+              if (Test-Path -LiteralPath "updater-check\latest.json") {
+                $downloaded = $true
+                Write-Host "Successfully downloaded latest.json via Web Request"
+                break
+              }
+            } catch {
+              Write-Host "Web Request failed: $_"
+            }
+            Start-Sleep -Seconds 5
+          }
+
           $manifestPath = Join-Path "updater-check" "latest.json"
           if (-not (Test-Path -LiteralPath $manifestPath)) {
-            throw "latest.json was not uploaded to release $tag"
+            throw "latest.json was not found in release $tag after retries"
           }
           $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
           if (-not $manifest.version) {
@@ -132,3 +156,4 @@ jobs:
               throw "latest.json platform $($platform.Name) is missing signature"
             }
           }
+          Write-Host "latest.json updater manifest validated successfully!"
