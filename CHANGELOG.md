@@ -5,6 +5,11 @@
 ### Fixed
 - **Draft Release updater 校验**：将 `latest.json` 校验从 `gh release download` 改为使用 `GITHUB_TOKEN` 通过 GitHub Releases API 读取 draft Release 资产，避免 draft 资产未公开导致校验失败。
 
+## [2026-08-04 12:05:00 +08:00]
+
+### Fixed
+- **Release manifest 校验稳定性**：取消 draft Release 中间态，直接创建正式 Release 并通过公开下载 URL 校验 `latest.json`，避免 GitHub draft 资产 API 不可见导致发布失败。
+
 ## [2026-08-04 11:25:00 +08:00]
 
 ### Fixed
