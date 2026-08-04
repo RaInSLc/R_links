@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [2026-08-04 13:48:00 +08:00] - Release v0.2.3
+
+### Changed
+- **版本升级至 v0.2.3**：同步更新 `package.json`、`package-lock.json`、`tauri.conf.json`、`Cargo.toml` 与 `Cargo.lock` 版本号为 `0.2.3`。
+- **发布流程自动化优化**：修复 GitHub Release Action 打包逻辑，包含对 `latest.json` 自动更新清单的多轮重试提取和稳健构建支持。
+
 ## [2026-08-04 13:30:00 +08:00]
 
 ### Fixed
