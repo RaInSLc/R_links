@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [2026-08-04 11:00:00 +08:00]
+
+### Release
+- **版本升级**：统一 `package.json`、`package-lock.json`、`tauri.conf.json`、`Cargo.toml` 和 `Cargo.lock` 的项目版本至 `0.2.2`，用于创建 `v0.2.2` 正式发布并验证在线更新清单。
+
 ## [2026-08-04 10:35:00 +08:00]
 
 ### Fixed
