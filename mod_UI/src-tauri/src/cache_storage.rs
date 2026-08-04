@@ -46,6 +46,7 @@ pub(crate) fn load_cache(app: &AppHandle) -> Result<HashMap<String, PackageCache
             let mut cache = HashMap::new();
             for e in es.into_iter().take(limit(app)) {
                 let k = e.package_name.to_ascii_lowercase();
+                #[allow(clippy::nonminimal_bool)]
                 if !k.is_empty()
                     && !e.source.is_empty()
                     && !(k == "oncopredict" && e.source == "cran" && e.repository.is_empty())

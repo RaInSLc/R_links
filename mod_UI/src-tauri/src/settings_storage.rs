@@ -271,10 +271,12 @@ fn redact_settings_value(value: &mut serde_json::Value) {
     }
 }
 #[cfg(test)]
+#[allow(dead_code)]
 pub(crate) fn test_stored_settings(settings: &Settings) -> Result<StoredSettings, String> {
     StoredSettings::from_settings(settings)
 }
 #[cfg(test)]
+#[allow(dead_code)]
 pub(crate) fn test_into_settings(stored: StoredSettings) -> Result<Settings, String> {
     stored.into_settings()
 }

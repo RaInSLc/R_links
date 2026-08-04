@@ -164,6 +164,7 @@ fn is_stopped(cancelled: &AtomicBool, budget: &RequestBudget) -> bool {
     cancelled.load(Ordering::SeqCst) || budget.is_exhausted()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn search(
     app: &AppHandle,
     run_id: u64,

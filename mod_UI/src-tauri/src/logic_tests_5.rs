@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(unused_imports)]
 mod tests {
     use crate::logic::*;
     use crate::models::{

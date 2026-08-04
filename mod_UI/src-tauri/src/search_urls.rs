@@ -94,29 +94,6 @@ fn configured_mirror_path_allows(configured: &Url, requested: &Url) -> bool {
     is_allowed_cran_package_path(&relative_url) || is_allowed_cran_archive_path(&relative_url)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::validate_search_request_url_with_mirror;
-
-    #[test]
-    fn accepts_standard_package_path_under_configured_cran_directory() {
-        let result = validate_search_request_url_with_mirror(
-            "https://mirrors.tuna.tsinghua.edu.cn/CRAN/web/packages/dplyr/index.html",
-            Some("https://mirrors.tuna.tsinghua.edu.cn/CRAN/"),
-        );
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn rejects_paths_outside_configured_cran_directory() {
-        let result = validate_search_request_url_with_mirror(
-            "https://mirrors.tuna.tsinghua.edu.cn/other/web/packages/dplyr/index.html",
-            Some("https://mirrors.tuna.tsinghua.edu.cn/CRAN/"),
-        );
-        assert!(result.is_err());
-    }
-}
-
 fn is_allowed_cran_package_path(url: &Url) -> bool {
     url.path_segments().is_some_and(|segments| {
         let segments = segments.collect::<Vec<_>>();
@@ -243,4 +220,27 @@ fn is_allowed_r_binary_path(url: &Url) -> bool {
                     character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_' | '+')
                 })
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_search_request_url_with_mirror;
+
+    #[test]
+    fn accepts_standard_package_path_under_configured_cran_directory() {
+        let result = validate_search_request_url_with_mirror(
+            "https://mirrors.tuna.tsinghua.edu.cn/CRAN/web/packages/dplyr/index.html",
+            Some("https://mirrors.tuna.tsinghua.edu.cn/CRAN/"),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn rejects_paths_outside_configured_cran_directory() {
+        let result = validate_search_request_url_with_mirror(
+            "https://mirrors.tuna.tsinghua.edu.cn/other/web/packages/dplyr/index.html",
+            Some("https://mirrors.tuna.tsinghua.edu.cn/CRAN/"),
+        );
+        assert!(result.is_err());
+    }
 }
