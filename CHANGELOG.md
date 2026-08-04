@@ -10,6 +10,11 @@
 ### Fixed
 - **Release manifest 校验稳定性**：取消 draft Release 中间态，直接创建正式 Release 并通过公开下载 URL 校验 `latest.json`，避免 GitHub draft 资产 API 不可见导致发布失败。
 
+## [2026-08-04 12:20:00 +08:00]
+
+### Fixed
+- **Release 残留 draft 冲突**：在构建前仅清理同 tag 的 draft Release，避免前几次失败留下的 `v0.2.2` draft 干扰 Tauri action 创建正式 Release。
+
 ## [2026-08-04 11:25:00 +08:00]
 
 ### Fixed
