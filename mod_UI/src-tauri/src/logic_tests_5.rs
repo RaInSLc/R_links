@@ -1,9 +1,12 @@
 #[cfg(test)]
 mod tests {
     use crate::logic::*;
-    use crate::models::{GenerateOptions, InputRules, PackageInput, SearchResult, MAX_FIELD_CHARS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS};
-    
-        #[test]
+    use crate::models::{
+        GenerateOptions, InputRules, PackageInput, SearchResult, MAX_FIELD_CHARS, MAX_INPUT_CHARS,
+        MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
+    };
+
+    #[test]
     fn custom_r_library_path_is_used_by_generated_script() {
         let script = generate_script(
             "dplyr",
@@ -21,41 +24,52 @@ mod tests {
         assert!(script.contains("lib = \"D:/R/project-library\""));
     }
 
-
-        #[test]
+    #[test]
     fn parallel_install_adds_ncpus_option() {
-        let script = generate_script("dplyr", &GenerateOptions { method: "base".to_string(), parallel_install: true, ..Default::default() }, &[]).expect("应生成脚本");
+        let script = generate_script(
+            "dplyr",
+            &GenerateOptions {
+                method: "base".to_string(),
+                parallel_install: true,
+                ..Default::default()
+            },
+            &[],
+        )
+        .expect("应生成脚本");
         assert!(script.contains("options(Ncpus = parallel::detectCores())"));
     }
 
-
-        #[test]
+    #[test]
     fn builds_pip_package_page_url() {
         let url = build_package_page_url("numpy", "pip", "").expect("应生成 PyPI URL");
         assert_eq!(url, "https://pypi.org/project/numpy/");
         assert!(is_allowed_package_page_url(&url));
     }
 
-
-        #[test]
+    #[test]
     fn builds_conda_package_page_url() {
-        let url = build_package_page_url("numpy", "conda", "conda-forge").expect("应生成 Conda URL");
+        let url =
+            build_package_page_url("numpy", "conda", "conda-forge").expect("应生成 Conda URL");
         assert_eq!(url, "https://anaconda.org/conda-forge/numpy");
         assert!(is_allowed_package_page_url(&url));
     }
 
-
-        #[test]
+    #[test]
     fn rejects_conda_page_url_with_invalid_channel() {
         assert!(build_package_page_url("numpy", "conda", "").is_err());
         assert!(build_package_page_url("numpy", "conda", "evil/path").is_err());
     }
 
-
-        #[test]
+    #[test]
     fn rejects_disallowed_pip_conda_page_urls() {
-        assert!(!is_allowed_package_page_url("https://pypi.org/project/numpy/../../etc"));
-        assert!(!is_allowed_package_page_url("https://anaconda.org/conda-forge/numpy?evil=1"));
-        assert!(!is_allowed_package_page_url("https://evil.com/project/numpy"));
+        assert!(!is_allowed_package_page_url(
+            "https://pypi.org/project/numpy/../../etc"
+        ));
+        assert!(!is_allowed_package_page_url(
+            "https://anaconda.org/conda-forge/numpy?evil=1"
+        ));
+        assert!(!is_allowed_package_page_url(
+            "https://evil.com/project/numpy"
+        ));
     }
 }

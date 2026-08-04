@@ -282,7 +282,9 @@ pub(crate) fn clean_result_repository(source: &str, value: &str) -> Option<Strin
         "cran-binary" => {
             if trimmed.starts_with("https://packagemanager.posit.co/") && trimmed.ends_with('/') {
                 Some(trimmed.to_string())
-            } else { None }
+            } else {
+                None
+            }
         }
         _ => {
             if trimmed.len() <= MAX_FIELD_CHARS && !trimmed.chars().any(char::is_control) {

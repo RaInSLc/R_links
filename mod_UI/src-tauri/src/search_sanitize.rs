@@ -66,7 +66,9 @@ pub(crate) fn clean_result_repository(source: &str, value: &str) -> Option<Strin
         "cran-binary" => {
             if trimmed.starts_with("https://packagemanager.posit.co/") && trimmed.ends_with("/") {
                 Some(trimmed.to_string())
-            } else { None }
+            } else {
+                None
+            }
         }
         _ => trimmed.is_empty().then(String::new),
     }
@@ -74,7 +76,9 @@ pub(crate) fn clean_result_repository(source: &str, value: &str) -> Option<Strin
 
 pub(crate) fn clean_result_source(value: &str) -> String {
     match value.trim() {
-        "cran" | "cran-binary" | "bioc" | "biocGit" | "github" | "r-forge" | "none" => value.trim().to_string(),
+        "cran" | "cran-binary" | "bioc" | "biocGit" | "github" | "r-forge" | "none" => {
+            value.trim().to_string()
+        }
         _ => "none".to_string(),
     }
 }
@@ -145,7 +149,9 @@ fn is_trusted_emit_result(result: &SearchResult) -> bool {
     match result.source.as_str() {
         "cran" => {
             result.repository.is_empty()
-                || (result.repository.starts_with("https://cran.r-project.org/src/contrib/Archive/")
+                || (result
+                    .repository
+                    .starts_with("https://cran.r-project.org/src/contrib/Archive/")
                     && result.repository.ends_with(".tar.gz"))
         }
         "cran-binary" => !result.repository.is_empty() && result.repository.starts_with("https://"),
@@ -242,7 +248,9 @@ mod tests {
             package: "fastshap".to_string(),
             requested_version: String::new(),
             latest_version: "0.1.1".to_string(),
-            repository: "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz".to_string(),
+            repository:
+                "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz"
+                    .to_string(),
             real_name: "fastshap".to_string(),
             source: "cran".to_string(),
             found: true,

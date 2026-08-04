@@ -9,7 +9,9 @@ use tauri::{AppHandle, Emitter};
 use tokio::time::sleep;
 
 use crate::models::{PackageCacheEntry, SearchResponse, SearchResult, Settings};
-use crate::search::{build_client, cache_entry_from_result, SearchLogBatchEvent, SearchProgressEvent};
+use crate::search::{
+    build_client, cache_entry_from_result, SearchLogBatchEvent, SearchProgressEvent,
+};
 use crate::storage;
 use crate::SearchState;
 
@@ -39,9 +41,9 @@ struct CondaResponse {
 fn valid_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
-        && value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '=' | '>' | '<' | '!'))
+        && value.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '=' | '>' | '<' | '!')
+        })
 }
 
 fn split_requirement(line: &str) -> (String, String) {
@@ -66,12 +68,18 @@ fn inputs(input: &str) -> Vec<(String, String)> {
 
 fn conda_version(payload: &CondaResponse, requested: &str) -> Option<String> {
     let mut versions = payload.versions.clone().unwrap_or_default();
-    if let Some(latest) = payload.latest_version.as_deref().filter(|value| !value.is_empty()) {
+    if let Some(latest) = payload
+        .latest_version
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
         versions.push(latest.to_string());
     }
     versions.sort_by(|left, right| {
         let left_parts = left.split('.').map(|part| part.parse::<u64>().unwrap_or(0));
-        let right_parts = right.split('.').map(|part| part.parse::<u64>().unwrap_or(0));
+        let right_parts = right
+            .split('.')
+            .map(|part| part.parse::<u64>().unwrap_or(0));
         left_parts.cmp(right_parts)
     });
     versions.dedup();
@@ -80,7 +88,8 @@ fn conda_version(payload: &CondaResponse, requested: &str) -> Option<String> {
     versions.into_iter().find(|version| {
         requested.is_empty()
             || version == requested
-            || (requested.matches('.').count() >= 1 && version.starts_with(&format!("{requested}.")))
+            || (requested.matches('.').count() >= 1
+                && version.starts_with(&format!("{requested}.")))
     })
 }
 
@@ -318,14 +327,16 @@ pub async fn search(
                 let existing = cache_update
                     .get(&cache_key)
                     .or_else(|| cache.get(&cache_key));
-                cache_update.insert(
-                    cache_key,
-                    cache_entry_from_result(&result, existing, now),
-                );
+                cache_update.insert(cache_key, cache_entry_from_result(&result, existing, now));
             }
 
             if results.len() >= MAX_MULTI_RESULTS {
-                emit_log(app, run_id, &mut logs, "检索结果达到上限，后续来源请求已停止");
+                emit_log(
+                    app,
+                    run_id,
+                    &mut logs,
+                    "检索结果达到上限，后续来源请求已停止",
+                );
                 break;
             }
             emit_progress(app, run_id, &result);
@@ -384,7 +395,11 @@ async fn search_one_multi(
         index + 1,
         total,
         name,
-        if requested.is_empty() { String::new() } else { format!(" {requested}") }
+        if requested.is_empty() {
+            String::new()
+        } else {
+            format!(" {requested}")
+        }
     ));
 
     if cancelled.load(Ordering::SeqCst) || budget.is_exhausted() {
@@ -397,7 +412,10 @@ async fn search_one_multi(
 
     if ecosystem == "pip" {
         let base = pip_index.trim().trim_end_matches('/');
-        if !(base.starts_with("https://") || base.starts_with("http://")) || base.contains('?') || base.contains('#') {
+        if !(base.starts_with("https://") || base.starts_with("http://"))
+            || base.contains('?')
+            || base.contains('#')
+        {
             logs.push(format!("Pip Index URL 无效: {base}"));
             return not_found_result(name, requested, ecosystem, "Pip Index URL 无效");
         }
@@ -413,12 +431,20 @@ async fn search_one_multi(
                 }
             }
             Ok(response) if response.status() == StatusCode::NOT_FOUND => {}
-            Ok(response) => logs.push(format!("Pip {} 返回 HTTP {}", name, response.status().as_u16())),
+            Ok(response) => logs.push(format!(
+                "Pip {} 返回 HTTP {}",
+                name,
+                response.status().as_u16()
+            )),
             Err(error) => logs.push(format!("Pip {} 请求失败: {error}", name)),
         }
         repository = base.to_string();
     } else {
-        for channel in conda_channels.iter().map(|c| c.trim()).filter(|c| !c.is_empty()) {
+        for channel in conda_channels
+            .iter()
+            .map(|c| c.trim())
+            .filter(|c| !c.is_empty())
+        {
             if cancelled.load(Ordering::SeqCst) || budget.is_exhausted() {
                 break;
             }
@@ -442,7 +468,12 @@ async fn search_one_multi(
                     }
                 }
                 Ok(response) if response.status() == StatusCode::NOT_FOUND => {}
-                Ok(response) => logs.push(format!("Conda {}/{} 返回 HTTP {}", channel, name, response.status().as_u16())),
+                Ok(response) => logs.push(format!(
+                    "Conda {}/{} 返回 HTTP {}",
+                    channel,
+                    name,
+                    response.status().as_u16()
+                )),
                 Err(error) => logs.push(format!("Conda {}/{} 请求失败: {error}", channel, name)),
             }
         }
@@ -456,7 +487,12 @@ async fn search_one_multi(
         real_name: name.to_string(),
         source: ecosystem.to_string(),
         found,
-        message: if found { "检索成功" } else { "所有配置来源均未找到" }.to_string(),
+        message: if found {
+            "检索成功"
+        } else {
+            "所有配置来源均未找到"
+        }
+        .to_string(),
         status: if found { "found" } else { "notFound" }.to_string(),
         stage: "final".to_string(),
     }

@@ -1,8 +1,21 @@
 use std::collections::HashMap;
 
 const CORE_PACKAGES: &[&str] = &[
-    "R", "base", "compiler", "datasets", "grDevices", "graphics", "grid", "methods",
-    "parallel", "splines", "stats", "stats4", "tcltk", "tools", "utils",
+    "R",
+    "base",
+    "compiler",
+    "datasets",
+    "grDevices",
+    "graphics",
+    "grid",
+    "methods",
+    "parallel",
+    "splines",
+    "stats",
+    "stats4",
+    "tcltk",
+    "tools",
+    "utils",
 ];
 
 /// 解析 Debian control (RFC 822) 格式的 DESCRIPTION 文件

@@ -29,7 +29,12 @@ pub async fn search_binary_packages(
     let mirror = crate::models::normalize_cran_mirror_url(mirror)?;
     let mut results = Vec::new();
     let mut logs = Vec::new();
-    log(app, run_id, &mut logs, &format!("开始 R 二进制包命令生成，镜像: {mirror}"));
+    log(
+        app,
+        run_id,
+        &mut logs,
+        &format!("开始 R 二进制包命令生成，镜像: {mirror}"),
+    );
 
     for (index, package) in packages.iter().enumerate() {
         if state.is_paused(run_id) {
@@ -38,11 +43,25 @@ pub async fn search_binary_packages(
         if cancelled.load(Ordering::SeqCst) {
             break;
         }
-        log(app, run_id, &mut logs, &format!("[{}/{}] 已按输入生成 R 二进制安装命令 {}", index + 1, packages.len(), package.name));
+        log(
+            app,
+            run_id,
+            &mut logs,
+            &format!(
+                "[{}/{}] 已按输入生成 R 二进制安装命令 {}",
+                index + 1,
+                packages.len(),
+                package.name
+            ),
+        );
         let result = SearchResult {
             package: package.name.clone(),
             requested_version: package.version.clone(),
-            latest_version: if package.version.is_empty() { "unknown".to_string() } else { package.version.clone() },
+            latest_version: if package.version.is_empty() {
+                "unknown".to_string()
+            } else {
+                package.version.clone()
+            },
             repository: mirror.clone(),
             real_name: package.name.clone(),
             source: "cran-binary".to_string(),
@@ -51,9 +70,27 @@ pub async fn search_binary_packages(
             status: "found".to_string(),
             stage: "final".to_string(),
         };
-        let _ = app.emit("search-progress", SearchProgressEvent { run_id, result: result.clone() });
+        let _ = app.emit(
+            "search-progress",
+            SearchProgressEvent {
+                run_id,
+                result: result.clone(),
+            },
+        );
         results.push(result);
     }
-    log(app, run_id, &mut logs, "R 二进制安装命令生成完成（未执行网络检索）");
-    Ok(SearchResponse { run_id, results, logs, stopped: cancelled.load(Ordering::SeqCst), stage_timings: Vec::new(), dependency_graph: None })
+    log(
+        app,
+        run_id,
+        &mut logs,
+        "R 二进制安装命令生成完成（未执行网络检索）",
+    );
+    Ok(SearchResponse {
+        run_id,
+        results,
+        logs,
+        stopped: cancelled.load(Ordering::SeqCst),
+        stage_timings: Vec::new(),
+        dependency_graph: None,
+    })
 }

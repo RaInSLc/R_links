@@ -1,9 +1,12 @@
 #[cfg(test)]
 mod tests {
     use crate::logic::*;
-    use crate::models::{GenerateOptions, InputRules, PackageInput, SearchResult, MAX_FIELD_CHARS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS};
-    
-        #[test]
+    use crate::models::{
+        GenerateOptions, InputRules, PackageInput, SearchResult, MAX_FIELD_CHARS, MAX_INPUT_CHARS,
+        MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
+    };
+
+    #[test]
     fn builds_history_from_supported_conditional_command_body() {
         let script = generate_script(
             "dplyr",
@@ -26,8 +29,7 @@ mod tests {
         assert!(records[0].command.starts_with("install.packages("));
     }
 
-
-        #[test]
+    #[test]
     fn rejects_unsupported_history_commands() {
         assert!(supported_history_command("system(\"calc.exe\")").is_none());
         assert!(supported_history_command("not_a_supported_command()").is_none());
@@ -70,8 +72,7 @@ mod tests {
         .is_none());
     }
 
-
-        #[test]
+    #[test]
     fn rejects_invalid_github_repository() {
         assert!(!is_valid_github_repository("../repo"));
         assert!(!is_valid_github_repository("owner_name/repo"));
@@ -90,15 +91,13 @@ mod tests {
         assert!(normalize_github_repository("https://github.com:443/owner/repo").is_none());
     }
 
-
-        #[test]
+    #[test]
     fn rejects_oversized_input() {
         let input = "pkg\n".repeat(MAX_PACKAGE_LINES + 1);
         assert!(parse_inputs(&input).is_err());
     }
 
-
-        #[test]
+    #[test]
     fn ignores_comment_lines_when_counting_package_limit() {
         let input = format!(
             "{}\n{}",
@@ -114,16 +113,14 @@ mod tests {
         );
     }
 
-
-        #[test]
+    #[test]
     fn still_rejects_oversized_comment_lines() {
         let input = format!("# {}", "x".repeat(MAX_INPUT_LINE_BYTES));
 
         assert!(validate_input_size(&input).is_err());
     }
 
-
-        #[test]
+    #[test]
     fn rejects_oversized_or_controlled_input_before_parse() {
         let multibyte = "注".repeat((MAX_INPUT_CHARS / "注".len()) + 1);
         assert!(multibyte.chars().count() < MAX_INPUT_CHARS);
@@ -133,8 +130,7 @@ mod tests {
         assert!(parse_inputs("demo\t1.2.3").is_ok());
     }
 
-
-        #[test]
+    #[test]
     fn rejects_oversized_input_line_before_parse() {
         let long_line = format!("demo {}", "1".repeat(MAX_INPUT_LINE_BYTES));
         assert!(validate_input_size(&long_line).is_err());
@@ -148,8 +144,7 @@ mod tests {
         assert!(parse_inputs(&multibyte_line).is_err());
     }
 
-
-        #[test]
+    #[test]
     fn rejects_oversized_requested_versions() {
         let input = format!("demo {}", "1".repeat(MAX_VERSION_CHARS + 1));
 
@@ -157,8 +152,7 @@ mod tests {
         assert!(parse_inputs(&input).is_err());
     }
 
-
-        #[test]
+    #[test]
     fn bounds_result_message_by_utf8_bytes() {
         let message = clean_result_text(&"注".repeat(MAX_RESULT_MESSAGE_CHARS));
 
@@ -166,8 +160,7 @@ mod tests {
         assert!(message.ends_with('注'));
     }
 
-
-        #[test]
+    #[test]
     fn validates_browser_search_url_scope() {
         assert!(is_allowed_browser_search_url(
             "https://www.google.com/search?q=R%20package%20GSVA"
@@ -189,16 +182,14 @@ mod tests {
         ));
     }
 
-
-        #[test]
+    #[test]
     fn rejects_oversized_history_script() {
         let script = "install.packages(\"demo\")\n".repeat((MAX_SCRIPT_CHARS / 25) + 10);
         assert!(build_history_records(&script).is_empty());
         assert!(validate_script_size(&script).is_err());
     }
 
-
-        #[test]
+    #[test]
     fn rejects_oversized_multibyte_script_by_bytes() {
         let script = "注".repeat((MAX_SCRIPT_CHARS / "注".len()) + 1);
         assert!(script.chars().count() < MAX_SCRIPT_CHARS);
@@ -208,8 +199,7 @@ mod tests {
         assert!(clean_script(&script).is_err());
     }
 
-
-        #[test]
+    #[test]
     fn cleans_script_and_rejects_oversized_cleaned_output() {
         let cleaned = clean_script("# comment\n\ninstall.packages(\"demo\")\n")
             .expect("普通脚本应可清理注释");
@@ -220,8 +210,7 @@ mod tests {
         assert!(clean_script(&script).is_err());
     }
 
-
-        #[test]
+    #[test]
     fn bounds_history_scan_lines() {
         let script = format!(
             "install.packages(\"demo\", repos = \"https://cloud.r-project.org/\", dependencies = TRUE)\n{}",
@@ -238,8 +227,7 @@ mod tests {
         assert_eq!(build_history_records(&script).len(), 1);
     }
 
-
-        #[test]
+    #[test]
     fn rejects_oversized_generated_script() {
         let input = (0..MAX_PACKAGE_LINES)
             .map(|index| format!("package{index:03}"))
@@ -262,8 +250,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-
-        #[test]
+    #[test]
     fn rejects_invalid_generate_method_without_echoing_value() {
         let method = format!("bad{}\n{}", "x".repeat(128), "system(\"calc.exe\")");
         let error = generate_script(
@@ -284,8 +271,7 @@ mod tests {
         assert!(!error.contains("calc.exe"));
     }
 
-
-        #[test]
+    #[test]
     fn rejects_unbounded_generate_search_results() {
         let results = (0..=MAX_GENERATE_SEARCH_RESULTS)
             .map(|index| SearchResult {
@@ -318,8 +304,7 @@ mod tests {
         assert!(error.contains("检索结果数量过多"));
     }
 
-
-        #[test]
+    #[test]
     fn uses_search_results_across_the_full_accepted_range() {
         let mut results = vec![
             SearchResult {
@@ -364,5 +349,4 @@ mod tests {
 
         assert!(output.contains("remotes::install_version(\"target\", version = \"9.9.9\""));
     }
-
 }

@@ -1,3 +1,5 @@
+use crate::models::{SearchResult, Settings, MAX_PACKAGE_LINES};
+use crate::search_sanitize::sanitize_log_message;
 use regex::Regex;
 use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
@@ -6,13 +8,12 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
-use crate::models::{SearchResult, Settings, MAX_PACKAGE_LINES};
-use crate::search_sanitize::sanitize_log_message;
 pub(crate) const BIOC_VERSIONS: &[&str] = &[
     "3.23", "3.22", "3.21", "3.20", "3.19", "3.18", "3.17", "3.16", "3.15", "3.14", "3.13", "3.12",
     "3.11", "3.10", "3.9", "3.8", "3.7", "3.6", "3.5", "3.4", "3.3", "3.2", "3.1", "3.0",
 ];
-pub(crate) const BIOC_CATEGORIES: &[&str] = &["bioc", "data/annotation", "data/experiment", "workflows"];
+pub(crate) const BIOC_CATEGORIES: &[&str] =
+    &["bioc", "data/annotation", "data/experiment", "workflows"];
 pub(crate) const MAX_TEXT_RESPONSE_BYTES: usize = 512 * 1024;
 pub(crate) const MAX_DESCRIPTION_BYTES: usize = 64 * 1024;
 pub(crate) const MAX_DESCRIPTION_LINES: usize = 1_000;
@@ -219,9 +220,12 @@ pub(crate) fn append_search_log(logs: &mut Vec<String>, message: &str) -> Option
 
 pub(crate) fn log(app: &AppHandle, run_id: u64, logs: &mut Vec<String>, message: &str) {
     if let Some(message) = append_search_log(logs, message) {
-        let _ = app.emit("search-log-batch", SearchLogBatchEvent {
-            run_id,
-            messages: vec![message],
-        });
+        let _ = app.emit(
+            "search-log-batch",
+            SearchLogBatchEvent {
+                run_id,
+                messages: vec![message],
+            },
+        );
     }
 }

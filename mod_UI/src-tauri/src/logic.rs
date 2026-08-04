@@ -1,13 +1,13 @@
-#[path = "input.rs"]
-mod input;
-#[path = "script_generation.rs"]
-mod script_generation;
-#[path = "result_validation.rs"]
-mod result_validation;
 #[path = "command_generation.rs"]
 mod command_generation;
 #[path = "history_parser.rs"]
 mod history_parser;
+#[path = "input.rs"]
+mod input;
+#[path = "result_validation.rs"]
+mod result_validation;
+#[path = "script_generation.rs"]
+mod script_generation;
 #[path = "url_validation.rs"]
 mod url_validation;
 
@@ -27,11 +27,11 @@ mod logic_tests_4;
 #[path = "logic_tests_5.rs"]
 mod logic_tests_5;
 
-pub(crate) use input::*;
-pub(crate) use script_generation::*;
-pub(crate) use result_validation::*;
 pub(crate) use command_generation::*;
 pub(crate) use history_parser::*;
+pub(crate) use input::*;
+pub(crate) use result_validation::*;
+pub(crate) use script_generation::*;
 pub(crate) use url_validation::*;
 
 #[cfg(test)]

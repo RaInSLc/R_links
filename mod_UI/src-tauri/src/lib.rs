@@ -1,3 +1,10 @@
+mod commands_browser;
+mod commands_cache;
+mod commands_diagnostics;
+mod commands_history;
+mod commands_search;
+mod commands_settings;
+mod commands_settings_runtime;
 mod dependency;
 mod logic;
 mod models;
@@ -6,23 +13,16 @@ mod search_multi;
 mod search_sanitize;
 mod search_urls;
 mod secrets;
-mod storage;
 mod state;
-mod commands_settings;
-mod commands_settings_runtime;
-mod commands_search;
-mod commands_cache;
-mod commands_browser;
-mod commands_diagnostics;
-mod commands_history;
+mod storage;
 pub(crate) use state::SearchState;
 
-#[cfg(test)]
-mod state_tests;
 #[cfg(test)]
 mod browser_tests;
 #[cfg(test)]
 mod settings_tests;
+#[cfg(test)]
+mod state_tests;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

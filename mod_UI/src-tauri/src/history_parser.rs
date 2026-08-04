@@ -1,8 +1,11 @@
+use crate::models::{
+    normalize_cran_mirror_url, HistoryRecord, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS,
+    MAX_SCRIPT_CHARS,
+};
 use regex::Regex;
 use std::collections::HashSet;
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::models::{normalize_cran_mirror_url, HistoryRecord, MAX_HISTORY_COMMAND_CHARS, MAX_HISTORY_RECORDS, MAX_SCRIPT_CHARS};
 const MAX_HISTORY_SCAN_LINES: usize = MAX_HISTORY_RECORDS;
 const MAX_VERSION_CHARS: usize = 64;
 static HISTORY_VERSION_RE: OnceLock<Regex> = OnceLock::new();

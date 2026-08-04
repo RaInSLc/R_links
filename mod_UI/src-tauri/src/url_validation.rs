@@ -1,6 +1,9 @@
+use crate::models::{
+    url_has_explicit_port, ReverseDependenciesInfo, MAX_FIELD_CHARS, MAX_INPUT_CHARS,
+    MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
+};
 use regex::Regex;
 use url::Url;
-use crate::models::{url_has_explicit_port, ReverseDependenciesInfo, MAX_FIELD_CHARS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS};
 const MAX_INSTALL_ARCHIVE_FILE_CHARS: usize = 256;
 const MAX_INPUT_LINE_BYTES: usize = 2_048;
 const INSTALL_ARCHIVE_EXTENSIONS: &[&str] = &[".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".zip"];
@@ -65,7 +68,10 @@ pub(crate) fn normalize_local_archive_path(value: &str) -> Result<String, String
         .and_then(|name| name.to_str())
         .ok_or_else(|| "本地归档文件名无效".to_string())?;
     let lower = file_name.to_ascii_lowercase();
-    if !INSTALL_ARCHIVE_EXTENSIONS.iter().any(|ext| lower.ends_with(ext)) {
+    if !INSTALL_ARCHIVE_EXTENSIONS
+        .iter()
+        .any(|ext| lower.ends_with(ext))
+    {
         return Err("本地文件必须是 R 包归档格式".to_string());
     }
     Ok(trimmed.to_string())
@@ -290,7 +296,11 @@ pub fn build_package_page_url(
             if !is_valid_package_name(package) {
                 return Err(format!("无效的 Conda 包名: {package}"));
             }
-            if channel.is_empty() || !channel.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            if channel.is_empty()
+                || !channel
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            {
                 return Err("无效的 Conda channel".to_string());
             }
             Ok(format!("https://anaconda.org/{channel}/{package}"))
@@ -338,7 +348,9 @@ pub fn is_allowed_package_page_url(value: &str) -> bool {
         Some("anaconda.org") => {
             let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
             segs.len() == 2
-                && segs[0].chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                && segs[0]
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
                 && is_valid_package_name(segs[1])
         }
         _ => false,

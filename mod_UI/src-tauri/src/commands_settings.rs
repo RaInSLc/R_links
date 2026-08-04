@@ -1,17 +1,143 @@
+use crate::state::MAX_RSCRIPT_BYTES;
+use crate::{
+    logic,
+    models::{GenerateOptions, InputRules, SearchResult, ToolchainCheck},
+    storage,
+};
 use std::process::{Command, Stdio};
 use tauri::AppHandle;
-use crate::{logic, models::{GenerateOptions, InputRules, SearchResult, ToolchainCheck}, storage};
-use crate::state::MAX_RSCRIPT_BYTES;
 
-fn run_tool_version(tool: &str, args: &[&str], advice: &str) -> ToolchainCheck { match std::process::Command::new(tool).args(args).output() { Ok(output) if output.status.success() => { let text = String::from_utf8_lossy(&output.stdout).trim().to_string(); let version = if text.is_empty() { String::from_utf8_lossy(&output.stderr).trim().to_string() } else { text }; ToolchainCheck { tool: tool.to_string(), available: true, version: version.chars().take(256).collect(), advice: String::new() } }, _ => ToolchainCheck { tool: tool.to_string(), available: false, version: String::new(), advice: advice.to_string() } } }
+fn run_tool_version(tool: &str, args: &[&str], advice: &str) -> ToolchainCheck {
+    match std::process::Command::new(tool).args(args).output() {
+        Ok(output) if output.status.success() => {
+            let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let version = if text.is_empty() {
+                String::from_utf8_lossy(&output.stderr).trim().to_string()
+            } else {
+                text
+            };
+            ToolchainCheck {
+                tool: tool.to_string(),
+                available: true,
+                version: version.chars().take(256).collect(),
+                advice: String::new(),
+            }
+        }
+        _ => ToolchainCheck {
+            tool: tool.to_string(),
+            available: false,
+            version: String::new(),
+            advice: advice.to_string(),
+        },
+    }
+}
 #[tauri::command]
-pub(crate) fn check_system_toolchain() -> Vec<ToolchainCheck> { let mut checks = vec![run_tool_version("Rscript", &["--version"], "请安装 R，并将 Rscript 加入 PATH。"), run_tool_version("R", &["--version"], "请安装 R，并将 R 加入 PATH。"), run_tool_version("git", &["--version"], "GitHub 或远程源码安装需要 Git。")]; if cfg!(target_os = "windows") { checks.push(run_tool_version("make", &["--version"], "Windows 源码包编译通常需要与 R 版本匹配的 Rtools；请从 CRAN Rtools 页面安装并将工具加入 PATH。")); checks.push(run_tool_version("gcc", &["--version"], "Windows 源码包编译需要 Rtools 提供的 GCC；请检查 Rtools 安装和 PATH 配置。")); } else { checks.push(run_tool_version("make", &["--version"], "请安装 make。")); checks.push(run_tool_version("gfortran", &["--version"], "涉及 Fortran 的 R 源码包需要 gfortran。")); checks.push(run_tool_version("gcc", &["--version"], "请安装 gcc/g++。")); } checks }
-#[derive(serde::Serialize)] pub(crate) struct ScriptExecutionResult { success: bool, code: Option<i32>, stdout: String, stderr: String }
+pub(crate) fn check_system_toolchain() -> Vec<ToolchainCheck> {
+    let mut checks = vec![
+        run_tool_version(
+            "Rscript",
+            &["--version"],
+            "请安装 R，并将 Rscript 加入 PATH。",
+        ),
+        run_tool_version("R", &["--version"], "请安装 R，并将 R 加入 PATH。"),
+        run_tool_version("git", &["--version"], "GitHub 或远程源码安装需要 Git。"),
+    ];
+    if cfg!(target_os = "windows") {
+        checks.push(run_tool_version("make", &["--version"], "Windows 源码包编译通常需要与 R 版本匹配的 Rtools；请从 CRAN Rtools 页面安装并将工具加入 PATH。"));
+        checks.push(run_tool_version(
+            "gcc",
+            &["--version"],
+            "Windows 源码包编译需要 Rtools 提供的 GCC；请检查 Rtools 安装和 PATH 配置。",
+        ));
+    } else {
+        checks.push(run_tool_version("make", &["--version"], "请安装 make。"));
+        checks.push(run_tool_version(
+            "gfortran",
+            &["--version"],
+            "涉及 Fortran 的 R 源码包需要 gfortran。",
+        ));
+        checks.push(run_tool_version("gcc", &["--version"], "请安装 gcc/g++。"));
+    }
+    checks
+}
+#[derive(serde::Serialize)]
+pub(crate) struct ScriptExecutionResult {
+    success: bool,
+    code: Option<i32>,
+    stdout: String,
+    stderr: String,
+}
 #[tauri::command]
-pub(crate) async fn execute_r_script(script: String) -> Result<ScriptExecutionResult, String> { if script.trim().is_empty() { return Err("R 脚本不能为空".to_string()); } if script.len() > MAX_RSCRIPT_BYTES { return Err("R 脚本超过 64 KiB 安全上限".to_string()); } if script.contains('\0') { return Err("R 脚本包含非法控制字符".to_string()); } let output = tokio::task::spawn_blocking(move || Command::new("Rscript").args(["--vanilla", "-e", &script]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).output()).await.map_err(|e| format!("Rscript 执行任务失败: {e}"))?.map_err(|_| "无法启动 Rscript，请确认 R 已安装并加入 PATH".to_string())?; Ok(ScriptExecutionResult { success: output.status.success(), code: output.status.code(), stdout: String::from_utf8_lossy(&output.stdout[..output.stdout.len().min(MAX_RSCRIPT_BYTES)]).to_string(), stderr: String::from_utf8_lossy(&output.stderr[..output.stderr.len().min(MAX_RSCRIPT_BYTES)]).to_string() }) }
-#[tauri::command] pub(crate) fn load_input_rules(app: AppHandle) -> Result<InputRules, String> { Ok(storage::load_input_rules(&app)) }
-#[tauri::command] pub(crate) fn save_input_rules(app: AppHandle, rules: InputRules) -> Result<(), String> { storage::save_input_rules(&app, &rules) }
+pub(crate) async fn execute_r_script(script: String) -> Result<ScriptExecutionResult, String> {
+    if script.trim().is_empty() {
+        return Err("R 脚本不能为空".to_string());
+    }
+    if script.len() > MAX_RSCRIPT_BYTES {
+        return Err("R 脚本超过 64 KiB 安全上限".to_string());
+    }
+    if script.contains('\0') {
+        return Err("R 脚本包含非法控制字符".to_string());
+    }
+    let output = tokio::task::spawn_blocking(move || {
+        Command::new("Rscript")
+            .args(["--vanilla", "-e", &script])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+    })
+    .await
+    .map_err(|e| format!("Rscript 执行任务失败: {e}"))?
+    .map_err(|_| "无法启动 Rscript，请确认 R 已安装并加入 PATH".to_string())?;
+    Ok(ScriptExecutionResult {
+        success: output.status.success(),
+        code: output.status.code(),
+        stdout: String::from_utf8_lossy(
+            &output.stdout[..output.stdout.len().min(MAX_RSCRIPT_BYTES)],
+        )
+        .to_string(),
+        stderr: String::from_utf8_lossy(
+            &output.stderr[..output.stderr.len().min(MAX_RSCRIPT_BYTES)],
+        )
+        .to_string(),
+    })
+}
 #[tauri::command]
-pub(crate) fn generate_script(app: AppHandle, input: String, options: GenerateOptions, mut results: Vec<SearchResult>, show_remote_version: Option<bool>) -> Result<String, String> { let rules = storage::load_input_rules(&app); if results.is_empty() { results = crate::commands_cache::build_offline_results(&app, &input, &rules); } logic::generate_script_with_rules(&input, &options, &results, show_remote_version != Some(false), &rules) }
-#[tauri::command] pub(crate) fn clean_script(script: String) -> Result<String, String> { logic::clean_script(&script) }
-#[tauri::command] pub(crate) fn build_history_records(script: String) -> Result<Vec<crate::models::HistoryRecord>, String> { logic::validate_script_size(&script)?; Ok(logic::build_history_records(&script)) }
+pub(crate) fn load_input_rules(app: AppHandle) -> Result<InputRules, String> {
+    Ok(storage::load_input_rules(&app))
+}
+#[tauri::command]
+pub(crate) fn save_input_rules(app: AppHandle, rules: InputRules) -> Result<(), String> {
+    storage::save_input_rules(&app, &rules)
+}
+#[tauri::command]
+pub(crate) fn generate_script(
+    app: AppHandle,
+    input: String,
+    options: GenerateOptions,
+    mut results: Vec<SearchResult>,
+    show_remote_version: Option<bool>,
+) -> Result<String, String> {
+    let rules = storage::load_input_rules(&app);
+    if results.is_empty() {
+        results = crate::commands_cache::build_offline_results(&app, &input, &rules);
+    }
+    logic::generate_script_with_rules(
+        &input,
+        &options,
+        &results,
+        show_remote_version != Some(false),
+        &rules,
+    )
+}
+#[tauri::command]
+pub(crate) fn clean_script(script: String) -> Result<String, String> {
+    logic::clean_script(&script)
+}
+#[tauri::command]
+pub(crate) fn build_history_records(
+    script: String,
+) -> Result<Vec<crate::models::HistoryRecord>, String> {
+    logic::validate_script_size(&script)?;
+    Ok(logic::build_history_records(&script))
+}

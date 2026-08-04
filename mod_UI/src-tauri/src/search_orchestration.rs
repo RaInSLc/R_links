@@ -88,7 +88,12 @@ pub async fn search_packages(
         for (offset, package) in batch.iter().enumerate() {
             let index = batch_start + offset;
             if state.is_package_cancelled(run_id, &package.name) {
-                log(app, run_id, &mut logs, &format!("[{}/{}] {} 已取消", index + 1, total, package.name));
+                log(
+                    app,
+                    run_id,
+                    &mut logs,
+                    &format!("[{}/{}] {} 已取消", index + 1, total, package.name),
+                );
                 continue;
             }
             let cache_key = package.name.to_ascii_lowercase();
@@ -97,7 +102,8 @@ pub async fn search_packages(
                 .get(&cache_key)
                 .filter(|entry| entry.is_trusted())
                 .filter(|entry| {
-                    package.version.is_empty() || version_compatible(&entry.version, &package.version)
+                    package.version.is_empty()
+                        || version_compatible(&entry.version, &package.version)
                 })
             {
                 log(
@@ -268,9 +274,18 @@ pub async fn search_packages(
     };
 
     let stage_timings = vec![
-        crate::models::SearchStageTiming { stage: "缓存与输入".to_string(), duration_ms: cache_stage_ms },
-        crate::models::SearchStageTiming { stage: "多源检索".to_string(), duration_ms: search_stage_ms },
-        crate::models::SearchStageTiming { stage: "依赖解析".to_string(), duration_ms: dependency_stage_start.elapsed().as_millis() as u64 },
+        crate::models::SearchStageTiming {
+            stage: "缓存与输入".to_string(),
+            duration_ms: cache_stage_ms,
+        },
+        crate::models::SearchStageTiming {
+            stage: "多源检索".to_string(),
+            duration_ms: search_stage_ms,
+        },
+        crate::models::SearchStageTiming {
+            stage: "依赖解析".to_string(),
+            duration_ms: dependency_stage_start.elapsed().as_millis() as u64,
+        },
     ];
     Ok(SearchResponse {
         run_id,
@@ -329,7 +344,10 @@ pub(crate) async fn search_one_package(
                 }
                 Ok(None) => {}
                 Err(error) => {
-                    context.log(&format!("CRAN 检索失败（{}）: {error}", context.settings.cran_mirror));
+                    context.log(&format!(
+                        "CRAN 检索失败（{}）: {error}",
+                        context.settings.cran_mirror
+                    ));
                     errors.push(format!("CRAN 检索失败: {error}"));
                 }
             }
@@ -412,7 +430,10 @@ pub(crate) async fn search_one_package(
             }
         }
 
-        if results.iter().any(|result| result.found && result.package.eq_ignore_ascii_case(&loop_package.name)) {
+        if results
+            .iter()
+            .any(|result| result.found && result.package.eq_ignore_ascii_case(&loop_package.name))
+        {
             break;
         }
         if attempts < AUTO_RETRY_LIMIT
@@ -425,7 +446,10 @@ pub(crate) async fn search_one_package(
             && !context.should_stop()
         {
             attempts += 1;
-            context.log(&format!("{} 检索失败，正在自动重试 ({}/{})", loop_package.name, attempts, AUTO_RETRY_LIMIT));
+            context.log(&format!(
+                "{} 检索失败，正在自动重试 ({}/{})",
+                loop_package.name, attempts, AUTO_RETRY_LIMIT
+            ));
             errors.clear();
             continue;
         }
@@ -437,7 +461,10 @@ pub(crate) async fn search_one_package(
             let (message, status) = if context.timed_out.load(Ordering::SeqCst) {
                 ("检索超时，部分来源未查询".to_string(), "timeout")
             } else if context.github_rate_limited {
-                ("GitHub API 频率限制，部分来源未查询".to_string(), "rateLimited")
+                (
+                    "GitHub API 频率限制，部分来源未查询".to_string(),
+                    "rateLimited",
+                )
             } else if !errors.is_empty() {
                 (errors.join("; "), "error")
             } else {

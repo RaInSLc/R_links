@@ -1,28 +1,280 @@
-use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use super::atomic_storage::{
+    atomic_write, backup_corrupt_file, path_entry_exists, read_storage_file_with_recovery,
+    MALFORMED_SETTINGS_BACKUP_NOTICE, MAX_SETTINGS_FILE_BYTES,
+};
 use crate::models::{InputRules, Settings, INPUT_RULES_FILE_NAME, MAX_TOKEN_CHARS};
 use crate::secrets;
-use super::atomic_storage::{atomic_write, backup_corrupt_file, read_storage_file_with_recovery, path_entry_exists, MAX_SETTINGS_FILE_BYTES, MALFORMED_SETTINGS_BACKUP_NOTICE};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use tauri::{AppHandle, Manager};
 
 const MAX_PROTECTED_TOKEN_CHARS: usize = MAX_TOKEN_CHARS * 16;
-fn default_true()->bool{true} fn default_false()->bool{false} fn default_max_cache_entries()->usize{1000} fn default_search_concurrency()->usize{6} fn default_archive_github_major_gap()->usize{1} fn default_max_dependency_depth()->usize{2} fn default_max_dependency_nodes()->usize{100}
-fn default_pinned_methods()->Vec<String>{["auto","base","biocManager","github"].into_iter().map(str::to_string).collect()}
-fn default_pip_index_storage()->String{"https://pypi.org".to_string()} fn default_conda_channels_storage()->Vec<String>{vec!["conda-forge".to_string(),"bioconda".to_string()]}
-#[derive(Debug,Serialize,Deserialize)] #[serde(rename_all="camelCase")] pub(crate) struct StoredSettings { proxy:String, cran_mirror:String, #[serde(default)] r_lib_path:String, full_search:bool, #[serde(default="default_search_concurrency")] search_concurrency:usize, #[serde(default="default_archive_github_major_gap")] archive_github_major_gap:usize, #[serde(default="default_true")] conditional:bool, #[serde(default="default_true")] install_dependencies:bool, #[serde(default="default_true")] show_remote_version:bool, #[serde(default="default_true")] use_cache:bool, #[serde(default="default_max_cache_entries")] max_cache_entries:usize, #[serde(default="default_true")] use_filter:bool, #[serde(default="default_true")] resolve_dependencies:bool, #[serde(default="default_max_dependency_depth")] max_dependency_depth:usize, #[serde(default="default_false")] include_light_dependencies:bool, #[serde(default="default_max_dependency_nodes")] max_dependency_nodes:usize, #[serde(default="default_pinned_methods")] pinned_methods:Vec<String>, #[serde(default="default_pip_index_storage")] pip_index:String, #[serde(default="default_conda_channels_storage")] conda_channels:Vec<String>, #[serde(default,skip_serializing_if="String::is_empty")] github_token:String, #[serde(default,skip_serializing_if="String::is_empty")] github_token_protected:String }
-impl StoredSettings { pub(crate) fn into_settings(self)->Result<Settings,String>{ if self.github_token_protected.len()>MAX_PROTECTED_TOKEN_CHARS{return Err("加密 Token 长度超过限制".to_string())} let token=if self.github_token_protected.trim().is_empty(){self.github_token}else{secrets::unprotect_string(&self.github_token_protected)?}; Settings{proxy:self.proxy,github_token:token,cran_mirror:self.cran_mirror,r_lib_path:self.r_lib_path,full_search:self.full_search,search_concurrency:self.search_concurrency,archive_github_major_gap:self.archive_github_major_gap,conditional:self.conditional,install_dependencies:self.install_dependencies,show_remote_version:self.show_remote_version,use_cache:self.use_cache,max_cache_entries:self.max_cache_entries,use_filter:self.use_filter,resolve_dependencies:self.resolve_dependencies,max_dependency_depth:self.max_dependency_depth,include_light_dependencies:self.include_light_dependencies,max_dependency_nodes:self.max_dependency_nodes,pinned_methods:self.pinned_methods,pip_index:self.pip_index,conda_channels:self.conda_channels}.normalized() }
- pub(crate) fn from_settings(settings:&Settings)->Result<Self,String>{let s=settings.normalized()?;Ok(Self{proxy:s.proxy,github_token:String::new(),github_token_protected:secrets::protect_string(&s.github_token)?,cran_mirror:s.cran_mirror,r_lib_path:s.r_lib_path,full_search:s.full_search,search_concurrency:s.search_concurrency,archive_github_major_gap:s.archive_github_major_gap,conditional:s.conditional,install_dependencies:s.install_dependencies,show_remote_version:s.show_remote_version,use_cache:s.use_cache,max_cache_entries:s.max_cache_entries,use_filter:s.use_filter,resolve_dependencies:s.resolve_dependencies,max_dependency_depth:s.max_dependency_depth,include_light_dependencies:s.include_light_dependencies,max_dependency_nodes:s.max_dependency_nodes,pinned_methods:s.pinned_methods,pip_index:s.pip_index,conda_channels:s.conda_channels})}}
-pub(crate) fn data_file(app:&AppHandle,name:&str)->Result<PathBuf,String>{Ok(ensure_data_directory(app)?.join(name))}
-pub(crate) fn ensure_data_directory(app:&AppHandle)->Result<PathBuf,String>{let d=app.path().app_data_dir().map_err(|e|e.to_string())?; super::atomic_storage::ensure_storage_directory(&d)?;Ok(d)}
-pub(crate) fn load_input_rules(app:&AppHandle)->InputRules{let Ok(path)=data_file(app,INPUT_RULES_FILE_NAME)else{return InputRules::default()};if !path_entry_exists(&path).unwrap_or(false){return InputRules::default()} let Some(content)=read_storage_file_with_recovery(app,INPUT_RULES_FILE_NAME,64*1024,"输入规则文件").unwrap_or(None)else{return InputRules::default()};serde_json::from_str::<InputRules>(&content).map(|r|r.normalized()).unwrap_or_else(|_|{let _=backup_corrupt_file(app,INPUT_RULES_FILE_NAME,&content);InputRules::default()})}
-pub(crate) fn save_default_input_rules(app:&AppHandle){let Ok(path)=data_file(app,INPUT_RULES_FILE_NAME)else{return};if path.exists(){return}if let Ok(c)=serde_json::to_string_pretty(&InputRules::default()){let _=atomic_write(&path,&c);}}
-pub(crate) fn save_input_rules(app:&AppHandle,rules:&InputRules)->Result<(),String>{let c=serde_json::to_string_pretty(&rules.normalized()).map_err(|e|e.to_string())?;atomic_write(&data_file(app,INPUT_RULES_FILE_NAME)?,&c)}
-pub(crate) fn load_settings(app:&AppHandle)->Result<Settings,String>{load_settings_with_recovery(app,true)}
-pub(crate) fn load_existing_settings(app:&AppHandle)->Result<Option<Settings>,String>{let p=data_file(app,"settings.json")?;if !path_entry_exists(&p)?{return Ok(None)}load_settings_with_recovery(app,false).map(Some)}
-fn load_settings_with_recovery(app:&AppHandle,fallback:bool)->Result<Settings,String>{let p=data_file(app,"settings.json")?;if !path_entry_exists(&p)?{return Ok(Settings::default())}let Some(c)=read_storage_file_with_recovery(app,"settings.json",MAX_SETTINGS_FILE_BYTES,"设置文件")?else{return if fallback{Ok(Settings::default())}else{Err("设置文件超过安全读取上限，已备份；请重新确认设置后再保存".to_string())}};match serde_json::from_str::<StoredSettings>(&c).and_then(|s|s.into_settings().map_err(|e|serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData,e)))){Ok(s)=>Ok(s),Err(_)=>{backup_corrupt_settings_file(app,&c)?;if fallback{Ok(Settings::default())}else{Err("设置文件损坏，已备份；请重新确认设置后再保存".to_string())}}}}
-pub(crate) fn save_settings(app:&AppHandle,settings:&Settings)->Result<(),String>{let s=StoredSettings::from_settings(settings)?;atomic_write(&data_file(app,"settings.json")?,&serde_json::to_string_pretty(&s).map_err(|e|e.to_string())?)}
-fn backup_corrupt_settings_file(app:&AppHandle,content:&str)->Result<(),String>{backup_corrupt_file(app,"settings.json",&redact_settings_backup_content(content))}
-pub(crate) fn redact_settings_backup_content(content:&str)->String{let Ok(mut value)=serde_json::from_str::<serde_json::Value>(content)else{return MALFORMED_SETTINGS_BACKUP_NOTICE.to_string()};redact_settings_value(&mut value);serde_json::to_string_pretty(&value).unwrap_or_else(|_|MALFORMED_SETTINGS_BACKUP_NOTICE.to_string())}
-fn redact_settings_value(value:&mut serde_json::Value){match value{serde_json::Value::Object(map)=>for(k,v)in map{if matches!(k.as_str(),"githubToken"|"githubTokenProtected"|"proxy"){*v=serde_json::Value::String("[redacted]".to_string())}else{redact_settings_value(v)}},serde_json::Value::Array(items)=>for v in items{redact_settings_value(v)},_=>{}}}
-#[cfg(test)] pub(crate) fn test_stored_settings(settings:&Settings)->Result<StoredSettings,String>{StoredSettings::from_settings(settings)}
-#[cfg(test)] pub(crate) fn test_into_settings(stored:StoredSettings)->Result<Settings,String>{stored.into_settings()}
+fn default_true() -> bool {
+    true
+}
+fn default_false() -> bool {
+    false
+}
+fn default_max_cache_entries() -> usize {
+    1000
+}
+fn default_search_concurrency() -> usize {
+    6
+}
+fn default_archive_github_major_gap() -> usize {
+    1
+}
+fn default_max_dependency_depth() -> usize {
+    2
+}
+fn default_max_dependency_nodes() -> usize {
+    100
+}
+fn default_pinned_methods() -> Vec<String> {
+    ["auto", "base", "biocManager", "github"]
+        .into_iter()
+        .map(str::to_string)
+        .collect()
+}
+fn default_pip_index_storage() -> String {
+    "https://pypi.org".to_string()
+}
+fn default_conda_channels_storage() -> Vec<String> {
+    vec!["conda-forge".to_string(), "bioconda".to_string()]
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StoredSettings {
+    proxy: String,
+    cran_mirror: String,
+    #[serde(default)]
+    r_lib_path: String,
+    full_search: bool,
+    #[serde(default = "default_search_concurrency")]
+    search_concurrency: usize,
+    #[serde(default = "default_archive_github_major_gap")]
+    archive_github_major_gap: usize,
+    #[serde(default = "default_true")]
+    conditional: bool,
+    #[serde(default = "default_true")]
+    install_dependencies: bool,
+    #[serde(default = "default_true")]
+    show_remote_version: bool,
+    #[serde(default = "default_true")]
+    use_cache: bool,
+    #[serde(default = "default_max_cache_entries")]
+    max_cache_entries: usize,
+    #[serde(default = "default_true")]
+    use_filter: bool,
+    #[serde(default = "default_true")]
+    resolve_dependencies: bool,
+    #[serde(default = "default_max_dependency_depth")]
+    max_dependency_depth: usize,
+    #[serde(default = "default_false")]
+    include_light_dependencies: bool,
+    #[serde(default = "default_max_dependency_nodes")]
+    max_dependency_nodes: usize,
+    #[serde(default = "default_pinned_methods")]
+    pinned_methods: Vec<String>,
+    #[serde(default = "default_pip_index_storage")]
+    pip_index: String,
+    #[serde(default = "default_conda_channels_storage")]
+    conda_channels: Vec<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    github_token: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    github_token_protected: String,
+}
+impl StoredSettings {
+    pub(crate) fn into_settings(self) -> Result<Settings, String> {
+        if self.github_token_protected.len() > MAX_PROTECTED_TOKEN_CHARS {
+            return Err("加密 Token 长度超过限制".to_string());
+        }
+        let token = if self.github_token_protected.trim().is_empty() {
+            self.github_token
+        } else {
+            secrets::unprotect_string(&self.github_token_protected)?
+        };
+        Settings {
+            proxy: self.proxy,
+            github_token: token,
+            cran_mirror: self.cran_mirror,
+            r_lib_path: self.r_lib_path,
+            full_search: self.full_search,
+            search_concurrency: self.search_concurrency,
+            archive_github_major_gap: self.archive_github_major_gap,
+            conditional: self.conditional,
+            install_dependencies: self.install_dependencies,
+            show_remote_version: self.show_remote_version,
+            use_cache: self.use_cache,
+            max_cache_entries: self.max_cache_entries,
+            use_filter: self.use_filter,
+            resolve_dependencies: self.resolve_dependencies,
+            max_dependency_depth: self.max_dependency_depth,
+            include_light_dependencies: self.include_light_dependencies,
+            max_dependency_nodes: self.max_dependency_nodes,
+            pinned_methods: self.pinned_methods,
+            pip_index: self.pip_index,
+            conda_channels: self.conda_channels,
+        }
+        .normalized()
+    }
+    pub(crate) fn from_settings(settings: &Settings) -> Result<Self, String> {
+        let s = settings.normalized()?;
+        Ok(Self {
+            proxy: s.proxy,
+            github_token: String::new(),
+            github_token_protected: secrets::protect_string(&s.github_token)?,
+            cran_mirror: s.cran_mirror,
+            r_lib_path: s.r_lib_path,
+            full_search: s.full_search,
+            search_concurrency: s.search_concurrency,
+            archive_github_major_gap: s.archive_github_major_gap,
+            conditional: s.conditional,
+            install_dependencies: s.install_dependencies,
+            show_remote_version: s.show_remote_version,
+            use_cache: s.use_cache,
+            max_cache_entries: s.max_cache_entries,
+            use_filter: s.use_filter,
+            resolve_dependencies: s.resolve_dependencies,
+            max_dependency_depth: s.max_dependency_depth,
+            include_light_dependencies: s.include_light_dependencies,
+            max_dependency_nodes: s.max_dependency_nodes,
+            pinned_methods: s.pinned_methods,
+            pip_index: s.pip_index,
+            conda_channels: s.conda_channels,
+        })
+    }
+}
+pub(crate) fn data_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
+    Ok(ensure_data_directory(app)?.join(name))
+}
+pub(crate) fn ensure_data_directory(app: &AppHandle) -> Result<PathBuf, String> {
+    let d = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    super::atomic_storage::ensure_storage_directory(&d)?;
+    Ok(d)
+}
+pub(crate) fn load_input_rules(app: &AppHandle) -> InputRules {
+    let Ok(path) = data_file(app, INPUT_RULES_FILE_NAME) else {
+        return InputRules::default();
+    };
+    if !path_entry_exists(&path).unwrap_or(false) {
+        return InputRules::default();
+    }
+    let Some(content) =
+        read_storage_file_with_recovery(app, INPUT_RULES_FILE_NAME, 64 * 1024, "输入规则文件")
+            .unwrap_or(None)
+    else {
+        return InputRules::default();
+    };
+    serde_json::from_str::<InputRules>(&content)
+        .map(|r| r.normalized())
+        .unwrap_or_else(|_| {
+            let _ = backup_corrupt_file(app, INPUT_RULES_FILE_NAME, &content);
+            InputRules::default()
+        })
+}
+pub(crate) fn save_default_input_rules(app: &AppHandle) {
+    let Ok(path) = data_file(app, INPUT_RULES_FILE_NAME) else {
+        return;
+    };
+    if path.exists() {
+        return;
+    }
+    if let Ok(c) = serde_json::to_string_pretty(&InputRules::default()) {
+        let _ = atomic_write(&path, &c);
+    }
+}
+pub(crate) fn save_input_rules(app: &AppHandle, rules: &InputRules) -> Result<(), String> {
+    let c = serde_json::to_string_pretty(&rules.normalized()).map_err(|e| e.to_string())?;
+    atomic_write(&data_file(app, INPUT_RULES_FILE_NAME)?, &c)
+}
+pub(crate) fn load_settings(app: &AppHandle) -> Result<Settings, String> {
+    load_settings_with_recovery(app, true)
+}
+pub(crate) fn load_existing_settings(app: &AppHandle) -> Result<Option<Settings>, String> {
+    let p = data_file(app, "settings.json")?;
+    if !path_entry_exists(&p)? {
+        return Ok(None);
+    }
+    load_settings_with_recovery(app, false).map(Some)
+}
+fn load_settings_with_recovery(app: &AppHandle, fallback: bool) -> Result<Settings, String> {
+    let p = data_file(app, "settings.json")?;
+    if !path_entry_exists(&p)? {
+        return Ok(Settings::default());
+    }
+    let Some(c) =
+        read_storage_file_with_recovery(app, "settings.json", MAX_SETTINGS_FILE_BYTES, "设置文件")?
+    else {
+        return if fallback {
+            Ok(Settings::default())
+        } else {
+            Err("设置文件超过安全读取上限，已备份；请重新确认设置后再保存".to_string())
+        };
+    };
+    match serde_json::from_str::<StoredSettings>(&c).and_then(|s| {
+        s.into_settings().map_err(|e| {
+            serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        })
+    }) {
+        Ok(s) => Ok(s),
+        Err(_) => {
+            backup_corrupt_settings_file(app, &c)?;
+            if fallback {
+                Ok(Settings::default())
+            } else {
+                Err("设置文件损坏，已备份；请重新确认设置后再保存".to_string())
+            }
+        }
+    }
+}
+pub(crate) fn save_settings(app: &AppHandle, settings: &Settings) -> Result<(), String> {
+    let s = StoredSettings::from_settings(settings)?;
+    atomic_write(
+        &data_file(app, "settings.json")?,
+        &serde_json::to_string_pretty(&s).map_err(|e| e.to_string())?,
+    )
+}
+fn backup_corrupt_settings_file(app: &AppHandle, content: &str) -> Result<(), String> {
+    backup_corrupt_file(
+        app,
+        "settings.json",
+        &redact_settings_backup_content(content),
+    )
+}
+pub(crate) fn redact_settings_backup_content(content: &str) -> String {
+    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(content) else {
+        return MALFORMED_SETTINGS_BACKUP_NOTICE.to_string();
+    };
+    redact_settings_value(&mut value);
+    serde_json::to_string_pretty(&value)
+        .unwrap_or_else(|_| MALFORMED_SETTINGS_BACKUP_NOTICE.to_string())
+}
+fn redact_settings_value(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (k, v) in map {
+                if matches!(k.as_str(), "githubToken" | "githubTokenProtected" | "proxy") {
+                    *v = serde_json::Value::String("[redacted]".to_string())
+                } else {
+                    redact_settings_value(v)
+                }
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for v in items {
+                redact_settings_value(v)
+            }
+        }
+        _ => {}
+    }
+}
+#[cfg(test)]
+pub(crate) fn test_stored_settings(settings: &Settings) -> Result<StoredSettings, String> {
+    StoredSettings::from_settings(settings)
+}
+#[cfg(test)]
+pub(crate) fn test_into_settings(stored: StoredSettings) -> Result<Settings, String> {
+    stored.into_settings()
+}

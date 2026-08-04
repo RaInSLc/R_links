@@ -7,8 +7,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::AppHandle;
 
-#[path = "dependency_fetch.rs"] mod dependency_fetch;
-#[path = "dependency_parse.rs"] mod dependency_parse;
+#[path = "dependency_fetch.rs"]
+mod dependency_fetch;
+#[path = "dependency_parse.rs"]
+mod dependency_parse;
 
 use dependency_fetch::fetch_description;
 use dependency_parse::parse_package_dependencies;
@@ -131,7 +133,9 @@ pub async fn resolve_dependencies(
     }
 
     while !queue.is_empty() && !cancelled.load(Ordering::SeqCst) {
-        if nodes_map.len() >= settings.max_dependency_nodes { break; }
+        if nodes_map.len() >= settings.max_dependency_nodes {
+            break;
+        }
 
         let level_size = queue.len();
         let mut level_tasks = Vec::new();
@@ -159,11 +163,8 @@ pub async fn resolve_dependencies(
             .map(|request| {
                 let client_clone = client.clone();
                 let mirror = settings.cran_mirror.clone();
-                let cache_key = dependency_cache_key(
-                    &request.package,
-                    &request.source,
-                    &request.repository,
-                );
+                let cache_key =
+                    dependency_cache_key(&request.package, &request.source, &request.repository);
                 let cache_entry = dep_cache.get(&cache_key).cloned();
                 async move {
                     if let Some(entry) = cache_entry.filter(|entry| {
@@ -206,11 +207,14 @@ pub async fn resolve_dependencies(
         let results = join_all(futures).await;
         let mut new_cache_entries = HashMap::new();
 
-        for (pkg, depth, path_roots, source, _requested_version, repository, parsed_res) in results {
+        for (pkg, depth, path_roots, source, _requested_version, repository, parsed_res) in results
+        {
             if cancelled.load(Ordering::SeqCst) {
                 break;
             }
-            if nodes_map.len() >= settings.max_dependency_nodes { break; }
+            if nodes_map.len() >= settings.max_dependency_nodes {
+                break;
+            }
 
             let mut path_roots = path_roots;
             if let Some(extra_roots) = pending_roots.remove(&pkg) {
@@ -371,9 +375,9 @@ pub async fn resolve_dependencies(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::dependency_fetch::extract_packages_index_entry;
     use super::dependency_parse::{clean_package_name, parse_description};
+    use super::*;
 
     #[test]
     fn test_parse_description_debian_control() {

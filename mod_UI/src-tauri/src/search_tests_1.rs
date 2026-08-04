@@ -210,7 +210,8 @@ mod tests {
     #[test]
     fn parses_ggsankey_description_metadata() {
         let description = "Package: ggsankey\nType: Package\nTitle: Sankey, Alluvial and Sankey Bump Plots\nVersion: 0.0.99999\nImports: \n    ggplot2,\n    dplyr,\n    stringr\n";
-        let metadata = extract_description_metadata(description).expect("ggsankey DESCRIPTION 应可解析");
+        let metadata =
+            extract_description_metadata(description).expect("ggsankey DESCRIPTION 应可解析");
         assert_eq!(metadata.package_name, "ggsankey");
         assert_eq!(metadata.version, "0.0.99999");
     }
@@ -328,5 +329,4 @@ mod tests {
         assert!(!result.message.contains('\n'));
         assert!(result.message.len() <= MAX_RESULT_MESSAGE_CHARS);
     }
-
 }

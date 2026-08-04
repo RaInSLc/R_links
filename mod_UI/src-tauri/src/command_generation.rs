@@ -1,8 +1,23 @@
 use crate::logic::*;
 
 #[cfg(test)]
-pub(crate) fn generate_command(value: &str, method: &str, version: &str, conditional: bool, mirror: &str, install_dependencies: bool) -> Result<String, String> {
-    generate_command_with_lib(value, method, version, conditional, mirror, install_dependencies, "")
+pub(crate) fn generate_command(
+    value: &str,
+    method: &str,
+    version: &str,
+    conditional: bool,
+    mirror: &str,
+    install_dependencies: bool,
+) -> Result<String, String> {
+    generate_command_with_lib(
+        value,
+        method,
+        version,
+        conditional,
+        mirror,
+        install_dependencies,
+        "",
+    )
 }
 
 pub(crate) fn generate_command_with_lib(

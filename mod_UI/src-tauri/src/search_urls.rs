@@ -30,9 +30,7 @@ pub(crate) fn validate_search_request_url_with_mirror(
             parsed.query().is_none()
                 && (is_allowed_cran_package_path(&parsed) || is_allowed_cran_archive_path(&parsed))
         }
-        "packagemanager.posit.co" => {
-            parsed.query().is_none() && is_allowed_r_binary_path(&parsed)
-        }
+        "packagemanager.posit.co" => parsed.query().is_none() && is_allowed_r_binary_path(&parsed),
         "bioconductor.org" => parsed.query().is_none() && is_allowed_bioc_package_path(&parsed),
         "r-forge.r-project.org" => parsed.query().is_none() && is_allowed_r_forge_path(&parsed),
         "r-universe.dev" => path == "/api/search" && is_allowed_r_universe_query(&parsed),
@@ -64,7 +62,9 @@ pub(crate) fn validate_search_request_url_with_mirror(
                 })
         }
         _ => configured_mirror.is_some_and(|mirror| {
-            let Ok(configured) = Url::parse(mirror) else { return false; };
+            let Ok(configured) = Url::parse(mirror) else {
+                return false;
+            };
             configured.scheme() == "https"
                 && configured.host_str() == Some(host)
                 && parsed.query().is_none()
@@ -88,7 +88,9 @@ fn configured_mirror_path_allows(configured: &Url, requested: &Url) -> bool {
         requested_path.strip_prefix(configured_path).unwrap_or("")
     };
     let relative = format!("https://host{}", relative_path);
-    let Ok(relative_url) = Url::parse(&relative) else { return false; };
+    let Ok(relative_url) = Url::parse(&relative) else {
+        return false;
+    };
     is_allowed_cran_package_path(&relative_url) || is_allowed_cran_archive_path(&relative_url)
 }
 
@@ -229,12 +231,16 @@ fn is_allowed_r_forge_path(url: &Url) -> bool {
 
 fn is_allowed_r_binary_path(url: &Url) -> bool {
     let segments = url.path_segments().map(|items| items.collect::<Vec<_>>());
-    let Some(segments) = segments else { return false; };
+    let Some(segments) = segments else {
+        return false;
+    };
     segments.len() >= 3
         && segments[0] == "cran"
         && segments.last() == Some(&"PACKAGES")
         && segments.iter().all(|segment| {
             !segment.is_empty()
-                && segment.chars().all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_' | '+'))
+                && segment.chars().all(|character| {
+                    character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_' | '+')
+                })
         })
 }

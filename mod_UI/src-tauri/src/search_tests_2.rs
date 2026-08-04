@@ -326,7 +326,9 @@ mod tests {
                 if url.contains("/web/packages/fastshap/index.html") {
                     Ok(None)
                 } else if url.contains("/src/contrib/Archive/fastshap/") {
-                    Ok(Some(r#"<a href="fastshap_0.1.1.tar.gz">fastshap_0.1.1.tar.gz</a>"#.to_string()))
+                    Ok(Some(
+                        r#"<a href="fastshap_0.1.1.tar.gz">fastshap_0.1.1.tar.gz</a>"#.to_string(),
+                    ))
                 } else {
                     Ok(None)
                 }
@@ -337,7 +339,9 @@ mod tests {
 
         MOCK_GET_TEXT.with(|mock| *mock.borrow_mut() = None);
 
-        let result = result.expect("Archive 检索不应报错").expect("应命中 Archive");
+        let result = result
+            .expect("Archive 检索不应报错")
+            .expect("应命中 Archive");
         assert_eq!(result.latest_version, "0.1.1");
         assert_eq!(result.source, "cran");
         assert_eq!(

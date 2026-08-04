@@ -1,8 +1,6 @@
 use super::*;
 
-use crate::search_sanitize::{
-    clean_result_package_name, clean_version,
-};
+use crate::search_sanitize::{clean_result_package_name, clean_version};
 
 pub(crate) fn extract_html_version(html: &str) -> Option<String> {
     let regex = HTML_VERSION_RE.get_or_init(|| {
@@ -96,7 +94,9 @@ pub(crate) fn r_universe_package_object(value: &Value) -> Option<&serde_json::Ma
     }
 }
 
-pub(crate) fn r_universe_object_has_bounded_fields(object: &serde_json::Map<String, Value>) -> bool {
+pub(crate) fn r_universe_object_has_bounded_fields(
+    object: &serde_json::Map<String, Value>,
+) -> bool {
     ["Package", "Version", "RemoteUrl"].iter().all(|field| {
         object
             .get(*field)

@@ -1,6 +1,6 @@
+use crate::models::{InputRules, PackageInput, MAX_PACKAGE_LINES};
 use regex::Regex;
 use std::sync::OnceLock;
-use crate::models::{InputRules, PackageInput, MAX_PACKAGE_LINES};
 
 static INPUT_URL_RE: OnceLock<Regex> = OnceLock::new();
 static INPUT_PACKAGE_RE: OnceLock<Regex> = OnceLock::new();
@@ -32,7 +32,11 @@ pub fn parse_inputs_filtered(input: &str, rules: &InputRules) -> Result<Vec<Pack
             continue;
         }
         if let Some(managed) = normalize_managed_package_line(trimmed) {
-            for item in managed.lines().map(str::trim).filter(|item| !item.is_empty()) {
+            for item in managed
+                .lines()
+                .map(str::trim)
+                .filter(|item| !item.is_empty())
+            {
                 let pkg = parse_input_line(item)
                     .ok_or_else(|| format!("第 {line_idx} 行包管理器输入格式无效"))?;
                 packages.push(pkg);
@@ -163,7 +167,9 @@ pub(crate) fn normalize_managed_package_line(line: &str) -> Option<String> {
     }
     Some(
         body.trim()
-            .trim_start_matches(|c: char| c == 'c' || c == 'C' || c == 'l' || c == 'i' || c == 's' || c == 't' || c == '(')
+            .trim_start_matches(|c: char| {
+                c == 'c' || c == 'C' || c == 'l' || c == 'i' || c == 's' || c == 't' || c == '('
+            })
             .trim_end_matches(')')
             .split([',', ';'])
             .map(str::trim)
@@ -320,7 +326,9 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
             .and_then(|file| {
                 let stem = package_name_from_archive_file(file)?;
                 stem.rsplit_once('_')
-                    .filter(|(_, version)| version.chars().next().is_some_and(|c| c.is_ascii_digit()))
+                    .filter(|(_, version)| {
+                        version.chars().next().is_some_and(|c| c.is_ascii_digit())
+                    })
                     .map(|(name, _)| name.to_string())
                     .or(Some(stem))
             })

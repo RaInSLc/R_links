@@ -2,13 +2,22 @@ use super::*;
 
 #[test]
 fn parses_pip_requirements() {
-    assert_eq!(split_requirement("numpy==1.26.4"), ("numpy".to_string(), "1.26.4".to_string()));
-    assert_eq!(split_requirement("pandas"), ("pandas".to_string(), String::new()));
+    assert_eq!(
+        split_requirement("numpy==1.26.4"),
+        ("numpy".to_string(), "1.26.4".to_string())
+    );
+    assert_eq!(
+        split_requirement("pandas"),
+        ("pandas".to_string(), String::new())
+    );
 }
 
 #[test]
 fn selects_conda_latest_version_from_metadata() {
-    let payload = CondaResponse { latest_version: Some("1.10.0".to_string()), versions: Some(vec!["1.2.0".to_string(), "1.10.0".to_string()]) };
+    let payload = CondaResponse {
+        latest_version: Some("1.10.0".to_string()),
+        versions: Some(vec!["1.2.0".to_string(), "1.10.0".to_string()]),
+    };
     assert_eq!(conda_version(&payload, ""), Some("1.10.0".to_string()));
     assert_eq!(conda_version(&payload, "1.2"), Some("1.2.0".to_string()));
     assert_eq!(conda_version(&payload, "9.0"), None);
@@ -16,7 +25,10 @@ fn selects_conda_latest_version_from_metadata() {
 
 #[test]
 fn empty_conda_metadata_is_not_a_hit() {
-    let payload = CondaResponse { latest_version: None, versions: Some(Vec::new()) };
+    let payload = CondaResponse {
+        latest_version: None,
+        versions: Some(Vec::new()),
+    };
     assert_eq!(conda_version(&payload, ""), None);
 }
 

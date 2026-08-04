@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## [2026-08-04 13:30:00 +08:00]
+
+### Fixed
+- **Release workflow 标签强行删除与中断修复**：移除 `release.yml` 在重跑旧 Release 时 `gh release delete` 携带的 `--cleanup-tag` 参数，避免在构建中途删掉 GitHub 远程 Git 标签导致后续 `tauri-action` 与 `action-gh-release` 因“标签不存在”而失败。
+- **Workflow 手动触发**：在 `release.yml` 与 `ci.yml` 中新增 `workflow_dispatch` 触发入口，方便在 GitHub Actions 控制台手动调试与重新触发构建。
+- **Rust 代码格式校验**：完成 Rust 代码 `cargo fmt` 规范化，确保 `ci.yml` 的 `cargo fmt -- --check` 步骤正常通过。
+
 ## [2026-08-04 11:50:00 +08:00]
 
 ### Fixed

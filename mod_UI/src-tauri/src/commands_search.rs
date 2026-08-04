@@ -1,9 +1,98 @@
+use crate::{
+    logic,
+    models::{SearchResponse, Settings},
+    search, search_multi,
+    state::SearchState,
+};
 use tauri::{AppHandle, State};
-use crate::{models::{SearchResponse, Settings}, search, search_multi, state::SearchState, logic};
-#[tauri::command] pub(crate) fn stop_search(state: State<'_, SearchState>, run_id:u64)->bool{state.request_stop(run_id)}
-#[tauri::command] pub(crate) fn pause_search(state: State<'_, SearchState>, run_id:u64)->bool{state.set_paused(run_id,true)}
-#[tauri::command] pub(crate) fn resume_search(state: State<'_, SearchState>, run_id:u64)->bool{state.set_paused(run_id,false)}
-#[tauri::command] pub(crate) fn cancel_search_package(state: State<'_, SearchState>, run_id:u64, package:String)->bool{state.cancel_package(run_id,&package)}
-#[tauri::command] pub(crate) async fn start_search(app:AppHandle,state:State<'_,SearchState>,run_id:u64,input:String,settings:Settings)->Result<SearchResponse,String>{logic::validate_input_size(&input)?;let run=state.try_begin(run_id)?;let existing=crate::commands_settings_runtime::load_existing_settings_for_runtime(&app)?;let settings=crate::commands_settings_runtime::merge_runtime_settings(settings,&existing)?;let result=search::search_packages(&app,run_id,run.cancelled(),&state,&input,&settings).await;drop(run);result}
-#[tauri::command] pub(crate) async fn start_binary_search(app:AppHandle,state:State<'_,SearchState>,run_id:u64,input:String,settings:Settings,mirror:String)->Result<SearchResponse,String>{logic::validate_input_size(&input)?;let run=state.try_begin(run_id)?;let existing=crate::commands_settings_runtime::load_existing_settings_for_runtime(&app)?;let settings=crate::commands_settings_runtime::merge_runtime_settings(settings,&existing)?;let result=search::search_binary_packages(&app,run_id,run.cancelled(),&state,&input,&settings,&mirror).await;drop(run);result}
-#[tauri::command] pub(crate) async fn search_multi_ecosystem(app:AppHandle,state:State<'_,SearchState>,run_id:u64,input:String,ecosystem:String,settings:Settings)->Result<SearchResponse,String>{logic::validate_input_size(&input)?;let run=state.try_begin(run_id)?;let existing=crate::commands_settings_runtime::load_existing_settings_for_runtime(&app)?;let settings=crate::commands_settings_runtime::merge_runtime_settings(settings,&existing)?;let result=search_multi::search(&app,run_id,run.cancelled(),&state,&input,&ecosystem,&settings.pip_index,&settings.conda_channels,&settings).await;drop(run);result}
+#[tauri::command]
+pub(crate) fn stop_search(state: State<'_, SearchState>, run_id: u64) -> bool {
+    state.request_stop(run_id)
+}
+#[tauri::command]
+pub(crate) fn pause_search(state: State<'_, SearchState>, run_id: u64) -> bool {
+    state.set_paused(run_id, true)
+}
+#[tauri::command]
+pub(crate) fn resume_search(state: State<'_, SearchState>, run_id: u64) -> bool {
+    state.set_paused(run_id, false)
+}
+#[tauri::command]
+pub(crate) fn cancel_search_package(
+    state: State<'_, SearchState>,
+    run_id: u64,
+    package: String,
+) -> bool {
+    state.cancel_package(run_id, &package)
+}
+#[tauri::command]
+pub(crate) async fn start_search(
+    app: AppHandle,
+    state: State<'_, SearchState>,
+    run_id: u64,
+    input: String,
+    settings: Settings,
+) -> Result<SearchResponse, String> {
+    logic::validate_input_size(&input)?;
+    let run = state.try_begin(run_id)?;
+    let existing = crate::commands_settings_runtime::load_existing_settings_for_runtime(&app)?;
+    let settings = crate::commands_settings_runtime::merge_runtime_settings(settings, &existing)?;
+    let result =
+        search::search_packages(&app, run_id, run.cancelled(), &state, &input, &settings).await;
+    drop(run);
+    result
+}
+#[tauri::command]
+pub(crate) async fn start_binary_search(
+    app: AppHandle,
+    state: State<'_, SearchState>,
+    run_id: u64,
+    input: String,
+    settings: Settings,
+    mirror: String,
+) -> Result<SearchResponse, String> {
+    logic::validate_input_size(&input)?;
+    let run = state.try_begin(run_id)?;
+    let existing = crate::commands_settings_runtime::load_existing_settings_for_runtime(&app)?;
+    let settings = crate::commands_settings_runtime::merge_runtime_settings(settings, &existing)?;
+    let result = search::search_binary_packages(
+        &app,
+        run_id,
+        run.cancelled(),
+        &state,
+        &input,
+        &settings,
+        &mirror,
+    )
+    .await;
+    drop(run);
+    result
+}
+#[tauri::command]
+pub(crate) async fn search_multi_ecosystem(
+    app: AppHandle,
+    state: State<'_, SearchState>,
+    run_id: u64,
+    input: String,
+    ecosystem: String,
+    settings: Settings,
+) -> Result<SearchResponse, String> {
+    logic::validate_input_size(&input)?;
+    let run = state.try_begin(run_id)?;
+    let existing = crate::commands_settings_runtime::load_existing_settings_for_runtime(&app)?;
+    let settings = crate::commands_settings_runtime::merge_runtime_settings(settings, &existing)?;
+    let result = search_multi::search(
+        &app,
+        run_id,
+        run.cancelled(),
+        &state,
+        &input,
+        &ecosystem,
+        &settings.pip_index,
+        &settings.conda_channels,
+        &settings,
+    )
+    .await;
+    drop(run);
+    result
+}

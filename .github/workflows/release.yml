@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
 
 # Requires repo Settings > Actions > General > Workflow permissions
 # set to "Read and write permissions" for GITHUB_TOKEN to create releases.
@@ -60,8 +61,8 @@ jobs:
           $releaseJson = gh release view $env:RELEASE_TAG --json isDraft 2>$null
           if ($LASTEXITCODE -eq 0 -and $releaseJson) {
             $release = $releaseJson | ConvertFrom-Json
-            Write-Host "Found existing release for $env:RELEASE_TAG (isDraft: $($release.isDraft)). Deleting to allow clean re-publish..."
-            gh release delete $env:RELEASE_TAG --yes --cleanup-tag
+            Write-Host "Found existing release for $env:RELEASE_TAG (isDraft: $($release.isDraft)). Deleting release to allow clean re-publish..."
+            gh release delete $env:RELEASE_TAG --yes
             if ($LASTEXITCODE -ne 0) {
               Write-Host "Warning: gh release delete returned code $LASTEXITCODE"
             }

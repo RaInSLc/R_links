@@ -24,7 +24,10 @@ thread_local! {
     pub static MOCK_GET_TEXT: std::cell::RefCell<Option<MockGetText>> = std::cell::RefCell::new(None);
 }
 
-pub(crate) async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Result<Option<String>, String> {
+pub(crate) async fn get_text(
+    context: &mut SearchContext<'_>,
+    url: &str,
+) -> Result<Option<String>, String> {
     #[cfg(test)]
     {
         let mock_result = MOCK_GET_TEXT.with(|mock| mock.borrow_mut().as_mut().map(|f| f(url)));
@@ -36,7 +39,8 @@ pub(crate) async fn get_text(context: &mut SearchContext<'_>, url: &str) -> Resu
     if context.is_stopped() {
         return Ok(None);
     }
-    let is_cran_mirror_request = url.contains("/web/packages/") || url.contains("/src/contrib/Archive/");
+    let is_cran_mirror_request =
+        url.contains("/web/packages/") || url.contains("/src/contrib/Archive/");
     let validation = if is_cran_mirror_request {
         validate_search_request_url_with_mirror(url, Some(&context.settings.cran_mirror))
     } else {
@@ -79,7 +83,10 @@ thread_local! {
     pub static MOCK_GET_JSON: std::cell::RefCell<Option<MockGetJson>> = std::cell::RefCell::new(None);
 }
 
-pub(crate) async fn get_json(context: &mut SearchContext<'_>, url: &str) -> Result<Option<Value>, String> {
+pub(crate) async fn get_json(
+    context: &mut SearchContext<'_>,
+    url: &str,
+) -> Result<Option<Value>, String> {
     #[cfg(test)]
     {
         let mock_result = MOCK_GET_JSON.with(|mock| mock.borrow_mut().as_mut().map(|f| f(url)));

@@ -16,13 +16,20 @@ pub(crate) async fn fetch_description(
     let mirror_clean = mirror.trim_end_matches('/');
 
     if source.eq_ignore_ascii_case("cran") || source.eq_ignore_ascii_case("none") {
-        urls.push((format!("{}/web/packages/{}/DESCRIPTION", mirror_clean, package), false));
+        urls.push((
+            format!("{}/web/packages/{}/DESCRIPTION", mirror_clean, package),
+            false,
+        ));
     } else if source.eq_ignore_ascii_case("bioc") || source.eq_ignore_ascii_case("biocGit") {
-        let bioc_versions = if source.eq_ignore_ascii_case("biocGit") && !repository.trim().is_empty() {
-            vec![repository.trim().trim_matches('/').to_string(), "release".to_string()]
-        } else {
-            vec!["release".to_string()]
-        };
+        let bioc_versions =
+            if source.eq_ignore_ascii_case("biocGit") && !repository.trim().is_empty() {
+                vec![
+                    repository.trim().trim_matches('/').to_string(),
+                    "release".to_string(),
+                ]
+            } else {
+                vec!["release".to_string()]
+            };
         for bioc_version in bioc_versions {
             for category in BIOC_DEPENDENCY_CATEGORIES {
                 urls.push((format!("https://bioconductor.org/packages/{bioc_version}/{category}/src/contrib/PACKAGES"), true));
@@ -37,12 +44,33 @@ pub(crate) async fn fetch_description(
             ""
         };
         if !github_repo.is_empty() {
-            urls.push((format!("https://raw.githubusercontent.com/{}/master/DESCRIPTION", github_repo), false));
-            urls.push((format!("https://raw.githubusercontent.com/{}/main/DESCRIPTION", github_repo), false));
+            urls.push((
+                format!(
+                    "https://raw.githubusercontent.com/{}/master/DESCRIPTION",
+                    github_repo
+                ),
+                false,
+            ));
+            urls.push((
+                format!(
+                    "https://raw.githubusercontent.com/{}/main/DESCRIPTION",
+                    github_repo
+                ),
+                false,
+            ));
         }
-        urls.push((format!("https://raw.githubusercontent.com/cran/{}/master/DESCRIPTION", package), false));
+        urls.push((
+            format!(
+                "https://raw.githubusercontent.com/cran/{}/master/DESCRIPTION",
+                package
+            ),
+            false,
+        ));
     } else {
-        urls.push((format!("{}/web/packages/{}/DESCRIPTION", mirror_clean, package), false));
+        urls.push((
+            format!("{}/web/packages/{}/DESCRIPTION", mirror_clean, package),
+            false,
+        ));
     }
 
     for (url, is_packages_index) in urls {
@@ -64,12 +92,24 @@ pub(crate) async fn fetch_description(
     Err(format!("无法获取包 {} 的 DESCRIPTION 元数据", package))
 }
 
-pub(crate) fn extract_packages_index_entry(text: &str, package: &str, version: &str) -> Option<String> {
+pub(crate) fn extract_packages_index_entry(
+    text: &str,
+    package: &str,
+    version: &str,
+) -> Option<String> {
     for entry in text.split("\n\n") {
         let meta = parse_description(entry);
-        let Some(entry_package) = meta.get("Package") else { continue };
-        if !entry_package.eq_ignore_ascii_case(package) { continue; }
-        if !version.is_empty() && meta.get("Version").is_some_and(|entry_version| entry_version != version) {
+        let Some(entry_package) = meta.get("Package") else {
+            continue;
+        };
+        if !entry_package.eq_ignore_ascii_case(package) {
+            continue;
+        }
+        if !version.is_empty()
+            && meta
+                .get("Version")
+                .is_some_and(|entry_version| entry_version != version)
+        {
             continue;
         }
         return Some(entry.to_string());

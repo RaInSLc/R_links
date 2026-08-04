@@ -1,19 +1,19 @@
 #[cfg(test)]
 mod tests {
     use crate::logic::*;
-    use crate::models::{GenerateOptions, InputRules, PackageInput, SearchResult, MAX_FIELD_CHARS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS};
-    
-    
+    use crate::models::{
+        GenerateOptions, InputRules, PackageInput, SearchResult, MAX_FIELD_CHARS, MAX_INPUT_CHARS,
+        MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
+    };
 
-        #[test]
+    #[test]
     fn parses_package_and_version() {
         let value = parse_input_line("GSVA 1.50.0 说明").expect("应解析包输入");
         assert_eq!(value.name, "GSVA");
         assert_eq!(value.version, "1.50.0");
     }
 
-
-        #[test]
+    #[test]
     fn parses_github_repository_url_as_github_input() {
         let value = parse_input_line("https://github.com/davidsjoberg/ggsankey")
             .expect("GitHub 仓库 URL 应可解析");
@@ -21,8 +21,7 @@ mod tests {
         assert_eq!(value.source_hint.as_deref(), Some("github"));
     }
 
-
-        #[test]
+    #[test]
     fn parses_local_r_archive_path() {
         let value = parse_input_line(r"C:\packages\ggsankey_0.0.99999.tar.gz")
             .expect("本地 R 包归档路径应可解析");
@@ -30,15 +29,13 @@ mod tests {
         assert_eq!(value.source_hint.as_deref(), Some("local"));
     }
 
-
-        #[test]
+    #[test]
     fn rejects_relative_or_non_archive_local_path() {
         assert!(parse_input_line(r"packages\ggsankey.tar.gz").is_none());
         assert!(parse_input_line(r"C:\packages\ggsankey.pdf").is_none());
     }
 
-
-        #[test]
+    #[test]
     fn extracts_github_repository_name() {
         assert_eq!(
             extract_package_name("https://github.com/buenrostrolab/FigR/"),
@@ -54,40 +51,35 @@ mod tests {
         );
     }
 
-
-        #[test]
+    #[test]
     fn accepts_http_archive_url_with_explicit_port() {
-        let value = parse_input_line(
-            "http://192.168.5.250:8011/softs/Rpackages/scTenifoldNet_1.3.tar.gz",
-        )
-        .expect("本地 HTTP R 包归档 URL 应可解析");
+        let value =
+            parse_input_line("http://192.168.5.250:8011/softs/Rpackages/scTenifoldNet_1.3.tar.gz")
+                .expect("本地 HTTP R 包归档 URL 应可解析");
         assert_eq!(value.name, "scTenifoldNet");
         assert_eq!(value.version, "");
     }
 
-
-        #[test]
+    #[test]
     fn rejects_archive_url_with_query_or_fragment() {
-        assert!(parse_input_line(
-            "http://192.168.5.250:8011/scTenifoldNet_1.3.tar.gz?download=1"
-        )
-        .is_none());
-        assert!(parse_input_line(
-            "http://192.168.5.250:8011/scTenifoldNet_1.3.tar.gz#download"
-        )
-        .is_none());
+        assert!(
+            parse_input_line("http://192.168.5.250:8011/scTenifoldNet_1.3.tar.gz?download=1")
+                .is_none()
+        );
+        assert!(
+            parse_input_line("http://192.168.5.250:8011/scTenifoldNet_1.3.tar.gz#download")
+                .is_none()
+        );
     }
 
-
-        #[test]
+    #[test]
     fn infers_bioconductor_versions() {
         assert_eq!(infer_bioc_version(1, 50), Some(18));
         assert_eq!(infer_bioc_version(1, 34), Some(10));
         assert_eq!(infer_bioc_version(2, 2), Some(22));
     }
 
-
-        #[test]
+    #[test]
     fn generates_conditional_cran_command() {
         let output = generate_script(
             "dplyr",
@@ -105,8 +97,7 @@ mod tests {
         assert!(output.contains("dependencies = TRUE"));
     }
 
-
-        #[test]
+    #[test]
     fn auto_routes_explicit_github_repository_without_search_result() {
         let output = generate_script(
             "owner/demo",
@@ -126,8 +117,7 @@ mod tests {
         assert!(!output.contains("install.packages(\"owner/demo\""));
     }
 
-
-        #[test]
+    #[test]
     fn check_system_uses_local_name_for_explicit_github_repository() {
         let output = generate_script(
             "owner/demo",
@@ -149,8 +139,7 @@ mod tests {
         assert!(!output.contains("\"owner/demo\""));
     }
 
-
-        #[test]
+    #[test]
     fn local_install_methods_use_local_name_for_explicit_github_repository() {
         for method in ["base", "version", "biocManager"] {
             let output = generate_script(
@@ -171,8 +160,7 @@ mod tests {
         }
     }
 
-
-        #[test]
+    #[test]
     fn install_url_condition_still_uses_archive_package_name() {
         let output = generate_script(
             "https://example.org/src/contrib/demo_1.0.0.tar.gz",
@@ -194,8 +182,7 @@ mod tests {
         assert!(!output.contains("requireNamespace(\"https://"));
     }
 
-
-        #[test]
+    #[test]
     fn auto_routes_archive_urls_per_input_line() {
         let output = generate_script(
             "https://example.org/src/contrib/demo_1.0.0.tar.gz\nother",
@@ -229,8 +216,7 @@ mod tests {
         assert!(!output.contains("install_version(\"demo\""));
     }
 
-
-        #[test]
+    #[test]
     fn auto_routes_local_http_archive_url_to_install_url() {
         let input = "http://192.168.5.250:8011/softs/Rpackages/scTenifoldNet_1.3.tar.gz";
         let output = generate_script(
@@ -252,8 +238,7 @@ mod tests {
         assert!(!output.contains("install.packages(\"scTenifoldNet\""));
     }
 
-
-        #[test]
+    #[test]
     fn rejects_archive_urls_for_incompatible_methods() {
         for method in ["base", "version", "biocManager", "github"] {
             assert!(
@@ -274,8 +259,7 @@ mod tests {
         }
     }
 
-
-        #[test]
+    #[test]
     fn test_generate_script_for_cran_archive() {
         let options = GenerateOptions {
             method: "auto".to_string(),
@@ -303,8 +287,7 @@ mod tests {
         assert!(script.contains("remotes::install_version(\"oncoPredict\", version = \"0.2.0\", repos = \"https://cloud.r-project.org\", upgrade = \"never\", dependencies = FALSE)"));
     }
 
-
-        #[test]
+    #[test]
     fn generate_script_for_cran_archive_tarball_url() {
         let options = GenerateOptions {
             method: "auto".to_string(),
@@ -317,7 +300,9 @@ mod tests {
             package: "fastshap".to_string(),
             requested_version: String::new(),
             latest_version: "0.1.1".to_string(),
-            repository: "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz".to_string(),
+            repository:
+                "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz"
+                    .to_string(),
             real_name: "fastshap".to_string(),
             source: "cran".to_string(),
             found: true,
@@ -333,8 +318,7 @@ mod tests {
         assert!(!script.contains("install.packages(\"fastshap\""));
     }
 
-
-        #[test]
+    #[test]
     fn cran_archive_tarball_takes_priority_over_close_github_version() {
         let options = GenerateOptions {
             method: "auto".to_string(),
@@ -348,7 +332,9 @@ mod tests {
                 package: "fastshap".to_string(),
                 requested_version: String::new(),
                 latest_version: "0.1.1".to_string(),
-                repository: "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz".to_string(),
+                repository:
+                    "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz"
+                        .to_string(),
                 real_name: "fastshap".to_string(),
                 source: "cran".to_string(),
                 found: true,
@@ -378,8 +364,7 @@ mod tests {
         assert!(!script.contains("install_github"));
     }
 
-
-        #[test]
+    #[test]
     fn github_replaces_archive_when_major_gap_reaches_threshold() {
         let options = GenerateOptions {
             method: "auto".to_string(),
@@ -394,7 +379,9 @@ mod tests {
                 package: "fastshap".to_string(),
                 requested_version: String::new(),
                 latest_version: "0.1.1".to_string(),
-                repository: "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz".to_string(),
+                repository:
+                    "https://cran.r-project.org/src/contrib/Archive/fastshap/fastshap_0.1.1.tar.gz"
+                        .to_string(),
                 real_name: "fastshap".to_string(),
                 source: "cran".to_string(),
                 found: true,
@@ -423,5 +410,4 @@ mod tests {
         assert!(script.contains("remotes::install_github(\"bgreenwell/fastshap\", upgrade = \"never\", dependencies = FALSE)"));
         assert!(!script.contains("install_url"));
     }
-
 }

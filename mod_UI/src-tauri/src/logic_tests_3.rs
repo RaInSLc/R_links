@@ -1,9 +1,12 @@
 #[cfg(test)]
 mod tests {
     use crate::logic::*;
-    use crate::models::{GenerateOptions, InputRules, PackageInput, SearchResult, MAX_FIELD_CHARS, MAX_INPUT_CHARS, MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS};
-    
-        #[test]
+    use crate::models::{
+        GenerateOptions, InputRules, PackageInput, SearchResult, MAX_FIELD_CHARS, MAX_INPUT_CHARS,
+        MAX_PACKAGE_LINES, MAX_SCRIPT_CHARS,
+    };
+
+    #[test]
     fn rejects_unsafe_install_url_inputs() {
         assert!(parse_input_line("https://example.org/src/contrib/demo_1.0.0.tar.gz").is_some());
         assert!(parse_input_line("demo https://example.org/pkg_1.0.tar.gz").is_none());
@@ -99,8 +102,7 @@ mod tests {
         .is_err());
     }
 
-
-        #[test]
+    #[test]
     fn rejects_untrusted_search_results_for_auto_script() {
         let output = generate_script(
             "demo",
@@ -131,8 +133,7 @@ mod tests {
         assert!(!output.contains("evil/demo"));
     }
 
-
-        #[test]
+    #[test]
     fn ignores_inconsistent_found_search_results_for_auto_script() {
         let output = generate_script(
             "demo",
@@ -192,8 +193,7 @@ mod tests {
         assert!(!output.contains("owner/demo"));
     }
 
-
-        #[test]
+    #[test]
     fn ignores_search_results_without_real_name_or_repository_match() {
         let output = generate_script(
             "demo",
@@ -224,8 +224,7 @@ mod tests {
         assert!(!output.contains("owner/not-demo"));
     }
 
-
-        #[test]
+    #[test]
     fn prefers_case_insensitive_real_name_matches() {
         let output = generate_script(
             "demo",
@@ -269,8 +268,7 @@ mod tests {
         assert!(!output.contains("install_github"));
     }
 
-
-        #[test]
+    #[test]
     fn accepts_sanitized_search_results_for_auto_script() {
         let output = generate_script(
             "demo",
@@ -300,8 +298,7 @@ mod tests {
         assert!(!output.contains("https://github.com/owner/demo.git"));
     }
 
-
-        #[test]
+    #[test]
     fn hides_remote_versions_without_losing_source_routing() {
         let options = GenerateOptions {
             method: "auto".to_string(),
@@ -356,8 +353,7 @@ mod tests {
         assert!(!github_output.contains("2.0.0"));
     }
 
-
-        #[test]
+    #[test]
     fn rejects_invalid_bioc_git_package_names() {
         let output = generate_script(
             "demo",
@@ -397,8 +393,7 @@ mod tests {
         assert!(error.contains("不是有效的 Bioconductor 包名"));
     }
 
-
-        #[test]
+    #[test]
     fn rejects_result_versions_with_control_characters() {
         let output = generate_script(
             "demo",
@@ -428,5 +423,4 @@ mod tests {
         assert!(!output.contains("install_version"));
         assert!(!output.contains("Injected"));
     }
-
 }

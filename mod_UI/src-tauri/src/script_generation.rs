@@ -1,7 +1,7 @@
 use crate::models::normalize_cran_mirror_url;
 const MAX_GENERATE_METHOD_CHARS: usize = 32;
-use crate::models::{GenerateOptions, InputRules, PackageInput, SearchResult};
 use crate::logic::*;
+use crate::models::{GenerateOptions, InputRules, PackageInput, SearchResult};
 
 #[cfg(test)]
 pub fn generate_script(
