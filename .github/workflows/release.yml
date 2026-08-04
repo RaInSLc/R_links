@@ -57,15 +57,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $ErrorActionPreference = "Stop"
-          $releaseJson = gh release view $env:RELEASE_TAG --json isDraft 2>$null
-          if ($LASTEXITCODE -eq 0 -and $releaseJson) {
-            $release = $releaseJson | ConvertFrom-Json
-            Write-Host "Found existing release for $env:RELEASE_TAG (isDraft: $($release.isDraft)). Deleting release to allow clean re-publish..."
-            gh release delete $env:RELEASE_TAG --yes
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "Warning: gh release delete returned code $LASTEXITCODE"
+          $releaseExists = $false
+          try {
+            $null = gh release view $env:RELEASE_TAG --json isDraft 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              $releaseExists = $true
             }
+          } catch {
+            $releaseExists = $false
+          }
+
+          if ($releaseExists) {
+            Write-Host "Found existing release for $env:RELEASE_TAG. Deleting release to allow clean re-publish..."
+            gh release delete $env:RELEASE_TAG --yes 2>&1 | Out-Null
+          } else {
+            Write-Host "No existing release found for $env:RELEASE_TAG. Proceeding with fresh release..."
           }
 
       - name: Build and upload Tauri assets
@@ -101,14 +107,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $ErrorActionPreference = "Stop"
           $tag = $env:RELEASE_TAG
           New-Item -ItemType Directory -Path "updater-check" -Force | Out-Null
 
           $downloaded = $false
           for ($i = 1; $i -le 6; $i++) {
             Write-Host "Attempt $i/6: Downloading latest.json via gh release download..."
-            gh release download $tag --pattern "latest.json" --dir "updater-check" --clobber 2>$null
+            try {
+              $null = gh release download $tag --pattern "latest.json" --dir "updater-check" --clobber 2>&1
+            } catch {}
+
             if (Test-Path -LiteralPath "updater-check\latest.json") {
               $downloaded = $true
               Write-Host "Successfully downloaded latest.json via GitHub CLI"
@@ -130,31 +138,39 @@ jobs:
             Start-Sleep -Seconds 5
           }
 
-          $manifestPath = Join-Path "updater-check" "latest.json"
-          if (-not (Test-Path -LiteralPath $manifestPath)) {
-            throw "latest.json was not found in release $tag after retries"
+          if (-not $downloaded) {
+            Write-Error "latest.json was not found in release $tag after retries"
+            exit 1
           }
+
+          $manifestPath = Join-Path "updater-check" "latest.json"
           $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
           if (-not $manifest.version) {
-            throw "latest.json is missing version"
+            Write-Error "latest.json is missing version"
+            exit 1
           }
           $packageVersion = (Get-Content -LiteralPath "mod_UI\package.json" -Raw | ConvertFrom-Json).version
           if ($manifest.version -ne $packageVersion) {
-            throw "latest.json version $($manifest.version) does not match package.json version $packageVersion"
+            Write-Error "latest.json version $($manifest.version) does not match package.json version $packageVersion"
+            exit 1
           }
           if (-not $manifest.platforms) {
-            throw "latest.json is missing platforms"
+            Write-Error "latest.json is missing platforms"
+            exit 1
           }
           $platforms = $manifest.platforms.PSObject.Properties
           if ($platforms.Count -lt 1) {
-            throw "latest.json platforms is empty"
+            Write-Error "latest.json platforms is empty"
+            exit 1
           }
           foreach ($platform in $platforms) {
             if (-not $platform.Value.url) {
-              throw "latest.json platform $($platform.Name) is missing url"
+              Write-Error "latest.json platform $($platform.Name) is missing url"
+              exit 1
             }
             if (-not $platform.Value.signature) {
-              throw "latest.json platform $($platform.Name) is missing signature"
+              Write-Error "latest.json platform $($platform.Name) is missing signature"
+              exit 1
             }
           }
           Write-Host "latest.json updater manifest validated successfully!"
