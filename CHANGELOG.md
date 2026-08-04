@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [2026-08-04 11:45:00 +08:00]
+
+### Fixed
+- **Draft Release updater 校验**：将 `latest.json` 校验从 `gh release download` 改为使用 `GITHUB_TOKEN` 通过 GitHub Releases API 读取 draft Release 资产，避免 draft 资产未公开导致校验失败。
+
 ## [2026-08-04 11:25:00 +08:00]
 
 ### Fixed
