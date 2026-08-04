@@ -2,7 +2,6 @@
 
 `mod_UI` 是独立的 Tauri 2 + React + Rust 桌面项目，用于生成 R 包安装命令，并检索 CRAN、Bioconductor、r-universe 与 GitHub 包来源。
 
-旧项目 `..\cpp_src\` 只作为行为参考。本项目不会读取或修改 `cpp_src\config.ini`、`cpp_src\history.txt` 或旧版可执行文件。
 
 ## 1. 首次启动
 
@@ -52,12 +51,12 @@ npm run tauri build -- --no-bundle
 
 ## 4. 必要环境
 
-| 工具 | 用途 | 检查命令 |
-|------|------|----------|
-| Node.js | 前端依赖与 Vite 构建 | `node --version` |
-| npm | 依赖安装与脚本运行 | `npm --version` |
-| Rust / Cargo | Tauri 后端编译 | `cargo --version` |
-| WebView2 Runtime | Windows 桌面 WebView | 系统通常已内置 |
+| 工具             | 用途                 | 检查命令            |
+| ---------------- | -------------------- | ------------------- |
+| Node.js          | 前端依赖与 Vite 构建 | `node --version`  |
+| npm              | 依赖安装与脚本运行   | `npm --version`   |
+| Rust / Cargo     | Tauri 后端编译       | `cargo --version` |
+| WebView2 Runtime | Windows 桌面 WebView | 系统通常已内置      |
 
 当前机器如果 `cargo` 不在 `PATH` 中，请先将 Rust 安装目录加入当前终端的 `PATH`。默认 rustup 安装路径通常为：
 
@@ -97,7 +96,7 @@ Windows 映射盘与 UNC 路径混用时，Vite/Rollup 可能把同一文件解�
 Set-Location -LiteralPath ".\mod_UI"
 ```
 
-不要在同一个终端中来回切换映射盘路径与 UNC 网络路径，例如 `Z:\R_links` 与 `\\10.0.0.163\pythonProject\R_links`。
+
 
 ### `npm ci` 很慢或失败
 
