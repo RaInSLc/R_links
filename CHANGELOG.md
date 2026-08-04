@@ -1,10 +1,10 @@
 # CHANGELOG
 
-## [2026-08-04 13:48:00 +08:00] - Release v0.2.3
+## [2026-08-04 15:30:00 +08:00] - Release v0.2.3
 
-### Changed
-- **版本升级至 v0.2.3**：同步更新 `package.json`、`package-lock.json`、`tauri.conf.json`、`Cargo.toml` 与 `Cargo.lock` 版本号为 `0.2.3`。
-- **发布流程自动化优化**：修复 GitHub Release Action 打包逻辑，包含对 `latest.json` 自动更新清单的多轮重试提取和稳健构建支持。
+### Fixed
+- **Release workflow 缺少 releaseName 修复**：在 `tauri-action` 步骤中补全 `releaseName: "R Package Command Center ${{ env.RELEASE_TAG }}"` 与 `releaseBody` 配置，解决重新创建 GitHub Release 时因缺失 Release 名称抛出 `"releaseName" not set but required to create release` 导致资产上传中断的问题。
+- **构建产物 Artifacts 自动保存**：在 `release.yml` 末尾添加 `Preserve Windows installers` 兜底步骤，使用 `actions/upload-artifact@v4` 保存 MSI/NSIS 安装包及签名。
 
 ## [2026-08-04 13:30:00 +08:00]
 
