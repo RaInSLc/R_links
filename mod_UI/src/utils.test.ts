@@ -312,7 +312,10 @@ describe("generateSystemRequirementsScript", () => {
   });
 
   it("generates a reviewable Windows preparation script", () => {
-    expect(generateSystemRequirementsScript("sf", "powershell")).toContain("Rtools");
+    const script = generateSystemRequirementsScript("sf", "powershell");
+    expect(script).toContain("Rtools");
+    expect(script).toContain("OSGeo4W");
+    expect(script).not.toContain("choco install");
   });
 });
 

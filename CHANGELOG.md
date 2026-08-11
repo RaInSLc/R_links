@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-08-11 21:15:00 +08:00]
+
+### Fixed
+- **Windows 系统依赖脚本可执行性**：系统依赖 PowerShell 导出不再将 Rtools 与 OSGeo4W 的人工安装说明误作为 Chocolatey 包名执行；脚本现在明确列出检测到的原生依赖并要求人工确认安装。
+
+### Tests
+- **前端**：新增 Windows 系统依赖脚本不生成无效 `choco install` 命令的回归断言，`npm test -- --run` 通过 151 项。
+- **完整打包**：`npm run tauri build` 成功生成 MSI 与 NSIS 安装包。
+
 ## [2026-08-11 21:00:00 +08:00]
 
 ### Fixed
