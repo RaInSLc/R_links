@@ -249,8 +249,11 @@ pub async fn search(
                 continue;
             }
 
-            let cache_key = format!("{ecosystem}:{name}");
-            if let Some(cached_entry) = cache.get(&cache_key).filter(|entry| entry.is_trusted()) {
+            if let Some(cached_entry) = cache
+                .values()
+                .find(|entry| entry.source == ecosystem && entry.package_name == *name)
+                .filter(|entry| entry.is_trusted())
+            {
                 emit_log(
                     app,
                     run_id,
@@ -319,7 +322,11 @@ pub async fn search(
             }
 
             if result.found {
-                let cache_key = format!("{}:{}", ecosystem, result.package);
+                let cache_key = storage::package_cache_key(
+                    &result.source,
+                    &result.real_name,
+                    &result.repository,
+                );
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()

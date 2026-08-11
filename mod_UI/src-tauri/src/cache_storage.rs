@@ -10,6 +10,7 @@ use tauri::AppHandle;
 const CACHE_FILE_NAME: &str = "pkg_cache.json";
 const DEP_CACHE_FILE_NAME: &str = "dep_cache.json";
 const MAX_CACHE_IMPORT_BYTES: usize = 8 * 1024 * 1024;
+const CACHE_KEY_SEPARATOR: char = '\u{1f}';
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DependencyCacheEntry {
@@ -20,6 +21,9 @@ pub struct DependencyCacheEntry {
     pub source: String,
     #[serde(default)]
     pub repository: String,
+}
+pub(crate) fn package_cache_key(source: &str, package_name: &str, repository: &str) -> String {
+    format!("{source}{CACHE_KEY_SEPARATOR}{package_name}{CACHE_KEY_SEPARATOR}{repository}")
 }
 fn limit(app: &AppHandle) -> usize {
     load_existing_settings(app)
@@ -45,11 +49,13 @@ pub(crate) fn load_cache(app: &AppHandle) -> Result<HashMap<String, PackageCache
                 .as_secs();
             let mut cache = HashMap::new();
             for e in es.into_iter().take(limit(app)) {
-                let k = e.package_name.to_ascii_lowercase();
+                let k = package_cache_key(&e.source, &e.package_name, &e.repository);
                 #[allow(clippy::nonminimal_bool)]
                 if !k.is_empty()
                     && !e.source.is_empty()
-                    && !(k == "oncopredict" && e.source == "cran" && e.repository.is_empty())
+                    && !(e.package_name.eq_ignore_ascii_case("oncopredict")
+                        && e.source == "cran"
+                        && e.repository.is_empty())
                 {
                     cache.insert(k, e);
                 }
@@ -99,7 +105,7 @@ pub(crate) fn import_cache(app: &AppHandle, content: &str) -> Result<usize, Stri
         {
             continue;
         }
-        let k = e.package_name.to_ascii_lowercase();
+        let k = package_cache_key(&e.source, &e.package_name, &e.repository);
         if cache.get(&k).is_none_or(|c| {
             (!c.is_trusted() && e.is_trusted())
                 || e.cached_at.parse::<u64>().unwrap_or_default()

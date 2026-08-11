@@ -121,6 +121,14 @@ fn sorted_cache_entries_keeps_newest_then_package_name() {
 }
 
 #[test]
+fn package_cache_key_preserves_case_sensitive_github_identity() {
+    let upper = package_cache_key("github", "Scissor", "sunduanchen/Scissor");
+    let lower = package_cache_key("github", "scissor", "statgarten/scissor");
+
+    assert_ne!(upper, lower);
+}
+
+#[test]
 fn ensure_storage_directory_creates_and_accepts_plain_directory() {
     let directory = std::env::temp_dir().join(format!("mod-ui-data-dir-{}", unique_file_suffix()));
 

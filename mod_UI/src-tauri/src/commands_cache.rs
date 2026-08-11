@@ -21,8 +21,18 @@ pub(crate) fn build_offline_results(
     packages
         .into_iter()
         .filter_map(|pkg| {
-            let key = pkg.name.to_ascii_lowercase();
-            if let Some(entry) = cache.get(&key).filter(|e| e.is_trusted()) {
+            if let Some(entry) = cache
+                .values()
+                .find(|entry| {
+                    if entry.source == "github" {
+                        logic::normalize_github_repository(&pkg.name)
+                            .is_some_and(|repository| entry.repository == repository)
+                    } else {
+                        entry.package_name == pkg.name
+                    }
+                })
+                .filter(|entry| entry.is_trusted())
+            {
                 return Some(SearchResult {
                     package: pkg.name,
                     requested_version: pkg.version,
@@ -149,11 +159,11 @@ pub(crate) fn rate_cache_result(
     let _guard = CACHE_FEEDBACK_LOCK
         .lock()
         .map_err(|_| "缓存反馈锁已损坏".to_string())?;
-    let key = package.trim().to_ascii_lowercase();
-    if key.is_empty() || !matches!(vote.as_str(), "up" | "down") {
+    if package.trim().is_empty() || !matches!(vote.as_str(), "up" | "down") {
         return Err("缓存反馈参数无效".to_string());
     }
     let mut cache = storage::load_cache(&app)?;
+    let key = storage::package_cache_key(&source, &real_name, &repository);
     let Some(entry) = cache.get_mut(&key) else {
         return Err("没有找到可反馈的缓存记录".to_string());
     };

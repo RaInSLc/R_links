@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [2026-08-11 23:10:00 +08:00]
+
+### Fixed
+- **GitHub 大小写敏感包身份**：缓存键升级为来源、原始包名与原始仓库坐标组合，不再以小写包名作为唯一身份；`sunduanchen/Scissor` 与 `statgarten/scissor` 可同时缓存、展示与生成脚本。
+- **缓存命中约束**：显式 GitHub 仓库仅匹配完全相同的 `owner/repo` 坐标，裸包名不再复用 GitHub 缓存，避免因大小写或同名仓库产生错误路由。
+- **前端结果去重**：GitHub 结果身份保留包名、真实包名及仓库坐标的精确大小写，大小写不同的包不会被合并。
+
+### Tests
+- **前端**：新增 `Scissor` / `scissor` 结果去重回归测试，`npm test -- --run` 通过 152 项。
+- **Rust**：新增 GitHub 大小写敏感缓存键回归测试，`cargo test` 通过 208 项。
+- **完整打包**：`npm run tauri build` 成功生成 MSI 与 NSIS 安装包。
+
 ## [2026-08-11 21:15:00 +08:00]
 
 ### Fixed

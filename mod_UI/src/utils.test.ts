@@ -447,6 +447,13 @@ describe("resultIdentityKey", () => {
     } as never;
     expect(resultIdentityKey(a)).toBe(resultIdentityKey(b));
   });
+
+  it("keeps GitHub packages distinct when only case differs", () => {
+    const upper = { package: "Scissor", source: "github", repository: "sunduanchen/Scissor", realName: "Scissor" } as never;
+    const lower = { package: "scissor", source: "github", repository: "statgarten/scissor", realName: "scissor" } as never;
+    expect(resultIdentityKey(upper)).not.toBe(resultIdentityKey(lower));
+    expect(dedupeBoundedResults([upper, lower], 10, 10)).toHaveLength(2);
+  });
 });
 
 describe("buildSearchPlanPreview", () => {

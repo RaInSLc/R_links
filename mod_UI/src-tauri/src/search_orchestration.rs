@@ -96,10 +96,18 @@ pub async fn search_packages(
                 );
                 continue;
             }
-            let cache_key = package.name.to_ascii_lowercase();
+            let cached_entry = cache
+                .values()
+                .find(|entry| {
+                    if entry.source == "github" {
+                        crate::logic::normalize_github_repository(&package.name)
+                            .is_some_and(|repository| entry.repository == repository)
+                    } else {
+                        entry.package_name == package.name
+                    }
+                });
 
-            if let Some(cached_entry) = cache
-                .get(&cache_key)
+            if let Some(cached_entry) = cached_entry
                 .filter(|entry| entry.is_trusted())
                 .filter(|entry| {
                     package.version.is_empty()
@@ -133,7 +141,7 @@ pub async fn search_packages(
                 );
                 sleep(STREAM_RESULT_PAUSE).await;
                 continue;
-            } else if cache.contains_key(&cache_key) {
+            } else if cached_entry.is_some() {
                 log(
                     app,
                     run_id,
@@ -186,7 +194,11 @@ pub async fn search_packages(
             }
 
             for result in &task_results_inner {
-                let result_key = result.package.to_ascii_lowercase();
+                let result_key = storage::package_cache_key(
+                    &result.source,
+                    &result.real_name,
+                    &result.repository,
+                );
                 if result.found
                     && matches!(
                         result.source.as_str(),
