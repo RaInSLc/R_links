@@ -83,8 +83,8 @@ pub(crate) fn generate_command_with_lib(
 
             effective_version.clear();
             format!(
-                "remotes::install_github(\"{}\", upgrade = \"never\", dependencies = {dependencies})",
-                escape_r(&repo_with_ref)
+                "remotes::install_github(\"{}\", upgrade = \"never\", dependencies = {dependencies}{lib_arg})",
+                escape_r(&repo_with_ref), lib_arg = lib_arg
             )
         }
         "base" => format!(
@@ -107,7 +107,7 @@ pub(crate) fn generate_command_with_lib(
             "BiocManager::install(\"{escaped_value}\", update = FALSE, ask = FALSE, dependencies = {dependencies}{lib_arg})"
         ),
         "rForge" => format!(
-            "install.packages(\"{escaped_value}\", repos = \"http://R-Forge.R-project.org\", dependencies = {dependencies})"
+            "install.packages(\"{escaped_value}\", repos = \"http://R-Forge.R-project.org\", dependencies = {dependencies}{lib_arg})"
         ),
         "biocGit" => {
             let (real_version, bioc_version) =
@@ -121,7 +121,7 @@ pub(crate) fn generate_command_with_lib(
             effective_version = real_version.to_string();
             let release = format!("RELEASE_{}", bioc_version.replace('.', "_"));
             format!(
-                "remotes::install_git(\"https://git.bioconductor.org/packages/{escaped_value}\", ref = \"{release}\", upgrade = \"never\", dependencies = {dependencies})"
+                "remotes::install_git(\"https://git.bioconductor.org/packages/{escaped_value}\", ref = \"{release}\", upgrade = \"never\", dependencies = {dependencies}{lib_arg})"
             )
         }
         "auto" => format!(

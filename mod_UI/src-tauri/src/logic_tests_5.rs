@@ -26,6 +26,36 @@ mod tests {
     }
 
     #[test]
+    fn custom_r_library_path_is_used_by_all_r_install_sources() {
+        let library = "D:/R/project-library";
+        for (input, method, version) in [
+            ("owner/repository", "github", ""),
+            ("edgeR", "biocGit", "|3.18"),
+            ("Rcmdr", "rForge", ""),
+        ] {
+            let script = generate_command_with_lib(input, method, version, false, "", true, library)
+                .expect("所有 R 安装来源均应支持自定义库路径");
+            assert!(
+                script.contains("lib = \"D:/R/project-library\""),
+                "{method} 未写入自定义库路径: {script}"
+            );
+        }
+
+        let local_script = generate_script(
+            r"C:\packages\example_1.0.0.tar.gz",
+            &GenerateOptions {
+                method: "auto".to_string(),
+                conditional: false,
+                r_lib_path: library.to_string(),
+                ..Default::default()
+            },
+            &[],
+        )
+        .expect("本地归档安装应支持自定义库路径");
+        assert!(local_script.contains("lib = \"D:/R/project-library\""));
+    }
+
+    #[test]
     fn parallel_install_adds_ncpus_option() {
         let script = generate_script(
             "dplyr",

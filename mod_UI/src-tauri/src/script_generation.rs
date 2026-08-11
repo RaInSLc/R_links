@@ -253,8 +253,13 @@ pub(crate) fn generate_script_inner(
 
         if is_local_archive {
             output.push(format!(
-                "install.packages(\"{}\", repos = NULL, type = \"source\")",
-                escape_r(&value)
+                "install.packages(\"{}\", repos = NULL, type = \"source\"{})",
+                escape_r(&value),
+                if options.r_lib_path.trim().is_empty() {
+                    String::new()
+                } else {
+                    format!(", lib = \"{}\"", escape_r(options.r_lib_path.trim()))
+                }
             ));
             continue;
         }

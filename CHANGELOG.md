@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-08-11 21:00:00 +08:00]
+
+### Fixed
+- **R 库路径全来源闭环**：GitHub、Bioconductor Git、R-Forge 与本地 R 包归档生成的安装命令现均透传设置页中的自定义 R 库路径；此前只有 CRAN、归档 URL 和 Bioconductor Manager 等部分路径使用该参数，可能导致隔离安装写入默认库。
+
+### Tests
+- **Rust**：新增四类安装来源的自定义库路径回归测试，`cargo test` 通过 207 项。
+- **前端**：`npm test -- --run` 通过 151 项。
+- **完整打包**：`npm run tauri build` 成功生成 MSI 与 NSIS 安装包。
+
 ## [2026-08-04 18:20:00 +08:00] - Release v0.2.3
 
 ### Fixed
