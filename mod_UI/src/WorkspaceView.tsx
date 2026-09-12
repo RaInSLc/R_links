@@ -1,9 +1,13 @@
-import { useState, useRef, useEffect } from "react";
-import { PanelHeader } from "./components";
-import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, buildSearchPlanPreview, dedupePackageInput, extractSystemRequirements, normalizePackageInputDisplay, parseProjectDependencyFile, trimTrailingBlankLines, type SmartSuggestion } from "./utils";
-import type { Ecosystem, Method, Settings } from "./types";
+import { useRef, useState } from "react";
+import { EcosystemSourceConfig } from "./EcosystemSourceConfig";
+import { PackageInputEditor, type PackageInputEditorHandle } from "./PackageInputEditor";
 import { ScriptPreview } from "./ScriptPreview";
+import { WorkspaceInputActions } from "./WorkspaceInputActions";
+import { WorkspaceInputSummary } from "./WorkspaceInputSummary";
 import { WorkspaceStrategyPanel } from "./WorkspaceStrategyPanel";
+import { PanelHeader } from "./components";
+import type { Ecosystem, Method, Settings } from "./types";
+import { MAX_INPUT_CHARS, MAX_PACKAGE_LINES, type SmartSuggestion } from "./utils";
 
 interface WorkspaceViewProps {
   input: string;
@@ -43,13 +47,13 @@ interface WorkspaceViewProps {
   pinnedMethods: Method[];
   onPinnedMethodsChange: (methods: Method[]) => void;
   onApplySmartSuggestion: (suggestion: SmartSuggestion) => void;
-  onConditionalChange: (v: boolean) => void;
-  onInstallDependenciesChange: (v: boolean) => void;
-  onShowRemoteVersionChange: (v: boolean) => void;
-  onVerifyInstallChange: (v: boolean) => void;
-  onParallelInstallChange: (v: boolean) => void;
-  onFullSearchChange: (v: boolean) => void;
-  onUseCacheChange: (v: boolean) => void;
+  onConditionalChange: (value: boolean) => void;
+  onInstallDependenciesChange: (value: boolean) => void;
+  onShowRemoteVersionChange: (value: boolean) => void;
+  onVerifyInstallChange: (value: boolean) => void;
+  onParallelInstallChange: (value: boolean) => void;
+  onFullSearchChange: (value: boolean) => void;
+  onUseCacheChange: (value: boolean) => void;
   onTempFilter: (text: string, mode: "chars" | "lines") => void;
   onCopyScript: () => void;
   onCleanComments: () => void;
@@ -58,415 +62,66 @@ interface WorkspaceViewProps {
   onDownloadBashScript: () => void;
   onDownloadSystemRequirements: (kind: "bash" | "powershell") => void;
   copyWithLineNumbers: boolean;
-  onCopyWithLineNumbersChange: (v: boolean) => void;
+  onCopyWithLineNumbersChange: (value: boolean) => void;
   isMethodDisabled: (candidate: Method) => boolean;
 }
 
 export function WorkspaceView({
   input, inputTooLarge, inputProfile, method,
   conditional, installDependencies, showRemoteVersion, verifyInstall, parallelInstall, settings,
-  ecosystem = "r", pipIndex = "", condaChannels = [], rBinaryMirror = "", onEcosystemChange = () => {}, onPipIndexChange = () => {}, onCondaChannelsChange = () => {}, onRBinaryMirrorChange = () => {},
-  smartSuggestions,
-  script, scriptTooLarge,
-  scriptCommandCount, duplicateCount,
-  searching, paused, openingSearchTabs,
-  onInputChange, onPaste, onClear, onOpenSearchTabs, onStartSearch, onStopSearch,
+  ecosystem = "r", pipIndex = "", condaChannels = [], rBinaryMirror = "",
+  onEcosystemChange = () => {}, onPipIndexChange = () => {}, onCondaChannelsChange = () => {}, onRBinaryMirrorChange = () => {},
+  smartSuggestions, script, scriptTooLarge, scriptCommandCount, duplicateCount,
+  searching, paused, openingSearchTabs, onInputChange, onPaste, onClear, onOpenSearchTabs, onStartSearch, onStopSearch,
   onMethodChange, pinnedMethods, onPinnedMethodsChange, onApplySmartSuggestion, onConditionalChange, onInstallDependenciesChange,
-  onShowRemoteVersionChange, onVerifyInstallChange, onParallelInstallChange, onFullSearchChange,
-  onUseCacheChange, onTempFilter,
-  onCopyScript, onCleanComments, onDownloadScript, onDownloadPowerShellScript, onDownloadBashScript, onDownloadSystemRequirements, onTogglePause = () => {},
-  copyWithLineNumbers, onCopyWithLineNumbersChange, isMethodDisabled,
+  onShowRemoteVersionChange, onVerifyInstallChange, onParallelInstallChange, onFullSearchChange, onUseCacheChange, onTempFilter,
+  onCopyScript, onCleanComments, onDownloadScript, onDownloadPowerShellScript, onDownloadBashScript, onDownloadSystemRequirements,
+  onTogglePause = () => {}, copyWithLineNumbers, onCopyWithLineNumbersChange, isMethodDisabled,
 }: WorkspaceViewProps) {
-  const [filterText, setFilterText] = useState("");
-  const [dragOver, setDragOver] = useState(false);
   const [pasteHint, setPasteHint] = useState(false);
-  const [rScriptHint, setRScriptHint] = useState<string | null>(null);
-  const [fileLoadHint, setFileLoadHint] = useState<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const lineGutterRef = useRef<HTMLDivElement>(null);
-  const searchPlan = buildSearchPlanPreview(inputProfile, {
-    fullSearch: settings.fullSearch,
-    useCache: settings.useCache,
-    duplicateCount,
-  });
-
-  useEffect(() => {
-    textareaRef.current?.focus();
-  }, []);
-
-  async function handleFileDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    const name = file.name.toLowerCase();
-    if (!name.endsWith(".txt") && !name.endsWith(".csv") && !name.endsWith(".r") && !name.endsWith("renv.lock") && !name.endsWith("description")) return;
-    const text = await file.text();
-    if (text) {
-      const parsed = parseProjectDependencyFile(file.name, text) ?? text;
-      const systemRequirements = extractSystemRequirements(file.name, text);
-      onInputChange(parsed, "clipboard");
-      setFileLoadHint(`已加载文件: ${file.name} (${parsed.split(/\r?\n/).filter(Boolean).length} 项)${systemRequirements ? `；系统依赖：${systemRequirements}` : ""}`);
-      setTimeout(() => setFileLoadHint(null), 4000);
-    }
-  }
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  async function handleFilePick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    const text = await file.text();
-    if (text) {
-      const parsed = parseProjectDependencyFile(file.name, text) ?? text;
-      const systemRequirements = extractSystemRequirements(file.name, text);
-      onInputChange(parsed, "clipboard");
-      setFileLoadHint(`已加载文件: ${file.name} (${parsed.split(/\r?\n/).filter(Boolean).length} 项)${systemRequirements ? `；系统依赖：${systemRequirements}` : ""}`);
-      setTimeout(() => setFileLoadHint(null), 4000);
-    }
-  }
-
-  function sortInputAlphabetical() {
-    const lines = input.split(/\r?\n/);
-    const active: string[] = [];
-    const comments: { idx: number; line: string }[] = [];
-    lines.forEach((line) => {
-      const t = line.trim();
-      if (!t || t.startsWith("#")) comments.push({ idx: active.length, line });
-      else active.push(line);
-    });
-    active.sort((a, b) => a.trim().toLowerCase().localeCompare(b.trim().toLowerCase()));
-    comments.forEach((c) => active.splice(c.idx, 0, c.line));
-    onInputChange(active.join("\n"), "manual");
-  }
+  const inputEditorRef = useRef<PackageInputEditorHandle>(null);
 
   return (
     <div className="workspace-grid">
       <section className="panel input-panel">
         <PanelHeader step="01" title="输入包列表" meta={`${inputProfile.total}/${MAX_PACKAGE_LINES} 项${duplicateCount > 0 ? ` · ${duplicateCount} 重复` : ""} · ${new Blob([input]).size}/${MAX_INPUT_CHARS}B`} />
-        <div className="ecosystem-bar">
-          <span className="ecosystem-label">包生态</span>
-          <div className="ecosystem-tabs">
-            {([["r", "R"], ["r-binary", "R 二进制"], ["pip", "Pip"], ["conda", "Conda"]] as const).map(([value, label]) => (
-              <button type="button" key={value} className={`button ${ecosystem === value ? "primary" : "ghost"}`} onClick={() => onEcosystemChange(value)} disabled={searching}>{label}</button>
-            ))}
-          </div>
-          <span className="ecosystem-hint">{ecosystem === "r" ? "CRAN / Bioconductor / GitHub" : ecosystem === "r-binary" ? "独立检索预编译 R 包" : ecosystem === "pip" ? "Python 包索引" : "Conda channel"}</span>
-        </div>
-        {ecosystem === "r-binary" && <div className="source-config-row"><label>R 二进制镜像</label><input value={rBinaryMirror} onChange={(e) => onRBinaryMirrorChange(e.currentTarget.value)} placeholder="https://packagemanager.posit.co/cran/latest" /></div>}
-        {ecosystem === "pip" && <div className="source-config-row"><label>Index URL</label><input value={pipIndex} onChange={(e) => onPipIndexChange(e.currentTarget.value)} placeholder="https://pypi.org" /></div>}
-        {ecosystem === "conda" && <div className="source-config-row"><label>Channels</label><input value={condaChannels.join(", ")} onChange={(e) => onCondaChannelsChange(e.currentTarget.value.split(/\s*,\s*/).filter(Boolean))} placeholder="conda-forge, bioconda" /></div>}
-        <div className="textarea-with-gutter">
-          <div className="line-gutter" ref={lineGutterRef} aria-hidden="true">
-            {input.split("\n").map((_, i) => (
-              <div key={i}>{i + 1}</div>
-            ))}
-          </div>
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(event) => onInputChange(event.currentTarget.value, "manual")}
-            onPaste={(e) => {
-              const text = e.clipboardData.getData("text");
-              const normalized = normalizePackageInputDisplay(text);
-              if (normalized !== text) {
-                e.preventDefault();
-                const el = e.currentTarget;
-                const nextValue = trimTrailingBlankLines(input.slice(0, el.selectionStart) + normalized + input.slice(el.selectionEnd));
-                onInputChange(nextValue, "clipboard");
-                return;
-              }
-              const lines = text.split("\n").filter((l) => l.trim());
-              const hasIssues = lines.length > 1 && (
-                lines.some((l) => l !== l.trim()) ||
-                lines.some((l) => l.includes(",")) ||
-                lines.some((l) => l.includes("\t")) ||
-                text.includes("\n\n")
-              );
-              if (hasIssues) setPasteHint(true);
-              const installPkgs = text.match(/install\.packages\s*\(\s*["'`]([^"'`]+)["'`]/g);
-              const biocPkgs = text.match(/BiocManager::install\s*\(\s*["'`]([^"'`]+)["'`]/g);
-              const githubPkgs = text.match(/(?:remotes|devtools)::install_github\s*\(\s*["'`]([^"'`]+)["'`]/g);
-              const totalMatches = (installPkgs?.length ?? 0) + (biocPkgs?.length ?? 0) + (githubPkgs?.length ?? 0);
-              if (totalMatches > 0) {
-                e.preventDefault();
-                const extractName = (m: string) => {
-                  const match = m.match(/["'`]([^"'`]+)["'`]/);
-                  return match ? match[1] : "";
-                };
-                const names: string[] = [];
-                installPkgs?.forEach((m) => names.push(extractName(m)));
-                biocPkgs?.forEach((m) => names.push(extractName(m)));
-                githubPkgs?.forEach((m) => names.push(extractName(m)));
-                const unique = [...new Set(names.filter(Boolean))];
-                if (unique.length > 0) {
-                  onInputChange(unique.join("\n"), "clipboard");
-                  setRScriptHint(`已从 R 脚本中提取 ${unique.length} 个包名`);
-                  setTimeout(() => setRScriptHint(null), 5000);
-                }
-              }
-            }}
-            onScroll={() => {
-              if (lineGutterRef.current && textareaRef.current) {
-                lineGutterRef.current.scrollTop = textareaRef.current.scrollTop;
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                if (!searching && input.trim() && !inputTooLarge) onStartSearch();
-                return;
-              }
-              if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                const el = e.currentTarget;
-                const start = el.selectionStart;
-                const end = el.selectionEnd;
-                onInputChange(
-                  input.slice(0, start) + "\n" + input.slice(end),
-                  "manual",
-                );
-                requestAnimationFrame(() => {
-                  if (textareaRef.current) {
-                    textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + 1;
-                  }
-                });
-                return;
-              }
-              if (e.key === "Tab") {
-                e.preventDefault();
-                const el = e.currentTarget;
-                const s = el.selectionStart;
-                const en = el.selectionEnd;
-                const newVal = input.slice(0, s) + "  " + input.slice(en);
-                const accepted = onInputChange(newVal, "manual");
-                if (accepted !== "rejected") {
-                  requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = s + 2; });
-                }
-              }
-            }}
-            onDragOver={(e) => { e.preventDefault(); if (!searching) setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleFileDrop}
-            className={dragOver ? "drag-over" : ""}
-             placeholder={"每行一个包，例如：\nSeurat 5.2.1\nGSVA 1.50\nbuenrostrolab/FigR\nhttps://example.org/pkg_1.0.tar.gz\n\n可拖放 .txt / .csv / .r / renv.lock / DESCRIPTION / requirements.txt"}
-            aria-label="R 包输入列表"
-            aria-describedby={inputTooLarge ? "input-limit-warning" : undefined}
-            aria-invalid={inputTooLarge}
-            spellCheck={false}
-            maxLength={MAX_INPUT_CHARS + 1}
-            disabled={searching}
-          />
-        </div>
-        {rScriptHint && (
-          <div className="r-script-hint-bar">
-            <span>{rScriptHint}</span>
-          </div>
-        )}
-        {fileLoadHint && (
-          <div className="r-script-hint-bar">
-            <span>{fileLoadHint}</span>
-          </div>
-        )}
-        {inputTooLarge && (
-          <div className="inline-warning" id="input-limit-warning" role="alert">
-            输入超出限制或包含非法字符：最多 {MAX_PACKAGE_LINES} 行、总计 {MAX_INPUT_CHARS} 字节、单行 {MAX_INPUT_LINE_BYTES} 字节。
-          </div>
-        )}
-        {input.length > 0 && (
-          <div className="input-stats-bar">
-            <span className="input-stat-chip">行数 <strong>{input.split("\n").filter((l) => l.trim()).length}</strong></span>
-            <span className="input-stat-chip">字符 <strong>{input.length}</strong></span>
-            {inputProfile.total > 0 && <span className="input-stat-chip">{ecosystem === "r-binary" ? "待生成" : "CRAN/Bioc"} <strong>{inputProfile.total - inputProfile.archiveUrls - inputProfile.repositories}</strong></span>}
-            {inputProfile.repositories > 0 && <span className="input-stat-chip">GitHub <strong>{inputProfile.repositories}</strong></span>}
-            {inputProfile.archiveUrls > 0 && <span className="input-stat-chip">URL <strong>{inputProfile.archiveUrls}</strong></span>}
-            {duplicateCount > 0 && (
-              <button
-                type="button"
-                className="input-stat-chip warn dedupe-btn"
-                title="点击去除重复包名"
-                onClick={() => {
-                  const deduped = dedupePackageInput(input);
-                  onInputChange(deduped, "manual");
-                }}
-              >
-                重复 <strong>{duplicateCount}</strong> · 去重
-              </button>
-            )}
-          </div>
-        )}
-        {inputProfile.total > 0 && ecosystem !== "r-binary" && (
-          <div className={`search-plan-preview ${searchPlan.level}`} aria-label="搜索计划预览">
-            <div>
-              <span className="search-plan-eyebrow">搜索计划</span>
-              <strong>{searchPlan.summary}</strong>
-              <small>{searchPlan.advice}</small>
-            </div>
-            <div className="search-plan-metrics">
-              <span>模式 <strong>{searchPlan.recommendedMode}</strong></span>
-              <span>缓存 <strong>{settings.useCache ? "开启" : "关闭"}</strong></span>
-              <span>强度 <strong>{searchPlan.level === "heavy" ? "高" : searchPlan.level === "medium" ? "中" : "低"}</strong></span>
-            </div>
-          </div>
-        )}
-        {smartSuggestions.length > 0 && (
-          <div className="smart-suggestion-list" aria-label="智能建议">
-            {smartSuggestions.map((suggestion) => (
-              <div className="smart-suggestion" key={suggestion.id}>
-                <div>
-                  <strong>{suggestion.title}</strong>
-                  <span>{suggestion.detail}</span>
-                </div>
-                {suggestion.actionLabel && (
-                  <button type="button" className="text-button" onClick={() => onApplySmartSuggestion(suggestion)} disabled={searching}>
-                    {suggestion.actionLabel}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        {pasteHint && (
-          <div className="paste-hint-bar">
-            <span>检测到粘贴内容可能含多余空白、空行或逗号分隔，建议清理后检索</span>
-            <div style={{ display: "flex", gap: "6px" }}>
-              <button
-                type="button"
-                className="button ghost compact-btn"
-                onClick={() => { onCleanComments(); setPasteHint(false); }}
-              >
-                清理
-              </button>
-              <button
-                type="button"
-                className="button ghost compact-btn"
-                onClick={() => setPasteHint(false)}
-              >
-                忽略
-              </button>
-            </div>
-          </div>
-        )}
-        <div className="temp-filter-bar">
-          <input
-            type="text"
-            className="temp-filter-input"
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
-            placeholder="临时过滤：输入字符/正则..."
-            disabled={searching}
-          />
-          <button
-            type="button"
-            className="button ghost"
-            onClick={() => onTempFilter(filterText, "chars")}
-            disabled={searching || !filterText.trim()}
-          >
-            剔除字符
-          </button>
-          <button
-            type="button"
-            className="button ghost"
-            onClick={() => onTempFilter(filterText, "lines")}
-            disabled={searching || !filterText.trim()}
-          >
-            剔除整行
-          </button>
-        </div>
-        <div className="input-actions">
-          <button className="button ghost" onClick={onPaste} disabled={searching}>粘贴</button>
-          <button className="button ghost" onClick={onClear} disabled={searching}>清空</button>
-          <button className="button ghost" onClick={sortInputAlphabetical} disabled={searching || !input.trim()} title="按字母排序">排序</button>
-          <button
-            className="button ghost"
-            onClick={() => {
-              const cleaned = input
-                .split(/\r?\n/)
-                .map((l) => l.trim().replace(/[;,\s]+$/, ""))
-                .filter((l, i, arr) => l !== "" || (i > 0 && i < arr.length - 1 && arr[i - 1] !== "" && arr[i + 1] !== ""))
-                .join("\n")
-                .replace(/[ \t]+/g, " ");
-              onInputChange(cleaned, "manual");
-            }}
-            disabled={searching || !input.trim()}
-            title="去除行首尾空白、行尾分号逗号、合并多余空格、移除连续空行"
-          >
-            清理
-          </button>
-          <button
-            className="button ghost"
-            onClick={sortInputAlphabetical}
-            disabled={searching || !input.trim()}
-            title="按字母 A-Z 排序（保留注释行位置）"
-          >
-            A-Z
-          </button>
-          <button
-            className="button ghost"
-            onClick={() => onInputChange(dedupePackageInput(input), "manual")}
-            disabled={searching || duplicateCount === 0}
-            title="大小写不敏感去重"
-          >
-            去重{duplicateCount > 0 ? `(${duplicateCount})` : ""}
-          </button>
-          <button className="button ghost" onClick={() => fileInputRef.current?.click()} disabled={searching} title="导入 .txt / .csv / .r 文件">导入文件</button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".txt,.csv,.r"
-            onChange={handleFilePick}
-            style={{ display: "none" }}
-          />
-          <button
-            className="button ghost"
-            onClick={() => onInputChange(`Seurat\nggplot2\ndplyr\nDESeq2\nClusterProfiler\nbuenrostrolab/FigR\nGSVA\nSingleCellExperiment\nlimma\ntidyverse`, "manual")}
-            disabled={searching}
-            title="填充常用生物信息学 R 包示例"
-          >
-            示例
-          </button>
-          <button className="button ghost wide" onClick={onOpenSearchTabs} disabled={searching || openingSearchTabs || inputTooLarge}>
-            {openingSearchTabs ? "正在打开..." : "浏览器搜索"}
-          </button>
-          {searching ? (
-            <>
-              <button className="button ghost" onClick={onTogglePause}>{paused ? "继续" : "暂停"}</button>
-              <button className="button danger" onClick={onStopSearch}>停止</button>
-            </>
-          ) : (
-            <button className="button primary" onClick={onStartSearch} disabled={!input.trim() || inputTooLarge} title="Ctrl+Enter">
-              开始检索<span className="kbd-hint">Ctrl+↵</span>
-            </button>
-          )}
-        </div>
+        <EcosystemSourceConfig
+          ecosystem={ecosystem} pipIndex={pipIndex} condaChannels={condaChannels} rBinaryMirror={rBinaryMirror} searching={searching}
+          onEcosystemChange={onEcosystemChange} onPipIndexChange={onPipIndexChange}
+          onCondaChannelsChange={onCondaChannelsChange} onRBinaryMirrorChange={onRBinaryMirrorChange}
+        />
+        <PackageInputEditor
+          ref={inputEditorRef} input={input} inputTooLarge={inputTooLarge} searching={searching}
+          onInputChange={onInputChange} onStartSearch={onStartSearch} onPasteIssues={() => setPasteHint(true)}
+        />
+        <WorkspaceInputSummary
+          input={input} inputTooLarge={inputTooLarge} inputProfile={inputProfile} ecosystem={ecosystem}
+          settings={settings} duplicateCount={duplicateCount} smartSuggestions={smartSuggestions} searching={searching}
+          pasteHint={pasteHint} onInputChange={onInputChange} onApplySmartSuggestion={onApplySmartSuggestion}
+          onCleanComments={onCleanComments} onDismissPasteHint={() => setPasteHint(false)}
+        />
+        <WorkspaceInputActions
+          input={input} inputTooLarge={inputTooLarge} duplicateCount={duplicateCount} searching={searching} paused={paused}
+          openingSearchTabs={openingSearchTabs} onInputChange={onInputChange} onPaste={onPaste} onClear={onClear}
+          onImportFile={() => inputEditorRef.current?.openFilePicker()} onOpenSearchTabs={onOpenSearchTabs}
+          onStartSearch={onStartSearch} onStopSearch={onStopSearch} onTogglePause={onTogglePause} onTempFilter={onTempFilter}
+        />
       </section>
-
       <WorkspaceStrategyPanel
         ecosystem={ecosystem} method={method} settings={settings} conditional={conditional}
-        installDependencies={installDependencies} showRemoteVersion={showRemoteVersion}
-        verifyInstall={verifyInstall} parallelInstall={parallelInstall} searching={searching}
-        pinnedMethods={pinnedMethods} onMethodChange={onMethodChange}
+        installDependencies={installDependencies} showRemoteVersion={showRemoteVersion} verifyInstall={verifyInstall}
+        parallelInstall={parallelInstall} searching={searching} pinnedMethods={pinnedMethods} onMethodChange={onMethodChange}
         onPinnedMethodsChange={onPinnedMethodsChange} onConditionalChange={onConditionalChange}
         onInstallDependenciesChange={onInstallDependenciesChange} onShowRemoteVersionChange={onShowRemoteVersionChange}
         onVerifyInstallChange={onVerifyInstallChange} onParallelInstallChange={onParallelInstallChange}
-        onFullSearchChange={onFullSearchChange} onUseCacheChange={onUseCacheChange}
-        isMethodDisabled={isMethodDisabled}
+        onFullSearchChange={onFullSearchChange} onUseCacheChange={onUseCacheChange} isMethodDisabled={isMethodDisabled}
       />
-
       <ScriptPreview
-        ecosystem={ecosystem}
-        script={script}
-        scriptTooLarge={scriptTooLarge}
-        scriptCommandCount={scriptCommandCount}
-        copyWithLineNumbers={copyWithLineNumbers}
-        onCopyWithLineNumbersChange={onCopyWithLineNumbersChange}
-        onCleanComments={onCleanComments}
-        onDownloadScript={onDownloadScript}
-        onDownloadPowerShellScript={onDownloadPowerShellScript}
-        onDownloadBashScript={onDownloadBashScript}
-        onDownloadSystemRequirements={onDownloadSystemRequirements}
-        onCopyScript={onCopyScript}
+        ecosystem={ecosystem} script={script} scriptTooLarge={scriptTooLarge} scriptCommandCount={scriptCommandCount}
+        copyWithLineNumbers={copyWithLineNumbers} onCopyWithLineNumbersChange={onCopyWithLineNumbersChange}
+        onCleanComments={onCleanComments} onDownloadScript={onDownloadScript}
+        onDownloadPowerShellScript={onDownloadPowerShellScript} onDownloadBashScript={onDownloadBashScript}
+        onDownloadSystemRequirements={onDownloadSystemRequirements} onCopyScript={onCopyScript}
       />
     </div>
   );
