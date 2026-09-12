@@ -99,7 +99,7 @@ jobs:
         with:
           projectPath: mod_UI
           tagName: ${{ env.RELEASE_TAG }}
-          releaseName: "R Package Command Center ${{ env.RELEASE_TAG }}"
+          releaseName: ${{ env.RELEASE_TAG }}
           releaseBody: "Windows installation packages for ${{ env.RELEASE_TAG }}"
           releaseDraft: false
           prerelease: false
