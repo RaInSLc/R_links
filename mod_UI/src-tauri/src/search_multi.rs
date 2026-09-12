@@ -3,7 +3,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use futures_util::stream::StreamExt;
-use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter};
 use tokio::time::sleep;
@@ -14,6 +13,17 @@ use crate::search::{
 };
 use crate::storage;
 use crate::SearchState;
+
+mod requirement;
+mod sources;
+
+use requirement::{conda_version, inputs, requirement_matches};
+use sources::{not_found_result, search_one_multi};
+
+#[cfg(test)]
+use requirement::split_requirement;
+#[cfg(test)]
+use reqwest::Client;
 
 const MAX_MULTI_DURATION: Duration = Duration::from_secs(300);
 const MAX_MULTI_HTTP_REQUESTS: usize = 200;
@@ -37,104 +47,6 @@ struct PypiResponse {
 struct CondaResponse {
     latest_version: Option<String>,
     versions: Option<Vec<String>>,
-}
-
-fn valid_name(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 128
-        && value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-}
-
-fn split_requirement(line: &str) -> (String, String) {
-    let line = line.trim().trim_matches(['"', '\'']);
-    if let Some(index) = line.find(['=', '>', '<', '!', '~']) {
-        return (
-            line[..index].trim().to_string(),
-            line[index..].split_whitespace().collect(),
-        );
-    }
-    (line.to_string(), String::new())
-}
-
-fn inputs(input: &str) -> Vec<(String, String)> {
-    input
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with('#') && !line.starts_with('-'))
-        .map(split_requirement)
-        .filter(|(name, _)| valid_name(name))
-        .collect()
-}
-
-fn conda_version(payload: &CondaResponse, requested: &str) -> Option<String> {
-    let mut versions = payload.versions.clone().unwrap_or_default();
-    if let Some(latest) = payload
-        .latest_version
-        .as_deref()
-        .filter(|value| !value.is_empty())
-    {
-        versions.push(latest.to_string());
-    }
-    versions.sort_by(|left, right| {
-        let left_parts = left.split('.').map(|part| part.parse::<u64>().unwrap_or(0));
-        let right_parts = right
-            .split('.')
-            .map(|part| part.parse::<u64>().unwrap_or(0));
-        left_parts.cmp(right_parts)
-    });
-    versions.dedup();
-    versions.reverse();
-
-    versions
-        .into_iter()
-        .find(|version| requirement_matches(version, requested))
-}
-
-fn requirement_matches(version: &str, requested: &str) -> bool {
-    if requested.is_empty() {
-        return true;
-    }
-    let numeric = |value: &str| {
-        value
-            .split('.')
-            .map(str::parse::<u64>)
-            .collect::<Result<Vec<_>, _>>()
-    };
-    let Ok(actual) = numeric(version) else {
-        return false;
-    };
-    requested.split(',').all(|constraint| {
-        let constraint = constraint.trim();
-        let operator = ["==", "!=", ">=", "<=", "~=", ">", "<", "="]
-            .into_iter()
-            .find(|operator| constraint.starts_with(operator))
-            .unwrap_or("=");
-        let target = constraint.strip_prefix(operator).unwrap_or(constraint);
-        let Ok(mut expected) = numeric(target) else {
-            return false;
-        };
-        let original = expected.clone();
-        let mut actual = actual.clone();
-        let length = actual.len().max(expected.len());
-        actual.resize(length, 0);
-        expected.resize(length, 0);
-        match operator {
-            "==" => actual == expected,
-            "!=" => actual != expected,
-            ">=" => actual >= expected,
-            "<=" => actual <= expected,
-            ">" => actual > expected,
-            "<" => actual < expected,
-            "~=" => {
-                actual >= expected
-                    && original.len() >= 2
-                    && actual[..original.len() - 1] == original[..original.len() - 1]
-            }
-            _ => actual.starts_with(&original),
-        }
-    })
 }
 
 struct RequestBudget {
@@ -496,180 +408,6 @@ pub async fn search(
         stage_timings: Vec::new(),
         dependency_graph: None,
     })
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn search_one_multi(
-    client: &Client,
-    cancelled: &AtomicBool,
-    budget: &RequestBudget,
-    ecosystem: &str,
-    name: &str,
-    requested: &str,
-    pip_index: &str,
-    conda_channels: &[String],
-    index: usize,
-    total: usize,
-    logs: &mut Vec<String>,
-) -> SearchResult {
-    logs.push(format!(
-        "[{}/{}] 检索 {}{}",
-        index + 1,
-        total,
-        name,
-        if requested.is_empty() {
-            String::new()
-        } else {
-            format!(" {requested}")
-        }
-    ));
-
-    if cancelled.load(Ordering::SeqCst) || budget.is_exhausted() {
-        return not_found_result(name, requested, ecosystem, "检索已停止");
-    }
-
-    let mut found = false;
-    let mut version = String::new();
-    let mut repository = String::new();
-
-    if ecosystem == "pip" {
-        let base = pip_index
-            .trim()
-            .trim_end_matches('/')
-            .trim_end_matches("/simple");
-        if !base.starts_with("https://") || base.contains('?') || base.contains('#') {
-            logs.push(format!("Pip Index URL 无效: {base}"));
-            return not_found_result(name, requested, ecosystem, "Pip Index URL 无效");
-        }
-        if !budget.try_acquire() {
-            return not_found_result(name, requested, ecosystem, "请求预算耗尽");
-        }
-        let url = format!("{base}/pypi/{}/json", urlencoding::encode(name));
-        match client.get(&url).send().await {
-            Ok(response) if response.status().is_success() => {
-                if let Ok(payload) = read_metadata::<PypiResponse>(response).await {
-                    version = if requested.is_empty() {
-                        payload.info.version.unwrap_or_default()
-                    } else {
-                        let metadata = CondaResponse {
-                            latest_version: None,
-                            versions: Some(
-                                payload
-                                    .releases
-                                    .iter()
-                                    .filter(|(_, files)| {
-                                        files.as_array().is_some_and(|files| !files.is_empty())
-                                    })
-                                    .map(|(version, _)| version.clone())
-                                    .collect(),
-                            ),
-                        };
-                        conda_version(&metadata, requested).unwrap_or_default()
-                    };
-                    found = !version.is_empty();
-                }
-            }
-            Ok(response) if response.status() == StatusCode::NOT_FOUND => {}
-            Ok(response) => logs.push(format!(
-                "Pip {} 返回 HTTP {}",
-                name,
-                response.status().as_u16()
-            )),
-            Err(error) => logs.push(format!("Pip {} 请求失败: {error}", name)),
-        }
-        repository = pip_index.trim().trim_end_matches('/').to_string();
-    } else {
-        for channel in conda_channels
-            .iter()
-            .map(|c| c.trim())
-            .filter(|c| !c.is_empty())
-        {
-            if cancelled.load(Ordering::SeqCst) || budget.is_exhausted() {
-                break;
-            }
-            if !budget.try_acquire() {
-                break;
-            }
-            let url = format!(
-                "https://api.anaconda.org/package/{}/{}",
-                urlencoding::encode(channel),
-                urlencoding::encode(name)
-            );
-            match client.get(&url).send().await {
-                Ok(response) if response.status().is_success() => {
-                    if let Ok(payload) = read_metadata::<CondaResponse>(response).await {
-                        if let Some(matched) = conda_version(&payload, requested) {
-                            version = matched;
-                            found = true;
-                            repository = channel.to_string();
-                            break;
-                        }
-                    }
-                }
-                Ok(response) if response.status() == StatusCode::NOT_FOUND => {}
-                Ok(response) => logs.push(format!(
-                    "Conda {}/{} 返回 HTTP {}",
-                    channel,
-                    name,
-                    response.status().as_u16()
-                )),
-                Err(error) => logs.push(format!("Conda {}/{} 请求失败: {error}", channel, name)),
-            }
-        }
-    }
-
-    SearchResult {
-        package: name.to_string(),
-        requested_version: requested.to_string(),
-        latest_version: version,
-        repository,
-        real_name: name.to_string(),
-        source: ecosystem.to_string(),
-        found,
-        message: if found {
-            "检索成功"
-        } else {
-            "所有配置来源均未找到"
-        }
-        .to_string(),
-        status: if found { "found" } else { "notFound" }.to_string(),
-        stage: "final".to_string(),
-    }
-}
-
-fn not_found_result(name: &str, requested: &str, ecosystem: &str, message: &str) -> SearchResult {
-    SearchResult {
-        package: name.to_string(),
-        requested_version: requested.to_string(),
-        latest_version: String::new(),
-        repository: String::new(),
-        real_name: name.to_string(),
-        source: ecosystem.to_string(),
-        found: false,
-        message: message.to_string(),
-        status: "notFound".to_string(),
-        stage: "final".to_string(),
-    }
-}
-
-async fn read_metadata<T: serde::de::DeserializeOwned>(
-    mut response: reqwest::Response,
-) -> Result<T, String> {
-    const LIMIT: usize = 8 * 1024 * 1024;
-    if response
-        .content_length()
-        .is_some_and(|length| length > LIMIT as u64)
-    {
-        return Err("包元数据超过 8 MiB 限制".to_string());
-    }
-    let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(|error| error.to_string())? {
-        if body.len().saturating_add(chunk.len()) > LIMIT {
-            return Err("包元数据超过 8 MiB 限制".to_string());
-        }
-        body.extend_from_slice(&chunk);
-    }
-    serde_json::from_slice(&body).map_err(|_| "包元数据格式无效".to_string())
 }
 
 #[cfg(test)]

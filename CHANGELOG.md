@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2026-09-12 21:05:33 +08:00]
+
+### Changed
+- **Rust 模块拆分**：将单包检索管线、多生态版本约束解析与来源请求、依赖模块测试拆分至独立子模块，保持原有公共接口与测试访问路径不变。
+
+### Tests
+- **Rust 验证**：执行 `cargo fmt`、`cargo test` 与 `cargo clippy --all-targets --locked -- -D warnings`。
+
 ## [2026-09-12 13:00:00 +08:00]
 
 ### Changed
