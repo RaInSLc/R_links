@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
-  dedupePackageInput, formatError, generateSystemRequirementsScript,
+  dedupePackageInput, formatError, generateSystemRequirementsScript, generateMultiEcosystemScript,
   MAX_HISTORY_RECORDS, MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES,
   MAX_SCRIPT_CHARS, methodSupportsInput, nonEmptyLineBytesExceeds,
   normalizePackageInputDisplay, scriptValueTooLarge, trimTrailingBlankLines,
@@ -45,9 +45,9 @@ interface AppActionContext {
   setStatus: SetStatus;
   requestSeq: React.MutableRefObject<number>;
   setScript: (value: string) => void;
-  startSearch: (...args: any[]) => void;
-  startBinarySearch: (...args: any[]) => void;
-  startMultiEcosystemSearch: (...args: any[]) => void;
+  startSearch: ReturnType<typeof import("./useSearch").useSearch>["startSearch"];
+  startBinarySearch: ReturnType<typeof import("./useSearch").useSearch>["startBinarySearch"];
+  startMultiEcosystemSearch: ReturnType<typeof import("./useSearch").useSearch>["startMultiEcosystemSearch"];
   stopSearch: () => void;
   sanitizeHistoryList: (value: unknown) => HistoryRecord[];
   enqueueHistorySave: (build: (current: HistoryRecord[]) => HistoryRecord[]) => Promise<void>;
@@ -80,6 +80,7 @@ export function useAppActions(context: AppActionContext) {
     }
     const clears = normalizedValue !== latestInputRef.current && hasSearchEvidenceRef.current;
     if (clears) { hasSearchEvidenceRef.current = false; setLogs([]); }
+    if (latestInputRef.current !== normalizedValue) latestScriptRef.current = "";
     latestInputRef.current = normalizedValue;
     setInput(normalizedValue);
     if (clears && source === "manual") setStatus("输入已变更，检索日志已清除（已验证的来源信息保留）");
@@ -93,7 +94,11 @@ export function useAppActions(context: AppActionContext) {
 
   function handleStartSearch() {
     if (ecosystem === "r-binary") { setView("report"); void startBinarySearch(input, settings, inputTooLarge, rBinaryMirror, () => setView("report")); return; }
-    if (ecosystem === "pip" || ecosystem === "conda") { void startMultiEcosystemSearch(input, ecosystem, settings, inputTooLarge, () => setView("report")); return; }
+    if (ecosystem === "pip" || ecosystem === "conda") {
+      try { generateMultiEcosystemScript(input, ecosystem, settings.pipIndex, settings.condaChannels); }
+      catch (error) { setStatus(`输入无效: ${formatError(error)}`); return; }
+      void startMultiEcosystemSearch(input, ecosystem, settings, inputTooLarge, () => setView("report")); return;
+    }
     startSearch(input, settings, inputTooLarge, () => setView("report"), () => setMethod("auto"));
   }
 
@@ -102,6 +107,11 @@ export function useAppActions(context: AppActionContext) {
     if (!snapshot || snapshot === "等待输入...") return;
     if (scriptValueTooLarge(snapshot)) { setStatus(`脚本内容过长，最多允许 ${MAX_SCRIPT_CHARS} 字节`); return; }
     try {
+      if (ecosystem === "pip" || ecosystem === "conda") {
+        await writeText(snapshot);
+        setStatus("已复制安装脚本");
+        return;
+      }
       const records = await invoke<HistoryRecord[]>("build_history_records", { script: snapshot });
       const cleanRecords = sanitizeHistoryList(records);
       const taskRecords = cleanRecords.map((record) => ({ ...record, input, method, conditional, installDependencies, showRemoteVersion, verifyInstall, cranMirror: settings.cranMirror }));
@@ -124,8 +134,16 @@ export function useAppActions(context: AppActionContext) {
   function downloadWrapperScript(kind: "powershell" | "bash") {
     const snapshot = latestScriptRef.current; if (!snapshot || snapshot === "等待输入..." || scriptValueTooLarge(snapshot)) return;
     const multi = ecosystem === "pip" || ecosystem === "conda";
-    const wrapper = multi && kind === "bash" ? snapshot : multi ? `$ErrorActionPreference = "Stop"\n${snapshot.split("\n").filter(Boolean).map((line) => `& ${line}`).join("\n")}\n` : kind === "powershell" ? `# R links package installer\n$ErrorActionPreference = "Stop"\n$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path\n$rscript = Get-Command Rscript -ErrorAction SilentlyContinue\nif (-not $rscript) { Write-Error "Rscript was not found in PATH."; exit 127 }\n& $rscript.Source -f (Join-Path $scriptDir "install_packages.R")\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\nWrite-Host "R package installation completed."\n` : `#!/usr/bin/env bash\nset -u\nSCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nRscript "$SCRIPT_DIR/install_packages.R"\n`;
-    const name = multi ? kind === "powershell" ? `${ecosystem}_install.ps1` : ecosystem === "pip" ? "install_packages.sh" : "install_conda.sh" : kind === "powershell" ? "install_packages.ps1" : "install_packages.sh";
+    if (multi) {
+      try {
+        const content = generateMultiEcosystemScript(input, ecosystem, settings.pipIndex, settings.condaChannels, kind);
+        downloadFile(content, `${ecosystem}_install.${kind === "powershell" ? "ps1" : "sh"}`);
+        setStatus("已下载当前生态的安装脚本");
+      } catch (error) { setStatus(`导出失败: ${formatError(error)}`); }
+      return;
+    }
+    const wrapper = kind === "powershell" ? `# R 包安装入口\n$ErrorActionPreference = "Stop"\n$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path\n$rscript = Get-Command Rscript -ErrorAction SilentlyContinue\nif (-not $rscript) { Write-Error "Rscript was not found in PATH."; exit 127 }\n& $rscript.Source -f (Join-Path $scriptDir "install_packages.R")\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\nWrite-Host "R package installation completed."\n` : `#!/usr/bin/env bash\nset -u\nSCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nRscript "$SCRIPT_DIR/install_packages.R"\n`;
+    const name = kind === "powershell" ? "install_packages.ps1" : "install_packages.sh";
     downloadFile(wrapper, name); setStatus(`已下载 ${kind === "powershell" ? ".ps1" : ".sh"} 包装脚本，请与 install_packages.R 放在同一目录`);
   }
   function downloadSystemRequirements(kind: "bash" | "powershell") { const name = kind === "bash" ? "setup_sysreqs.sh" : "setup_sysreqs.ps1"; downloadFile(generateSystemRequirementsScript(input, kind), name); setStatus(`已下载系统依赖准备脚本 ${name}`); }
@@ -144,7 +162,7 @@ export function useAppActions(context: AppActionContext) {
   async function saveInputRules(rules: InputRules = inputRules) { setInputRulesBusy(true); try { await invoke("save_input_rules", { rules }); setStatus("过滤规则已保存并立即生效"); } catch (error) { setStatus(`保存过滤规则失败: ${formatError(error)}`); } finally { setInputRulesBusy(false); } }
   function isMethodDisabled(candidate: Method) { return !methodSupportsInput(candidate, inputProfile); }
 
-  useEffect(() => { if (inputProfile.total === 0 || methodSupportsInput(method, inputProfile)) return; setMethod(inputProfile.archiveUrls === inputProfile.total ? "remotes" : inputProfile.repositories === inputProfile.total ? "github" : "auto"); }, [inputProfile, method]);
-  useEffect(() => { if (view !== "workspace") return; const onKeydown = (e: KeyboardEvent) => { if (!(e.ctrlKey || e.metaKey)) return; if (e.key === "Enter") { e.preventDefault(); if (searching) stopSearch(); else if (input.trim() && !inputTooLarge) handleStartSearch(); } else if (e.shiftKey && e.key.toLowerCase() === "c") { e.preventDefault(); void copyScript(); } else if (!e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); downloadScript(); } else if (e.shiftKey && e.key.toLowerCase() === "k") { e.preventDefault(); if (!searching && input.trim()) acceptInputValue("", "manual"); } else if (!e.shiftKey && e.key.toLowerCase() === "d") { e.preventDefault(); if (!searching && input.trim()) acceptInputValue(dedupePackageInput(input), "manual"); } }; window.addEventListener("keydown", onKeydown); return () => window.removeEventListener("keydown", onKeydown); }, [view, searching, input, inputTooLarge]);
+  useEffect(() => { if (inputProfile.total === 0 || methodSupportsInput(method, inputProfile)) return; setMethod(inputProfile.archiveUrls === inputProfile.total ? "remotes" : inputProfile.repositories === inputProfile.total ? "github" : "auto"); }, [inputProfile, method, setMethod]);
+  useEffect(() => { if (view !== "workspace") return; const onKeydown = (e: KeyboardEvent) => { if (!(e.ctrlKey || e.metaKey)) return; if (e.key === "Enter") { e.preventDefault(); if (searching) stopSearch(); else if (input.trim() && !inputTooLarge) handleStartSearch(); } else if (e.shiftKey && e.key.toLowerCase() === "c") { e.preventDefault(); void copyScript(); } else if (!e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); downloadScript(); } else if (e.shiftKey && e.key.toLowerCase() === "k") { e.preventDefault(); if (!searching && input.trim()) acceptInputValue("", "manual"); } else if (!e.shiftKey && e.key.toLowerCase() === "d") { e.preventDefault(); if (!searching && input.trim()) acceptInputValue(dedupePackageInput(input), "manual"); } }; window.addEventListener("keydown", onKeydown); return () => window.removeEventListener("keydown", onKeydown); });
   return { acceptInputValue, pasteInput, handleStartSearch, copyScript, downloadScript, downloadWrapperScript, downloadSystemRequirements, cleanComments, applyHistoryRecord, handleTempFilter, saveInputRules, isMethodDisabled };
 }

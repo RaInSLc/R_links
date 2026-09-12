@@ -1,5 +1,20 @@
 use super::*;
 
+pub(crate) fn index_cache(
+    cache: &HashMap<String, PackageCacheEntry>,
+) -> HashMap<String, Vec<&PackageCacheEntry>> {
+    let mut index: HashMap<String, Vec<&PackageCacheEntry>> = HashMap::new();
+    for entry in cache.values() {
+        let identity = if entry.source == "github" {
+            &entry.repository
+        } else {
+            &entry.package_name
+        };
+        index.entry(identity.clone()).or_default().push(entry);
+    }
+    index
+}
+
 pub(crate) fn cache_entry_matches_result(entry: &PackageCacheEntry, result: &SearchResult) -> bool {
     entry.source == result.source
         && entry.version == result.latest_version
@@ -113,4 +128,38 @@ pub(crate) fn append_bounded_search_result(
     }
     results.push(result);
     true
+}
+
+#[cfg(test)]
+mod index_tests {
+    use super::*;
+    #[test]
+    fn 索引保留大小写与同名多来源候选() {
+        let mut cache = HashMap::new();
+        for (source, package, repository) in [
+            ("cran", "pkg", ""),
+            ("pip", "pkg", "https://pypi.org"),
+            ("github", "Scissor", "owner/Scissor"),
+            ("github", "scissor", "other/scissor"),
+        ] {
+            let entry = cache_entry_from_result(
+                &SearchResult {
+                    package: package.into(),
+                    real_name: package.into(),
+                    source: source.into(),
+                    repository: repository.into(),
+                    latest_version: "1.0".into(),
+                    found: true,
+                    ..Default::default()
+                },
+                None,
+                "1".into(),
+            );
+            cache.insert(format!("{source}:{package}"), entry);
+        }
+        let index = index_cache(&cache);
+        assert_eq!(index["pkg"].len(), 2);
+        assert_eq!(index["owner/Scissor"][0].real_name, "Scissor");
+        assert!(!index.contains_key("owner/scissor"));
+    }
 }

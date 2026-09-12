@@ -131,6 +131,47 @@ pub(crate) fn generate_script(
     )
 }
 #[tauri::command]
+pub(crate) fn generate_result_commands(
+    app: AppHandle,
+    results: Vec<SearchResult>,
+    options: GenerateOptions,
+    show_remote_version: bool,
+) -> Result<Vec<String>, String> {
+    logic::validate_search_results_count(&results)?;
+    let rules = storage::load_input_rules(&app);
+    let mut total_bytes = 0usize;
+    results
+        .iter()
+        .map(|result| {
+            if !result.found || matches!(result.source.as_str(), "pip" | "conda") {
+                return Ok(String::new());
+            }
+            let name = if result.source == "github" {
+                &result.repository
+            } else {
+                &result.package
+            };
+            let input = if result.requested_version.is_empty() {
+                name.clone()
+            } else {
+                format!("{name} {}", result.requested_version)
+            };
+            let command = logic::generate_script_with_rules(
+                &input,
+                &options,
+                std::slice::from_ref(result),
+                show_remote_version,
+                &rules,
+            )?;
+            total_bytes = total_bytes.saturating_add(command.len());
+            if total_bytes > 8 * 1024 * 1024 {
+                return Err("报告命令总量超过 8 MiB 限制".to_string());
+            }
+            Ok(command)
+        })
+        .collect()
+}
+#[tauri::command]
 pub(crate) fn clean_script(script: String) -> Result<String, String> {
     logic::clean_script(&script)
 }

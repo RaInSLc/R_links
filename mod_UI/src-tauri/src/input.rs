@@ -152,10 +152,9 @@ pub(crate) fn normalize_managed_package_line(line: &str) -> Option<String> {
     let shell = Regex::new(r#"(?i)\b(?:R|Rscript)\s+-e\s+[\"'](.+)[\"']"#).ok()?;
     let body = if let Some(captures) = call_re.captures(&normalized) {
         captures.get(1)?.as_str().to_string()
-    } else if let Some(captures) = shell.captures(&normalized) {
-        return normalize_managed_package_line(captures.get(1)?.as_str());
     } else {
-        return None;
+        let captures = shell.captures(&normalized)?;
+        return normalize_managed_package_line(captures.get(1)?.as_str());
     };
     let quoted = Regex::new(r#"[\"']([^\"']+)[\"']"#).ok()?;
     let quoted_values = quoted

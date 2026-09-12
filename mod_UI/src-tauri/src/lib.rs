@@ -6,6 +6,9 @@ mod commands_search;
 mod commands_settings;
 mod commands_settings_runtime;
 mod dependency;
+#[cfg(test)]
+#[path = "../../../报告/ai_codes/integration_baselines.rs"]
+mod integration_baselines;
 mod logic;
 mod models;
 mod search;
@@ -39,6 +42,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands_settings::generate_script,
+            commands_settings::generate_result_commands,
             commands_settings::clean_script,
             commands_settings::build_history_records,
             commands_settings_runtime::load_settings,

@@ -1,10 +1,58 @@
 use super::*;
 
+#[tokio::test]
+async fn 已取消的检索不会发送请求() {
+    let client = Client::new();
+    let cancelled = AtomicBool::new(true);
+    let budget = RequestBudget::new(3);
+    let mut logs = Vec::new();
+    let result = search_one_multi(
+        &client,
+        &cancelled,
+        &budget,
+        "pip",
+        "numpy",
+        ">=1.0",
+        "https://pypi.org",
+        &[],
+        0,
+        1,
+        &mut logs,
+    )
+    .await;
+    assert!(!result.found);
+    assert_eq!(budget.remaining.load(Ordering::SeqCst), 3);
+}
+
+#[test]
+fn 数字版本约束保留运算符并正确匹配() {
+    assert_eq!(
+        split_requirement("numpy>=1.26"),
+        ("numpy".into(), ">=1.26".into())
+    );
+    assert!(requirement_matches("1.27.0", ">=1.26,<2"));
+    assert!(!requirement_matches("2.0", ">=1.26,<2"));
+    assert!(!requirement_matches("1.26.4", "==1.26"));
+    assert!(!requirement_matches("1.26", "!=1.26"));
+    assert!(requirement_matches("1.26.4", "~=1.26.0"));
+    assert!(!requirement_matches("1.27.0", "~=1.26.0"));
+}
+
+#[test]
+fn 复合约束以第一个运算符分割包名() {
+    assert_eq!(
+        split_requirement("numpy>1.0,<=2.0"),
+        ("numpy".into(), ">1.0,<=2.0".into())
+    );
+    assert!(requirement_matches("2.0", ">1.0,<=2.0"));
+    assert!(!requirement_matches("1.0", ">1.0,<=2.0"));
+}
+
 #[test]
 fn parses_pip_requirements() {
     assert_eq!(
         split_requirement("numpy==1.26.4"),
-        ("numpy".to_string(), "1.26.4".to_string())
+        ("numpy".to_string(), "==1.26.4".to_string())
     );
     assert_eq!(
         split_requirement("pandas"),
@@ -46,7 +94,7 @@ fn request_budget_tracks_remaining() {
 fn inputs_skip_comments_and_flags() {
     let result = inputs("# comment\n-numpy\npandas==2.0\nscipy");
     assert_eq!(result.len(), 2);
-    assert_eq!(result[0], ("pandas".to_string(), "2.0".to_string()));
+    assert_eq!(result[0], ("pandas".to_string(), "==2.0".to_string()));
     assert_eq!(result[1], ("scipy".to_string(), String::new()));
 }
 

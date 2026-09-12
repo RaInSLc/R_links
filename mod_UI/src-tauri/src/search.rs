@@ -12,7 +12,7 @@ use crate::search_sanitize::{
 };
 use crate::search_urls::{validate_search_request_url, validate_search_request_url_with_mirror};
 use crate::storage;
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use futures_util::StreamExt;
 use regex::Regex;
 use reqwest::{Client, RequestBuilder, StatusCode};
 use serde_json::Value;

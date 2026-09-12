@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { generateMultiEcosystemScript, type SearchResult } from "./utils";
 import type { Ecosystem, Method, Settings } from "./types";
@@ -13,8 +13,11 @@ export function useScriptGeneration(input: string, ecosystem: Ecosystem, pipInde
     setScriptState(next);
   }
 
+  useLayoutEffect(() => { latestScriptRef.current = ""; }, [input, ecosystem, pipIndex, condaChannels, method, conditional, installDependencies, showRemoteVersion, verifyInstall, parallelInstall, settings, rBinaryMirror, results, inputTooLarge]);
+
   useEffect(() => {
     let active = true;
+    latestScriptRef.current = "";
     const timer = window.setTimeout(() => {
       const seq = requestSeq.current + 1;
       requestSeq.current = seq;
@@ -23,7 +26,8 @@ export function useScriptGeneration(input: string, ecosystem: Ecosystem, pipInde
         return;
       }
       if (ecosystem === "pip" || ecosystem === "conda") {
-        setScript(generateMultiEcosystemScript(input, ecosystem, pipIndex, condaChannels));
+        try { setScript(generateMultiEcosystemScript(input, ecosystem, pipIndex, condaChannels)); }
+        catch (error) { setScript(""); setStatus(`生成失败: ${String(error)}`); }
         return;
       }
       invoke<string>("generate_script", {
@@ -34,7 +38,7 @@ export function useScriptGeneration(input: string, ecosystem: Ecosystem, pipInde
       }).then((next) => {
         if (active && seq === requestSeq.current) setScript(next);
       }).catch((error) => {
-        if (active && seq === requestSeq.current) setStatus(`生成失败: ${error instanceof Error ? error.message : String(error)}`);
+        if (active && seq === requestSeq.current) { setScript(""); setStatus(`生成失败: ${error instanceof Error ? error.message : String(error)}`); }
       });
     }, 120);
     return () => { active = false; window.clearTimeout(timer); };

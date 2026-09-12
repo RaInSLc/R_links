@@ -26,12 +26,7 @@ struct DependencyRequest {
 }
 
 fn dependency_cache_key(package: &str, source: &str, repository: &str) -> String {
-    format!(
-        "{}\u{1f}{}\u{1f}{}",
-        package.to_ascii_lowercase(),
-        source.to_ascii_lowercase(),
-        repository.to_ascii_lowercase(),
-    )
+    format!("{package}\u{1f}{source}\u{1f}{repository}")
 }
 
 fn merge_roots(target: &mut Vec<String>, roots: Vec<String>) {
@@ -69,19 +64,43 @@ fn enqueue_dependency(
 }
 
 /// 拓扑依赖解析主入口
-pub async fn resolve_dependencies(
+pub(crate) async fn resolve_dependencies(
     app: &AppHandle,
     client: &reqwest::Client,
     root_results: &[SearchResult],
     settings: &Settings,
     cancelled: &AtomicBool,
+    budget: &crate::search::RequestBudget,
+    deadline: std::time::Instant,
+) -> Result<DependencyGraph, String> {
+    resolve_dependencies_inner(
+        Some(app),
+        client,
+        root_results,
+        settings,
+        cancelled,
+        budget,
+        deadline,
+    )
+    .await
+}
+
+pub(crate) async fn resolve_dependencies_inner(
+    app: Option<&AppHandle>,
+    client: &reqwest::Client,
+    root_results: &[SearchResult],
+    settings: &Settings,
+    cancelled: &AtomicBool,
+    budget: &crate::search::RequestBudget,
+    deadline: std::time::Instant,
 ) -> Result<DependencyGraph, String> {
     let mut roots = Vec::new();
     let mut nodes_map: HashMap<String, DependencyNode> = HashMap::new();
     let mut edges: Vec<DependencyEdge> = Vec::new();
 
     let mut dep_cache = if settings.use_cache {
-        storage::load_dependency_cache(app).unwrap_or_default()
+        app.and_then(|app| storage::load_dependency_cache(app).ok())
+            .unwrap_or_default()
     } else {
         HashMap::new()
     };
@@ -89,8 +108,35 @@ pub async fn resolve_dependencies(
     let mut root_sources = HashMap::new();
     let mut root_versions = HashMap::new();
     let mut root_repositories = HashMap::new();
-    for res in root_results {
+    let mut ordered_results: Vec<_> = root_results.iter().collect();
+    ordered_results.sort_by_key(|result| {
+        (
+            match result.source.as_str() {
+                "cran" => 0,
+                "bioc" => 1,
+                "biocGit" => 2,
+                "github" => 3,
+                _ => 4,
+            },
+            &result.repository,
+        )
+    });
+    for res in ordered_results {
         if res.found {
+            if root_sources.contains_key(&res.package) {
+                continue;
+            }
+            let best =
+                crate::logic::choose_best_result(&res.package, root_results, None).unwrap_or(res);
+            let res = crate::logic::archive_github_decision(
+                &res.package,
+                best,
+                root_results,
+                settings.archive_github_major_gap,
+            )
+            .filter(|decision| decision.use_github)
+            .map(|decision| decision.github)
+            .unwrap_or(best);
             roots.push(res.package.clone());
             root_sources.insert(res.package.clone(), res.source.clone());
             root_versions.insert(res.package.clone(), res.latest_version.clone());
@@ -137,7 +183,11 @@ pub async fn resolve_dependencies(
             break;
         }
 
-        let level_size = queue.len();
+        let level_size = queue.len().min(settings.search_concurrency.max(1)).min(
+            settings
+                .max_dependency_nodes
+                .saturating_sub(nodes_map.len()),
+        );
         let mut level_tasks = Vec::new();
 
         for _ in 0..level_size {
@@ -188,6 +238,9 @@ pub async fn resolve_dependencies(
                         &request.version,
                         &request.repository,
                         &mirror,
+                        cancelled,
+                        budget,
+                        deadline,
                     )
                     .await;
                     let parsed = fetch_result.map(|content| parse_package_dependencies(&content));
@@ -224,10 +277,17 @@ pub async fn resolve_dependencies(
             match parsed_res {
                 Ok((heavy_deps, light_deps, version)) => {
                     let cache_key = dependency_cache_key(&pkg, &source, &repository);
-                    if !dep_cache.contains_key(&cache_key) {
+                    if dep_cache
+                        .get(&cache_key)
+                        .is_none_or(|entry| entry.version != version)
+                    {
                         new_cache_entries.insert(
                             cache_key,
                             storage::DependencyCacheEntry {
+                                cached_at: std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(),
                                 heavy_deps: heavy_deps.clone(),
                                 light_deps: light_deps.clone(),
                                 version: version.clone(),
@@ -327,11 +387,14 @@ pub async fn resolve_dependencies(
             for (k, v) in new_cache_entries {
                 dep_cache.insert(k, v);
             }
-            let _ = storage::save_dependency_cache(app, &dep_cache);
+            if let Some(app) = app {
+                storage::save_dependency_cache(app, &dep_cache)?;
+            }
         }
     }
 
     let total_nodes = nodes_map.len();
+    edges.retain(|edge| nodes_map.contains_key(&edge.from) && nodes_map.contains_key(&edge.to));
     let total_edges = edges.len();
     let mut heavy_nodes = 0;
     let mut light_nodes = 0;

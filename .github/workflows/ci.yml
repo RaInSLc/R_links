@@ -11,15 +11,13 @@ on:
 jobs:
   build-and-test:
     runs-on: windows-latest
-    env:
-      CARGO_TARGET_DIR: target/ci_target
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
           cache-dependency-path: 'mod_UI/package-lock.json'
 
@@ -57,6 +55,10 @@ jobs:
         working-directory: mod_UI
         run: npm test
 
+      - name: frontend hooks check
+        working-directory: mod_UI
+        run: npm run lint
+
       - name: Rust format check
         working-directory: mod_UI/src-tauri
         run: cargo fmt -- --check
@@ -68,6 +70,10 @@ jobs:
       - name: Rust tests
         working-directory: mod_UI/src-tauri
         run: cargo test --locked
+
+      - name: Integration baselines
+        working-directory: mod_UI/src-tauri
+        run: cargo test --locked integration_baselines -- --ignored --nocapture --test-threads=1
 
       - name: Tauri build (no bundle)
         working-directory: mod_UI

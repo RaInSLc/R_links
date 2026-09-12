@@ -17,21 +17,45 @@ pub(crate) fn build_offline_results(
         return Vec::new();
     };
     let cache = storage::load_cache(app).unwrap_or_default();
+    let cache_index = crate::search::index_cache(&cache);
     let history = storage::load_history(app).unwrap_or_default();
     packages
         .into_iter()
         .filter_map(|pkg| {
-            if let Some(entry) = cache
-                .values()
-                .find(|entry| {
+            if let Some(entry) = cache_index
+                .get(&pkg.name)
+                .into_iter()
+                .flatten()
+                .copied()
+                .filter(|entry| {
+                    entry.is_trusted()
+                        && (pkg.version.is_empty()
+                            || crate::search::version_compatible(&entry.version, &pkg.version))
+                })
+                .filter(|entry| {
                     if entry.source == "github" {
                         logic::normalize_github_repository(&pkg.name)
                             .is_some_and(|repository| entry.repository == repository)
                     } else {
-                        entry.package_name == pkg.name
+                        matches!(
+                            entry.source.as_str(),
+                            "cran" | "bioc" | "biocGit" | "r-forge"
+                        ) && entry.package_name == pkg.name
+                            && !pkg.name.contains('/')
                     }
                 })
-                .filter(|entry| entry.is_trusted())
+                .min_by_key(|entry| {
+                    (
+                        match entry.source.as_str() {
+                            "cran" => 0,
+                            "bioc" => 1,
+                            "biocGit" => 2,
+                            "github" => 3,
+                            _ => 4,
+                        },
+                        &entry.repository,
+                    )
+                })
             {
                 return Some(SearchResult {
                     package: pkg.name,

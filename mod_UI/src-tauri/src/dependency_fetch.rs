@@ -4,6 +4,7 @@ const BIOC_DEPENDENCY_CATEGORIES: &[&str] =
     &["bioc", "data/annotation", "data/experiment", "workflows"];
 
 /// 发送请求获取包的 DESCRIPTION 文本
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn fetch_description(
     client: &reqwest::Client,
     package: &str,
@@ -11,6 +12,9 @@ pub(crate) async fn fetch_description(
     version: &str,
     repository: &str,
     mirror: &str,
+    cancelled: &std::sync::atomic::AtomicBool,
+    budget: &crate::search::RequestBudget,
+    deadline: std::time::Instant,
 ) -> Result<String, String> {
     let mut urls: Vec<(String, bool)> = Vec::new();
     let mirror_clean = mirror.trim_end_matches('/');
@@ -74,9 +78,30 @@ pub(crate) async fn fetch_description(
     }
 
     for (url, is_packages_index) in urls {
-        match client.get(&url).send().await {
-            Ok(resp) if resp.status().is_success() => {
-                if let Ok(text) = resp.text().await {
+        budget.try_acquire()?;
+        match crate::search::await_or_stop(client.get(&url).send(), cancelled, budget, deadline)
+            .await?
+        {
+            Ok(mut resp) if resp.status().is_success() => {
+                const MAX_DESCRIPTION_BYTES: usize = 8 * 1024 * 1024;
+                if resp
+                    .content_length()
+                    .is_some_and(|length| length > MAX_DESCRIPTION_BYTES as u64)
+                {
+                    continue;
+                }
+                let mut body = Vec::new();
+                while let Some(chunk) =
+                    crate::search::await_or_stop(resp.chunk(), cancelled, budget, deadline)
+                        .await?
+                        .map_err(|error| error.to_string())?
+                {
+                    if body.len().saturating_add(chunk.len()) > MAX_DESCRIPTION_BYTES {
+                        return Err("依赖元数据超过读取限制".to_string());
+                    }
+                    body.extend_from_slice(&chunk);
+                }
+                if let Ok(text) = String::from_utf8(body) {
                     if is_packages_index {
                         if let Some(entry) = extract_packages_index_entry(&text, package, version) {
                             return Ok(entry);

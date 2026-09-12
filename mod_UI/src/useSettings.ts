@@ -68,6 +68,8 @@ export function useSettings(setStatus: SetStatus) {
         }
       });
     return () => { active = false; };
+  // 设置仅在挂载时加载，状态提示回调变化不应覆盖用户编辑。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function updateSettingsFromUser(update: (current: Settings) => Settings) {

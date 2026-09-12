@@ -10,10 +10,59 @@ use tauri::AppHandle;
 const CACHE_FILE_NAME: &str = "pkg_cache.json";
 const DEP_CACHE_FILE_NAME: &str = "dep_cache.json";
 const MAX_CACHE_IMPORT_BYTES: usize = 8 * 1024 * 1024;
+const MAX_CACHE_STORAGE_BYTES: usize = 8 * 1024 * 1024;
 const CACHE_KEY_SEPARATOR: char = '\u{1f}';
+#[cfg(test)]
+mod regression_tests {
+    use super::*;
+    #[test]
+    fn 大缓存序列化后仍处于相同读取预算内() {
+        let mut cache = HashMap::new();
+        for index in 0..5000 {
+            let name = format!("package{index}");
+            cache.insert(
+                name.clone(),
+                PackageCacheEntry {
+                    package_name: name.clone(),
+                    real_name: name,
+                    source: "cran".into(),
+                    version: "1.0.0".into(),
+                    repository: String::new(),
+                    cached_at: "1800000000".into(),
+                    verified_count: 1,
+                    up_votes: 0,
+                    down_votes: 0,
+                    invalidated: false,
+                },
+            );
+        }
+        let content = serialize_package_cache(&cache, 10000).unwrap();
+        assert!(content.len() > 1024 * 1024);
+        assert!(content.len() <= MAX_CACHE_STORAGE_BYTES);
+        let entries: Vec<PackageCacheEntry> = serde_json::from_str(&content).unwrap();
+        assert_eq!(entries.len(), 5000);
+        for entry in cache.values_mut() {
+            entry.repository = "x".repeat(2048);
+        }
+        assert!(serialize_package_cache(&cache, 10000).is_err());
+    }
+}
+fn serialize_package_cache(
+    cache: &HashMap<String, PackageCacheEntry>,
+    limit: usize,
+) -> Result<String, String> {
+    let content = serde_json::to_string_pretty(&sorted_cache_entries(cache, limit))
+        .map_err(|error| error.to_string())?;
+    if content.len() > MAX_CACHE_STORAGE_BYTES {
+        return Err("缓存内容超过 8 MiB 存储限制，请减少缓存条目".to_string());
+    }
+    Ok(content)
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DependencyCacheEntry {
+    #[serde(default)]
+    pub cached_at: u64,
     pub heavy_deps: Vec<String>,
     pub light_deps: Vec<String>,
     pub version: String,
@@ -33,26 +82,46 @@ fn limit(app: &AppHandle) -> usize {
         .unwrap_or(1000)
 }
 pub(crate) fn load_cache(app: &AppHandle) -> Result<HashMap<String, PackageCacheEntry>, String> {
+    let mut cache = load_raw_cache(app)?;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    cache.retain(|_, entry| {
+        !entry.invalidated
+            && entry
+                .cached_at
+                .parse::<u64>()
+                .map(|time| now.saturating_sub(time) < 7 * 24 * 3600)
+                .unwrap_or(false)
+    });
+    Ok(cache)
+}
+fn load_raw_cache(app: &AppHandle) -> Result<HashMap<String, PackageCacheEntry>, String> {
     let p = data_file(app, CACHE_FILE_NAME)?;
     if !path_entry_exists(&p)? {
         return Ok(HashMap::new());
     }
-    let Some(c) = read_storage_file_with_recovery(app, CACHE_FILE_NAME, 1024 * 1024, "包缓存文件")?
+    let Some(c) = read_storage_file_with_recovery(
+        app,
+        CACHE_FILE_NAME,
+        MAX_CACHE_STORAGE_BYTES as u64,
+        "包缓存文件",
+    )?
     else {
         return Ok(HashMap::new());
     };
     match serde_json::from_str::<Vec<PackageCacheEntry>>(&c) {
         Ok(es) => {
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
             let mut cache = HashMap::new();
             for e in es.into_iter().take(limit(app)) {
                 let k = package_cache_key(&e.source, &e.package_name, &e.repository);
                 #[allow(clippy::nonminimal_bool)]
                 if !k.is_empty()
                     && !e.source.is_empty()
+                    && e.package_name.len() <= MAX_FIELD_CHARS
+                    && e.real_name.len() <= MAX_FIELD_CHARS
+                    && e.repository.len() <= MAX_FIELD_CHARS
                     && !(e.package_name.eq_ignore_ascii_case("oncopredict")
                         && e.source == "cran"
                         && e.repository.is_empty())
@@ -60,13 +129,6 @@ pub(crate) fn load_cache(app: &AppHandle) -> Result<HashMap<String, PackageCache
                     cache.insert(k, e);
                 }
             }
-            cache.retain(|_, e| {
-                !e.invalidated
-                    && e.cached_at
-                        .parse::<u64>()
-                        .map(|t| now.saturating_sub(t) < 7 * 24 * 3600)
-                        .unwrap_or(false)
-            });
             Ok(cache)
         }
         Err(_) => {
@@ -79,8 +141,7 @@ pub(crate) fn save_cache(
     app: &AppHandle,
     cache: &HashMap<String, PackageCacheEntry>,
 ) -> Result<(), String> {
-    let c = serde_json::to_string_pretty(&sorted_cache_entries(cache, limit(app)))
-        .map_err(|e| e.to_string())?;
+    let c = serialize_package_cache(cache, limit(app))?;
     atomic_write(&data_file(app, CACHE_FILE_NAME)?, &c)
 }
 pub(crate) fn export_cache(app: &AppHandle) -> Result<String, String> {
@@ -100,6 +161,7 @@ pub(crate) fn import_cache(app: &AppHandle, content: &str) -> Result<usize, Stri
             || e.real_name.trim().is_empty()
             || e.source.trim().is_empty()
             || e.package_name.len() > MAX_FIELD_CHARS
+            || e.real_name.len() > MAX_FIELD_CHARS
             || e.version.len() > 64
             || e.repository.len() > MAX_FIELD_CHARS
         {
@@ -115,7 +177,7 @@ pub(crate) fn import_cache(app: &AppHandle, content: &str) -> Result<usize, Stri
         }
     }
     save_cache(app, &cache)?;
-    Ok(cache.len().saturating_sub(before))
+    Ok(cache.len().min(limit(app)).saturating_sub(before))
 }
 pub(crate) fn sorted_cache_entries(
     cache: &HashMap<String, PackageCacheEntry>,
@@ -140,7 +202,7 @@ pub(crate) fn clear_cache(app: &AppHandle) -> Result<(), String> {
     atomic_write(&data_file(app, DEP_CACHE_FILE_NAME)?, "{}")
 }
 pub(crate) fn clear_invalidated_cache(app: &AppHandle) -> Result<usize, String> {
-    let mut c = load_cache(app)?;
+    let mut c = load_raw_cache(app)?;
     let n = c.len();
     c.retain(|_, e| !e.invalidated);
     save_cache(app, &c)?;
@@ -183,8 +245,17 @@ pub(crate) fn load_dependency_cache(
     else {
         return Ok(HashMap::new());
     };
-    match serde_json::from_str(&c) {
-        Ok(v) => Ok(v),
+    match serde_json::from_str::<HashMap<String, DependencyCacheEntry>>(&c) {
+        Ok(mut v) => {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            v.retain(|_, entry| {
+                entry.cached_at > 0 && now.saturating_sub(entry.cached_at) < 7 * 24 * 3600
+            });
+            Ok(v)
+        }
         Err(_) => {
             backup_corrupt_file(app, DEP_CACHE_FILE_NAME, &c)?;
             Ok(HashMap::new())
@@ -195,8 +266,18 @@ pub(crate) fn save_dependency_cache(
     app: &AppHandle,
     cache: &HashMap<String, DependencyCacheEntry>,
 ) -> Result<(), String> {
-    atomic_write(
-        &data_file(app, DEP_CACHE_FILE_NAME)?,
-        &serde_json::to_string_pretty(cache).map_err(|e| e.to_string())?,
-    )
+    let mut entries: Vec<_> = cache.iter().collect();
+    entries.sort_by(|(left_key, left), (right_key, right)| {
+        right
+            .cached_at
+            .cmp(&left.cached_at)
+            .then_with(|| left_key.cmp(right_key))
+    });
+    entries.truncate(limit(app));
+    let bounded: HashMap<_, _> = entries.into_iter().collect();
+    let content = serde_json::to_string_pretty(&bounded).map_err(|error| error.to_string())?;
+    if content.len() > 5 * 1024 * 1024 {
+        return Err("依赖缓存超过 5 MiB 存储限制".to_string());
+    }
+    atomic_write(&data_file(app, DEP_CACHE_FILE_NAME)?, &content)
 }

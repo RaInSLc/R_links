@@ -26,7 +26,11 @@ scratch/
 temp_*.html
 
 # AI generated temporary code (not source)
-报告/
+报告/*
+!报告/ai_codes/
+报告/ai_codes/*
+!报告/ai_codes/eslint.config.mjs
+!报告/ai_codes/integration_baselines.rs
 mod_UI/.vscode
 # Node
 node_modules/

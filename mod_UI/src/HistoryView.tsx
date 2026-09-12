@@ -64,7 +64,7 @@ export function HistoryView({
     if (e.key === "ArrowDown") { e.preventDefault(); setHistNavIndex((p) => Math.min(p + 1, sorted.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setHistNavIndex((p) => Math.max(p - 1, 0)); }
     else if (e.key === "Enter" && histNavIndex >= 0 && sorted[histNavIndex]) { e.preventDefault(); onApplyRecord(sorted[histNavIndex]); }
-  }, [sorted, histNavIndex]);
+  }, [sorted, histNavIndex, onApplyRecord]);
 
   useEffect(() => {
     window.addEventListener("keydown", onHistKeydown);

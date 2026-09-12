@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import {
   appendBounded, asRecord, collectBrowserSearchNames, formatError,
   nextSearchRunId, safeRunId, safeStatusText, sanitizeSearchResponse,
-  sanitizeSearchResult, upsertBoundedResult,
+  sanitizeSearchResult, resultIdentityKey,
   BROWSER_SEARCH_CONFIRM_THRESHOLD, MAX_SEARCH_LOGS, MAX_SEARCH_RESULTS, MAX_SEARCH_TABS,
   type SearchResponse, type SearchResult, type DependencyGraph, type SearchStageTiming,
 } from "./utils";
@@ -13,9 +13,13 @@ import type { Settings, SearchLogBatchEvent, SearchProgressEvent } from "./types
 type SetStatus = (s: string) => void;
 
 function mergeSearchResults(current: SearchResult[], incoming: SearchResult[]) {
-  let next = current;
+  const indexes = new Map(current.map((item, index) => [resultIdentityKey(item), index]));
+  const next = [...current];
   for (const item of incoming) {
-    next = upsertBoundedResult(next, item, MAX_SEARCH_RESULTS);
+    const key = resultIdentityKey(item);
+    const index = indexes.get(key);
+    if (index !== undefined) next[index] = item;
+    else if (next.length < MAX_SEARCH_RESULTS) { indexes.set(key, next.length); next.push(item); }
   }
   return next;
 }
@@ -46,9 +50,27 @@ export function useSearch(setStatus: SetStatus) {
   const browserOpenInProgress = useRef(false);
   const searchStartTime = useRef(0);
   const listenerReadyRef = useRef<Promise<void>>(Promise.resolve());
+  const flushEventsRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     let active = true;
+    let pendingResults: SearchResult[] = [];
+    let pendingLogs: string[] = [];
+    let pendingRunId = 0;
+    const flush = () => {
+      if (pendingRunId === activeSearchRunId.current && active) {
+        const incomingResults = pendingResults;
+        const incomingLogs = pendingLogs;
+        if (incomingResults.length) setResults((current) => mergeSearchResults(current, incomingResults));
+        if (incomingLogs.length) setLogs((current) => [...current, ...incomingLogs].slice(0, MAX_SEARCH_LOGS));
+      }
+      pendingResults = []; pendingLogs = [];
+    };
+    const timer = window.setInterval(flush, 32);
+    flushEventsRef.current = flush;
+    const prepareBatch = (runId: number) => {
+      if (pendingRunId !== runId) { pendingResults = []; pendingLogs = []; pendingRunId = runId; }
+    };
     const unlistenLog = listen<SearchLogBatchEvent>(
       "search-log-batch",
       (event) => {
@@ -56,13 +78,8 @@ export function useSearch(setStatus: SetStatus) {
         if (!active || safeRunId(payload.runId) !== activeSearchRunId.current) return;
         hasSearchEvidenceRef.current = true;
         const messages = Array.isArray(payload.messages) ? payload.messages.map(m => safeStatusText(String(m))) : [];
-        setLogs((current) => {
-            let next = [...current];
-            for (const msg of messages) {
-                next = appendBounded(next, msg, MAX_SEARCH_LOGS);
-            }
-            return next;
-        });
+        prepareBatch(activeSearchRunId.current);
+        pendingLogs = [...pendingLogs, ...messages].slice(0, MAX_SEARCH_LOGS);
       },
     ).catch((error) => {
       if (active) setStatus(`检索日志监听失败: ${formatError(error)}`);
@@ -74,9 +91,9 @@ export function useSearch(setStatus: SetStatus) {
         const payload = asRecord(event.payload);
         if (!active || safeRunId(payload.runId) !== activeSearchRunId.current) return;
         hasSearchEvidenceRef.current = true;
-        setResults((current) =>
-          upsertBoundedResult(current, sanitizeSearchResult(payload.result), MAX_SEARCH_RESULTS),
-        );
+        prepareBatch(activeSearchRunId.current);
+        const incoming = Array.isArray(payload.results) ? payload.results.slice(0, 32) : [payload.result];
+        for (const result of incoming) if (pendingResults.length < MAX_SEARCH_RESULTS) pendingResults.push(sanitizeSearchResult(result));
       },
     ).catch((error) => {
       if (active) setStatus(`检索进度监听失败: ${formatError(error)}`);
@@ -85,10 +102,11 @@ export function useSearch(setStatus: SetStatus) {
     listenerReadyRef.current = Promise.all([unlistenLog, unlistenProgress]).then(() => undefined);
     return () => {
       active = false;
+      window.clearInterval(timer);
       void unlistenLog.then((u) => u());
       void unlistenProgress.then((u) => u());
     };
-  }, []);
+  }, [setStatus]);
 
   async function startSearch(
     input: string,
@@ -104,12 +122,14 @@ export function useSearch(setStatus: SetStatus) {
       return;
     }
     const runId = nextSearchRunId();
+    searchingRef.current = true;
     activeSearchRunId.current = runId;
     hasSearchEvidenceRef.current = false;
     try {
       await listenerReadyRef.current;
     } catch (error) {
       activeSearchRunId.current = 0;
+      searchingRef.current = false;
       setStatus(`检索监听初始化失败: ${formatError(error)}`);
       return;
     }
@@ -128,6 +148,7 @@ export function useSearch(setStatus: SetStatus) {
       const response = await invoke<SearchResponse>("start_search", { runId, input, settings });
       const clean = sanitizeSearchResponse(response);
       if (clean.runId !== activeSearchRunId.current) return;
+      flushEventsRef.current();
       hasSearchEvidenceRef.current = clean.results.length > 0 || clean.logs.length > 0;
       setResults((current) => mergeSearchResults(current, clean.results));
       setLogs((current) => mergeSearchLogs(current, clean.logs));
@@ -141,6 +162,7 @@ export function useSearch(setStatus: SetStatus) {
       }
     } finally {
       if (runId === activeSearchRunId.current) {
+        flushEventsRef.current();
         const elapsed = Date.now() - searchStartTime.current;
         setSearchDuration(elapsed);
         setSearching(false);
@@ -160,8 +182,10 @@ export function useSearch(setStatus: SetStatus) {
   ) {
     if (!input.trim() || searchingRef.current || inputTooLarge) return;
     const runId = nextSearchRunId();
+    searchingRef.current = true;
     activeSearchRunId.current = runId;
-    await listenerReadyRef.current;
+    try { await listenerReadyRef.current; }
+    catch (error) { activeSearchRunId.current = 0; searchingRef.current = false; setStatus(`检索监听初始化失败: ${formatError(error)}`); return; }
     searchingRef.current = true;
     setSearching(true); setPaused(false); setSearchDuration(null); setResults([]); setLogs([]); setDependencyGraph(null); setStatus("正在检索 R 二进制包"); onViewReport();
     setStageTimings([]);
@@ -169,11 +193,12 @@ export function useSearch(setStatus: SetStatus) {
     try {
       const response = await invoke<SearchResponse>("start_binary_search", { runId, input, settings, mirror });
       const clean = sanitizeSearchResponse(response);
-      setResults(clean.results); setLogs(clean.logs); setDependencyGraph(null); setStatus("R 二进制包检索完成");
+      if (clean.runId !== activeSearchRunId.current) return;
+      setResults(clean.results); setLogs(clean.logs); setDependencyGraph(null); setStatus(clean.stopped ? "检索任务已停止" : "R 二进制包检索完成");
     } catch (error) {
-      setStatus(`R 二进制包检索失败: ${formatError(error)}`);
+      if (runId === activeSearchRunId.current) setStatus(`R 二进制包检索失败: ${formatError(error)}`);
     } finally {
-      setSearchDuration(Date.now() - searchStartTime.current); setSearching(false); setPaused(false); searchingRef.current = false; activeSearchRunId.current = 0;
+      if (runId === activeSearchRunId.current) { setSearchDuration(Date.now() - searchStartTime.current); setSearching(false); setPaused(false); searchingRef.current = false; activeSearchRunId.current = 0; }
     }
   }
 
@@ -186,11 +211,13 @@ export function useSearch(setStatus: SetStatus) {
   ) {
     if (!input.trim() || searchingRef.current || inputTooLarge) return;
     const runId = nextSearchRunId();
+    searchingRef.current = true;
     activeSearchRunId.current = runId;
     try {
       await listenerReadyRef.current;
     } catch (error) {
       activeSearchRunId.current = 0;
+      searchingRef.current = false;
       setStatus(`检索监听初始化失败: ${formatError(error)}`);
       return;
     }

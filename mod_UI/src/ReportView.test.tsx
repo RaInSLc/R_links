@@ -1,8 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { ReportView } from "./ReportView";
 import type { SearchResult } from "./utils";
+import { invoke } from "@tauri-apps/api/core";
+import { defaultSettings } from "./types";
+import { getInstallCommand, mergeInstallCommands } from "./reportUtils";
 
 // Mock @tauri-apps/api/core and @tauri-apps/plugin-clipboard-manager
 vi.mock("@tauri-apps/api/core", () => ({
@@ -13,6 +16,47 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 }));
 
 describe("ReportView", () => {
+  it("多个 CRAN 包合并且保留库路径与条件安装", () => {
+    const results = ["dplyr", "ggplot2"].map((packageName) => ({ package: packageName, realName: packageName, source: "cran", found: true, requestedVersion: "", latestVersion: "1.0", repository: "", message: "" }));
+    const script = mergeInstallCommands(results, { ...defaultSettings, rLibPath: "D:/R/library" });
+    expect(script.match(/install\.packages\(/g)).toHaveLength(1);
+    expect(script).toContain('c("dplyr", "ggplot2")');
+    expect(script).toContain('Filter(function(p) !requireNamespace(p, quietly = TRUE)');
+    expect(script).toContain('lib = "D:/R/library"');
+    const explicit = mergeInstallCommands([{ ...results[0], requestedVersion: "1.0" }, results[1]]);
+    expect(explicit).toContain('install_version("dplyr"');
+  });
+  beforeEach(() => {
+    vi.mocked(invoke).mockImplementation(async (command, args) => command === "generate_result_commands" ? (args as { results: SearchResult[] }).results.map(getInstallCommand) : undefined);
+  });
+  it("报告复制复用后端命令并传递当前库路径", async () => {
+    const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
+    vi.mocked(invoke).mockResolvedValue(['install.packages("dplyr", lib = "D:/R/custom")']);
+    const results: SearchResult[] = [{ package: "dplyr", requestedVersion: "", latestVersion: "1.1.0", repository: "", realName: "dplyr", source: "cran", found: true, message: "" }];
+    render(<ReportView results={results} logs={[]} dependencyGraph={null} packageCount={1} uniqueFoundCount={1} smartSuggestions={[]} searching={false} searchDuration={1} settings={{ ...defaultSettings, rLibPath: "D:/R/custom" }} onClearLogs={vi.fn()} onStatusChange={vi.fn()} onApplySmartSuggestion={vi.fn()} onRetryMissing={vi.fn()} />);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 180)); });
+    await act(async () => { fireEvent.click(screen.getAllByTitle(/复制安装指令/)[0]); });
+    expect(invoke).toHaveBeenCalledWith("generate_result_commands", expect.objectContaining({ options: expect.objectContaining({ rLibPath: "D:/R/custom" }) }));
+    expect(writeText).toHaveBeenCalledWith('install.packages("dplyr", lib = "D:/R/custom")');
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "合并指令" })); });
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('lib = "D:/R/custom"'));
+    const calls = vi.mocked(writeText).mock.calls;
+    expect(calls[calls.length - 1]?.[0]).toContain('c("dplyr")');
+    vi.mocked(invoke).mockReset();
+  });
+  it("大量结果按页展示且按钮 Enter 不触发表格复制", async () => {
+    const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
+    const results: SearchResult[] = Array.from({ length: 205 }, (_, index) => ({ package: `pkg${String(index).padStart(3, "0")}`, requestedVersion: "", latestVersion: "", repository: "", realName: `pkg${index}`, source: "none", found: false, message: "" }));
+    render(<ReportView results={results} logs={[]} dependencyGraph={null} packageCount={205} uniqueFoundCount={0} smartSuggestions={[]} searching={false} searchDuration={1} onClearLogs={vi.fn()} onStatusChange={vi.fn()} onApplySmartSuggestion={vi.fn()} onRetryMissing={vi.fn()} />);
+    expect(screen.getAllByRole("row")).toHaveLength(101);
+    const next = screen.getByRole("button", { name: "下一页" });
+    vi.mocked(writeText).mockClear();
+    fireEvent.keyDown(next, { key: "Enter" });
+    expect(writeText).not.toHaveBeenCalled();
+    fireEvent.click(next);
+    expect(screen.getByText("pkg100")).toBeInTheDocument();
+    expect(screen.queryByText("pkg000")).not.toBeInTheDocument();
+  });
   const mockResults: SearchResult[] = [
     {
       package: "dplyr",
@@ -270,6 +314,7 @@ describe("ReportView", () => {
     );
 
     expect(screen.getByText(/1\.1\.2（请求 1\.0\.0）/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByTitle(/复制安装指令/)[0].getAttribute("title")).not.toBe("复制安装指令: "));
     await act(async () => {
       fireEvent.click(screen.getAllByTitle(/复制安装指令/)[0]);
     });
@@ -310,7 +355,7 @@ describe("ReportView", () => {
       fireEvent.click(screen.getAllByTitle(/复制安装指令/)[0]);
     });
     expect(vi.mocked(writeText)).toHaveBeenCalledWith(
-      expect.stringContaining("conda install conda-forge::numpy=1.26.4"),
+      expect.stringContaining("conda 'install' '-c' 'conda-forge' 'numpy==1.26.4'"),
     );
   });
 
@@ -348,7 +393,7 @@ describe("ReportView", () => {
       fireEvent.click(screen.getAllByTitle(/复制安装指令/)[0]);
     });
     expect(vi.mocked(writeText)).toHaveBeenCalledWith(
-      expect.stringContaining("pip install requests==2.31.0"),
+      expect.stringContaining("pip 'install' 'requests==2.31.0'"),
     );
   });
 });

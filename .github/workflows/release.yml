@@ -5,6 +5,15 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '待发布标签（vX.Y.Z）'
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 # Requires repo Settings > Actions > General > Workflow permissions
 # set to "Read and write permissions" for GITHUB_TOKEN to create releases.
@@ -16,14 +25,16 @@ jobs:
     name: Build Windows release
     runs-on: windows-latest
     env:
-      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -31,6 +42,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -52,22 +65,28 @@ jobs:
             throw "Release tag $env:RELEASE_TAG does not match package.json version v$packageVersion"
           }
 
-      - name: Remove stale draft or existing release
+      - name: Validate tests and build before publishing
+        working-directory: mod_UI
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          try {
-            $null = gh release view $env:RELEASE_TAG --json isDraft 2>&1
-            if ($LASTEXITCODE -eq 0) {
-              Write-Host "Found existing release for $env:RELEASE_TAG. Deleting release to allow clean re-publish..."
-              gh release delete $env:RELEASE_TAG --yes 2>&1 | Out-Null
-            } else {
-              Write-Host "No existing release found for $env:RELEASE_TAG. Proceeding with fresh release..."
-            }
-          } catch {
-            Write-Host "No existing release found or check failed. Proceeding with fresh release..."
-          }
+          $packageVersion = (Get-Content -LiteralPath 'package.json' -Raw -Encoding UTF8 | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content -LiteralPath 'src-tauri\tauri.conf.json' -Raw -Encoding UTF8 | ConvertFrom-Json).version
+          $cargoVersion = (Select-String '^version\s*=\s*"([^"]+)"' 'src-tauri\Cargo.toml').Matches[0].Groups[1].Value
+          if ($packageVersion -ne $tauriVersion -or $packageVersion -ne $cargoVersion) { throw '版本号不一致' }
+          npm test -- --run
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run lint
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo fmt --manifest-path src-tauri\Cargo.toml -- --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --manifest-path src-tauri\Cargo.toml --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --manifest-path src-tauri\Cargo.toml --locked integration_baselines -- --ignored --nocapture --test-threads=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo clippy --manifest-path src-tauri\Cargo.toml --all-targets --locked -- -D warnings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run tauri build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $global:LASTEXITCODE = 0
           exit 0
 

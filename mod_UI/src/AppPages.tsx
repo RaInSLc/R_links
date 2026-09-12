@@ -3,8 +3,29 @@ import { WorkspaceView } from "./WorkspaceView";
 import { ReportView } from "./ReportView";
 import { HistoryView } from "./HistoryView";
 import { SettingsView } from "./SettingsView";
+import type { ComponentProps } from "react";
+import type { View, Settings, InputRules } from "./types";
+import type { useAppActions } from "./useAppActions";
+import type { useSettings } from "./useSettings";
 
-export function AppPages(props: any) {
+type Actions = ReturnType<typeof useAppActions>;
+type SettingsHook = ReturnType<typeof useSettings>;
+export type AppPagesProps = Omit<ComponentProps<typeof WorkspaceView>, "onStartSearch" | "onCopyScript" | "onCleanComments" | "onDownloadScript" | "onDownloadPowerShellScript" | "onDownloadBashScript" | "onDownloadSystemRequirements" | "onTempFilter" | "isMethodDisabled">
+  & Omit<ComponentProps<typeof ReportView>, "onRetryMissing">
+  & Omit<ComponentProps<typeof HistoryView>, "onApplyRecord">
+  & Omit<ComponentProps<typeof SettingsView>, "onReplaceSettings" | "onSaveInputRules">
+  & Actions & {
+    view: View; setView: (view: View) => void; status: string; foundCount: number; summaryProgress: number;
+    resultSuggestions: ComponentProps<typeof ReportView>["smartSuggestions"];
+    cancelSearchPackage: (name: string) => Promise<boolean>;
+    updateAndPersistSettings: (update: (settings: Settings) => Settings) => void;
+    replaceSettingsFromUser: SettingsHook["replaceSettingsFromUser"];
+    persistSettings: SettingsHook["persistSettings"];
+    setStatus: (status: string) => void;
+    onInputRulesChange: (rules: InputRules) => void;
+  };
+
+export function AppPages(props: AppPagesProps) {
   const { view, setView, status, searching, packageCount, foundCount, results, history, summaryProgress } = props;
   return <div className="app-shell">
     <aside className="sidebar"><div className="brand"><div className="brand-mark">R</div><div><strong>Package Center</strong><span>R 包命令工作台</span></div></div>
@@ -19,9 +40,9 @@ export function AppPages(props: any) {
     </aside>
     <main className="main-area"><header className="topbar"><div><span className="eyebrow">R PACKAGE INSTALLATION</span><h1>{view === "workspace" ? "安装命令工作台" : view === "report" ? "多源检索报告" : view === "history" ? "命令历史" : "网络与镜像设置"}</h1></div><div key={status} className={`status-chip status-pulse ${searching ? "active" : ""}`} role="status" aria-live="polite" aria-atomic="true"><i aria-hidden="true" />{status}</div></header>
       <section className="content">{view === "workspace" && <WorkspaceView {...props} onInputChange={props.acceptInputValue} onPaste={props.pasteInput} onClear={() => props.acceptInputValue("", "manual")} onStartSearch={props.handleStartSearch} onCopyScript={props.copyScript} onCleanComments={props.cleanComments} onDownloadScript={props.downloadScript} onDownloadPowerShellScript={() => props.downloadWrapperScript("powershell")} onDownloadBashScript={() => props.downloadWrapperScript("bash")} onDownloadSystemRequirements={props.downloadSystemRequirements} onTempFilter={props.handleTempFilter} isMethodDisabled={props.isMethodDisabled} />}
-        {view === "report" && <ReportView {...props} onApplySmartSuggestion={(s: any) => { if (s.action === "openSettings") setView("settings"); else if (s.action === "enableFullSearch") props.updateAndPersistSettings((c: any) => ({ ...c, fullSearch: true })); else if (s.action === "retrySearch") props.handleStartSearch(); props.setStatus(`已应用智能建议：${s.title}`); }} onRetryMissing={(packages: string[]) => { props.acceptInputValue(packages.join("\n"), "manual"); setView("workspace"); props.setStatus(`已回填 ${packages.length} 个未找到的包名，可重新检索`); }} onCancelPackage={props.cancelSearchPackage} />}
+        {view === "report" && <ReportView {...props} smartSuggestions={props.resultSuggestions} onApplySmartSuggestion={(s) => { if (s.action === "openSettings") setView("settings"); else if (s.action === "enableFullSearch") props.updateAndPersistSettings((c) => ({ ...c, fullSearch: true })); else if (s.action === "retrySearch") props.handleStartSearch(); props.setStatus(`已应用智能建议：${s.title}`); }} onRetryMissing={(packages: string[]) => { props.acceptInputValue(packages.join("\n"), "manual"); setView("workspace"); props.setStatus(`已回填 ${packages.length} 个未找到的包名，可重新检索`); }} onCancelPackage={props.cancelSearchPackage} />}
         {view === "history" && <HistoryView {...props} onApplyRecord={props.applyHistoryRecord} />}
-        {view === "settings" && <SettingsView {...props} onSaveSettings={props.persistSettings} onReplaceSettings={(next: any) => { props.replaceSettingsFromUser(next); void props.persistSettings(next); }} onCheckUpdates={props.onCheckUpdates} onClearCache={props.onClearCache} onExportDiagnostics={props.onExportDiagnostics} onSaveInputRules={props.saveInputRules} onReplaceInputRules={(next: any) => { props.setInputRules(next); void props.saveInputRules(next); }} />}
+        {view === "settings" && <SettingsView {...props} onSaveSettings={props.persistSettings} onReplaceSettings={(next) => { props.replaceSettingsFromUser(next); void props.persistSettings(next); }} onCheckUpdates={props.onCheckUpdates} onClearCache={props.onClearCache} onExportDiagnostics={props.onExportDiagnostics} onSaveInputRules={props.saveInputRules} onReplaceInputRules={(next) => { props.onInputRulesChange(next); void props.saveInputRules(next); }} />}
       </section>
     </main>
   </div>;

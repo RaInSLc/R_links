@@ -33,8 +33,9 @@ mod tests {
             ("edgeR", "biocGit", "|3.18"),
             ("Rcmdr", "rForge", ""),
         ] {
-            let script = generate_command_with_lib(input, method, version, false, "", true, library)
-                .expect("所有 R 安装来源均应支持自定义库路径");
+            let script =
+                generate_command_with_lib(input, method, version, false, "", true, library)
+                    .expect("所有 R 安装来源均应支持自定义库路径");
             assert!(
                 script.contains("lib = \"D:/R/project-library\""),
                 "{method} 未写入自定义库路径: {script}"

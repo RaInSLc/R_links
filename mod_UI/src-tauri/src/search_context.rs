@@ -29,7 +29,6 @@ pub(crate) const SEARCH_STOP_POLL_INTERVAL: Duration = Duration::from_millis(100
 pub(crate) const SEARCH_STOPPED_ERROR: &str = "检索已停止";
 pub(crate) const SEARCH_LOGS_TRUNCATED_MESSAGE: &str = "检索日志达到上限，后续日志已停止记录";
 pub(crate) const SEARCH_RESULTS_TRUNCATED_MESSAGE: &str = "检索结果达到上限，后续来源请求已停止";
-pub(crate) const STREAM_RESULT_PAUSE: Duration = Duration::from_millis(35);
 pub(crate) const AUTO_RETRY_LIMIT: usize = 1;
 pub(crate) const R_FORGE_PACKAGES_URL: &str = "https://r-forge.r-project.org/src/contrib/PACKAGES";
 pub(crate) const R_FORGE_REPOS_URL: &str = "http://R-Forge.R-project.org";
@@ -63,6 +62,37 @@ pub struct SearchLogBatchEvent {
 pub struct SearchProgressEvent {
     pub run_id: u64,
     pub result: SearchResult,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchProgressBatchEvent {
+    run_id: u64,
+    results: Vec<SearchResult>,
+}
+
+pub(crate) fn emit_result_batch(app: &AppHandle, run_id: u64, results: &[SearchResult]) {
+    for batch in results.chunks(32) {
+        let _ = app.emit(
+            "search-progress",
+            SearchProgressBatchEvent {
+                run_id,
+                results: batch.to_vec(),
+            },
+        );
+    }
+}
+
+pub(crate) fn emit_log_batch(app: &AppHandle, run_id: u64, messages: &[String]) {
+    for batch in messages.chunks(32) {
+        let _ = app.emit(
+            "search-log-batch",
+            SearchLogBatchEvent {
+                run_id,
+                messages: batch.to_vec(),
+            },
+        );
+    }
 }
 
 pub(crate) struct RequestBudget {

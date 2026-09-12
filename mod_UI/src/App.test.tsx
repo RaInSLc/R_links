@@ -52,6 +52,28 @@ describe('App Component Input Validation', () => {
     expect(textarea).toHaveValue('');
   });
 
+  it('修改输入后立即复制不得复制上一轮脚本', async () => {
+    render(<App />);
+    const textarea = screen.getByLabelText('R 包输入列表');
+    fireEvent.change(textarea, { target: { value: 'ggplot2' } });
+    await waitFor(() => expect(screen.getByLabelText('生成的 R 脚本')).toHaveTextContent('install.packages'));
+    vi.mocked(writeText).mockClear();
+    fireEvent.change(textarea, { target: { value: 'dplyr' } });
+    fireEvent.click(screen.getByRole('button', { name: /复制脚本/ }));
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('新输入生成失败后清除旧脚本', async () => {
+    render(<App />);
+    const textarea = screen.getByLabelText('R 包输入列表');
+    fireEvent.change(textarea, { target: { value: 'ggplot2' } });
+    await waitFor(() => expect(screen.getByLabelText('生成的 R 脚本')).toHaveTextContent('install.packages'));
+    vi.mocked(tauriCore.invoke).mockImplementation(async (command) => { if (command === 'generate_script') throw new Error('测试生成失败'); return null; });
+    fireEvent.change(textarea, { target: { value: 'dplyr' } });
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('生成失败'));
+    expect(screen.getByLabelText('生成的 R 脚本')).toBeEmptyDOMElement();
+  });
+
   it('如果单行字节超出限制，应当拒绝输入', async () => {
     render(<App />);
 
@@ -92,6 +114,7 @@ describe('App Component Input Validation', () => {
       if (cmd === 'load_input_rules') return { separators: [','], commentChars: ['#'], stripQuotes: true, stripCParens: true, splitSpaces: false };
       if (cmd === 'load_settings') return { proxy: '', githubToken: '', cranMirror: '', fullSearch: false, searchConcurrency: 6, archiveGithubMajorGap: 1, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100, pinnedMethods: ['auto', 'base', 'biocManager', 'github'] };
       if (cmd === 'load_cached_results') return [{ package: 'ggplot2', requestedVersion: '', latestVersion: '3.5.0', repository: '', realName: 'ggplot2', source: 'cran', found: true, message: '缓存命中', status: 'found' }];
+      if (cmd === 'generate_result_commands') return ['install.packages("ggplot2")'];
       if (cmd === 'generate_script') return 'install.packages("ggplot2")';
       return null;
     });
@@ -100,7 +123,7 @@ describe('App Component Input Validation', () => {
     render(<App />);
     fireEvent.click(screen.getByText('检索报告'));
 
-    const copyButton = await screen.findByTitle(/复制安装指令/);
+    const copyButton = await screen.findByTitle(/复制安装指令: install/);
     fireEvent.click(copyButton);
 
     await waitFor(() => {

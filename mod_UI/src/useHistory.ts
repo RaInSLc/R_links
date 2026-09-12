@@ -27,14 +27,18 @@ export function useHistory(setStatus: SetStatus) {
     let active = true;
     invoke<HistoryRecord[]>("load_history")
       .then((nextHistory) => {
-        if (active) loadInitialHistory(nextHistory);
+        if (active) {
+          const clean = mapBounded(asArray(nextHistory), MAX_HISTORY_RECORDS, sanitizeHistoryRecord);
+          latestHistoryRef.current = clean;
+          if (historyActionSeq.current === 0) setHistoryState(clean);
+        }
       })
       .catch((error) => {
         if (active) setStatus(`历史加载失败: ${formatError(error)}`);
       })
       .finally(() => historyLoadResolveRef.current());
     return () => { active = false; };
-  }, []);
+  }, [setStatus]);
 
   function sanitizeHistoryList(nextHistory: unknown): HistoryRecord[] {
     return mapBounded(asArray(nextHistory), MAX_HISTORY_RECORDS, sanitizeHistoryRecord);
@@ -46,13 +50,6 @@ export function useHistory(setStatus: SetStatus) {
     setHistoryState(clean);
   }
 
-  function loadInitialHistory(nextHistory: unknown) {
-    const clean = sanitizeHistoryList(nextHistory);
-    latestHistoryRef.current = clean;
-    if (historyActionSeq.current === 0) {
-      setHistoryState(clean);
-    }
-  }
 
   async function waitForInitialHistoryLoad() {
     return Promise.race([

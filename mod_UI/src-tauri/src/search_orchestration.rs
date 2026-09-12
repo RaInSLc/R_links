@@ -67,9 +67,13 @@ pub async fn search_packages(
     let cache_stage_ms = cache_stage_start.elapsed().as_millis() as u64;
     let search_stage_start = Instant::now();
     let mut processed = 0usize;
+    let cache_index = index_cache(&cache);
 
     while processed < packages.len() {
-        while state.is_paused(run_id) && !cancelled.load(Ordering::SeqCst) {
+        while state.is_paused(run_id)
+            && !cancelled.load(Ordering::SeqCst)
+            && Instant::now() < deadline
+        {
             sleep(SEARCH_STOP_POLL_INTERVAL).await;
         }
         if search_stopped(cancelled, &budget) || timed_out.load(Ordering::SeqCst) {
@@ -80,12 +84,16 @@ pub async fn search_packages(
             break;
         }
 
-        let batch_size = settings.search_concurrency.min(packages.len() - processed);
+        let batch_size = packages.len() - processed;
         let batch = &packages[processed..processed + batch_size];
         let batch_start = processed;
 
         let mut batch_tasks = Vec::new();
+        let cached_start = results.len();
         for (offset, package) in batch.iter().enumerate() {
+            if cancelled.load(Ordering::SeqCst) || Instant::now() >= deadline {
+                break;
+            }
             let index = batch_start + offset;
             if state.is_package_cancelled(run_id, &package.name) {
                 log(
@@ -96,23 +104,48 @@ pub async fn search_packages(
                 );
                 continue;
             }
-            let cached_entry = cache
-                .values()
-                .find(|entry| {
+            let cached_entry = cache_index
+                .get(&package.name)
+                .into_iter()
+                .flatten()
+                .copied()
+                .filter(|entry| {
+                    entry.is_trusted()
+                        && (package.version.is_empty()
+                            || version_compatible(&entry.version, &package.version))
+                })
+                .filter(|entry| {
                     if entry.source == "github" {
                         crate::logic::normalize_github_repository(&package.name)
                             .is_some_and(|repository| entry.repository == repository)
                     } else {
-                        entry.package_name == package.name
+                        matches!(
+                            entry.source.as_str(),
+                            "cran" | "bioc" | "biocGit" | "r-forge"
+                        ) && entry.package_name == package.name
+                            && !package.name.contains('/')
                     }
+                })
+                .min_by_key(|entry| {
+                    (
+                        match entry.source.as_str() {
+                            "cran" => 0,
+                            "bioc" => 1,
+                            "biocGit" => 2,
+                            "github" => 3,
+                            _ => 4,
+                        },
+                        &entry.repository,
+                    )
                 });
 
-            if let Some(cached_entry) = cached_entry
-                .filter(|entry| entry.is_trusted())
-                .filter(|entry| {
-                    package.version.is_empty()
-                        || version_compatible(&entry.version, &package.version)
-                })
+            if let Some(cached_entry) =
+                cached_entry
+                    .filter(|entry| entry.is_trusted())
+                    .filter(|entry| {
+                        package.version.is_empty()
+                            || version_compatible(&entry.version, &package.version)
+                    })
             {
                 log(
                     app,
@@ -132,14 +165,7 @@ pub async fn search_packages(
                     status: "found".to_string(),
                     stage: "cacheHit".to_string(),
                 });
-                let _ = app.emit(
-                    "search-progress",
-                    SearchProgressEvent {
-                        run_id,
-                        result: results.last().expect("刚刚推送的结果应存在").clone(),
-                    },
-                );
-                sleep(STREAM_RESULT_PAUSE).await;
+                tokio::task::yield_now().await;
                 continue;
             } else if cached_entry.is_some() {
                 log(
@@ -153,13 +179,13 @@ pub async fn search_packages(
             batch_tasks.push((index, package.clone()));
         }
 
+        emit_result_batch(app, run_id, &results[cached_start..]);
         if batch_tasks.is_empty() {
             processed += batch_size;
             continue;
         }
 
-        let mut futures: FuturesUnordered<_> = batch_tasks
-            .iter()
+        let mut futures = futures_util::stream::iter(batch_tasks)
             .map(|(index, package)| {
                 let pkg = package.clone();
                 let client_ref = &client;
@@ -170,8 +196,20 @@ pub async fn search_packages(
                 async move {
                     let mut task_logs = Vec::new();
                     let mut task_results = Vec::new();
+                    while state.is_paused(run_id)
+                        && !cancelled_ref.load(Ordering::SeqCst)
+                        && Instant::now() < deadline
+                    {
+                        sleep(SEARCH_STOP_POLL_INTERVAL).await;
+                    }
+                    if state.is_package_cancelled(run_id, &pkg.name)
+                        || cancelled_ref.load(Ordering::SeqCst)
+                        || Instant::now() >= deadline
+                    {
+                        return (task_results, task_logs);
+                    }
                     let mut context = SearchContext {
-                        log_emitter: Some((app, run_id)),
+                        log_emitter: None,
                         client: client_ref,
                         settings: settings_ref,
                         cancelled: cancelled_ref,
@@ -182,13 +220,14 @@ pub async fn search_packages(
                         result_limit_reached: false,
                         github_rate_limited: false,
                     };
-                    search_one_package(&mut context, &mut task_results, &pkg, *index, total).await;
+                    search_one_package(&mut context, &mut task_results, &pkg, index, total).await;
                     (task_results, task_logs)
                 }
             })
-            .collect();
+            .buffer_unordered(settings.search_concurrency.max(1));
 
         while let Some((task_results_inner, task_logs)) = futures.next().await {
+            emit_log_batch(app, run_id, &task_logs);
             for msg in &task_logs {
                 let _ = append_search_log(&mut logs, msg);
             }
@@ -217,6 +256,7 @@ pub async fn search_packages(
                 }
             }
 
+            let batch_start = results.len();
             for result in task_results_inner {
                 if results.len() >= MAX_SEARCH_RESULTS {
                     log(app, run_id, &mut logs, SEARCH_RESULTS_TRUNCATED_MESSAGE);
@@ -224,20 +264,15 @@ pub async fn search_packages(
                 }
                 let sanitized = sanitize_search_result_for_emit(result);
                 results.push(sanitized.clone());
-                let _ = app.emit(
-                    "search-progress",
-                    SearchProgressEvent {
-                        run_id,
-                        result: sanitized,
-                    },
-                );
-                sleep(STREAM_RESULT_PAUSE).await;
+                tokio::task::yield_now().await;
             }
+            emit_result_batch(app, run_id, &results[batch_start..]);
         }
 
         processed += batch_size;
     }
 
+    drop(cache_index);
     for (key, entry) in &cache_update {
         cache.insert(key.clone(), entry.clone());
     }
@@ -259,10 +294,22 @@ pub async fn search_packages(
     }
 
     let dependency_stage_start = Instant::now();
-    let dependency_graph = if settings.resolve_dependencies && !search_stopped(cancelled, &budget) {
+    let dependency_graph = if settings.resolve_dependencies
+        && !search_stopped(cancelled, &budget)
+        && !timed_out.load(Ordering::SeqCst)
+        && Instant::now() < deadline
+    {
         log(app, run_id, &mut logs, "开始解析 R 包依赖关系图...");
-        match crate::dependency::resolve_dependencies(app, &client, &results, settings, cancelled)
-            .await
+        match await_or_stop(
+            crate::dependency::resolve_dependencies(
+                app, &client, &results, settings, cancelled, &budget, deadline,
+            ),
+            cancelled,
+            &budget,
+            deadline,
+        )
+        .await
+        .and_then(|result| result)
         {
             Ok(graph) => {
                 log(
@@ -303,7 +350,9 @@ pub async fn search_packages(
         run_id,
         results,
         logs,
-        stopped: timed_out.load(Ordering::SeqCst) || search_stopped(cancelled, &budget),
+        stopped: timed_out.load(Ordering::SeqCst)
+            || search_stopped(cancelled, &budget)
+            || Instant::now() >= deadline,
         stage_timings,
         dependency_graph,
     })
