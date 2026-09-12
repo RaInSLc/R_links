@@ -31,6 +31,7 @@ temp_*.html
 报告/ai_codes/*
 !报告/ai_codes/eslint.config.mjs
 !报告/ai_codes/integration_baselines.rs
+!报告/ai_codes/check_source_size.mjs
 mod_UI/.vscode
 # Node
 node_modules/

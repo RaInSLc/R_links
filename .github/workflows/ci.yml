@@ -59,6 +59,10 @@ jobs:
         working-directory: mod_UI
         run: npm run lint
 
+      - name: Source size architecture check
+        working-directory: mod_UI
+        run: npm run check:size
+
       - name: Rust format check
         working-directory: mod_UI/src-tauri
         run: cargo fmt -- --check

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "lint": "eslint --config ../报告/ai_codes/eslint.config.mjs src",
+    "check:size": "node ../报告/ai_codes/check_source_size.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
