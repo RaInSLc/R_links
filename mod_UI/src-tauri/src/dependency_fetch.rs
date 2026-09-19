@@ -1,21 +1,17 @@
 use super::dependency_parse::parse_description;
+use crate::logic::{is_valid_package_name, normalize_github_repository};
+use crate::search_urls::validate_search_request_url_with_mirror;
 
 const BIOC_DEPENDENCY_CATEGORIES: &[&str] =
     &["bioc", "data/annotation", "data/experiment", "workflows"];
 
-/// 发送请求获取包的 DESCRIPTION 文本
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn fetch_description(
-    client: &reqwest::Client,
+/// 构造依赖元数据候选 URL。与检索路径使用同一套 URL 校验，避免字符串拼接绕过防御。
+pub(crate) fn build_dependency_urls(
     package: &str,
     source: &str,
-    version: &str,
     repository: &str,
     mirror: &str,
-    cancelled: &std::sync::atomic::AtomicBool,
-    budget: &crate::search::RequestBudget,
-    deadline: std::time::Instant,
-) -> Result<String, String> {
+) -> Vec<(String, bool)> {
     let mut urls: Vec<(String, bool)> = Vec::new();
     let mirror_clean = mirror.trim_end_matches('/');
 
@@ -36,46 +32,61 @@ pub(crate) async fn fetch_description(
             };
         for bioc_version in bioc_versions {
             for category in BIOC_DEPENDENCY_CATEGORIES {
-                urls.push((format!("https://bioconductor.org/packages/{bioc_version}/{category}/src/contrib/PACKAGES"), true));
+                urls.push((
+                    format!("https://bioconductor.org/packages/{bioc_version}/{category}/src/contrib/PACKAGES"),
+                    true,
+                ));
             }
         }
     } else if source.eq_ignore_ascii_case("github") {
-        let github_repo = if !repository.trim().is_empty() {
+        let candidate = if !repository.trim().is_empty() {
             repository.trim()
         } else if package.contains('/') {
             package
         } else {
             ""
         };
-        if !github_repo.is_empty() {
+        if let Some(github_repo) = normalize_github_repository(candidate) {
             urls.push((
-                format!(
-                    "https://raw.githubusercontent.com/{}/master/DESCRIPTION",
-                    github_repo
-                ),
+                format!("https://raw.githubusercontent.com/{github_repo}/master/DESCRIPTION"),
                 false,
             ));
             urls.push((
-                format!(
-                    "https://raw.githubusercontent.com/{}/main/DESCRIPTION",
-                    github_repo
-                ),
+                format!("https://raw.githubusercontent.com/{github_repo}/main/DESCRIPTION"),
                 false,
             ));
         }
-        urls.push((
-            format!(
-                "https://raw.githubusercontent.com/cran/{}/master/DESCRIPTION",
-                package
-            ),
-            false,
-        ));
+        if is_valid_package_name(package) {
+            urls.push((
+                format!("https://raw.githubusercontent.com/cran/{package}/master/DESCRIPTION"),
+                false,
+            ));
+        }
     } else {
         urls.push((
             format!("{}/web/packages/{}/DESCRIPTION", mirror_clean, package),
             false,
         ));
     }
+
+    urls.retain(|(url, _)| validate_search_request_url_with_mirror(url, Some(mirror)).is_ok());
+    urls
+}
+
+/// 发送请求获取包的 DESCRIPTION 文本
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn fetch_description(
+    client: &reqwest::Client,
+    package: &str,
+    source: &str,
+    version: &str,
+    repository: &str,
+    mirror: &str,
+    cancelled: &std::sync::atomic::AtomicBool,
+    budget: &crate::search::RequestBudget,
+    deadline: std::time::Instant,
+) -> Result<String, String> {
+    let urls = build_dependency_urls(package, source, repository, mirror);
 
     for (url, is_packages_index) in urls {
         budget.try_acquire()?;
@@ -124,7 +135,7 @@ pub(crate) fn extract_packages_index_entry(
 ) -> Option<String> {
     for entry in text.split("\n\n") {
         let meta = parse_description(entry);
-        let Some(entry_package) = meta.get("Package") else {
+        let Some(entry_package) = meta.get("package") else {
             continue;
         };
         if !entry_package.eq_ignore_ascii_case(package) {
@@ -132,7 +143,7 @@ pub(crate) fn extract_packages_index_entry(
         }
         if !version.is_empty()
             && meta
-                .get("Version")
+                .get("version")
                 .is_some_and(|entry_version| entry_version != version)
         {
             continue;

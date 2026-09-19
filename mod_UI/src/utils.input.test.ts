@@ -10,6 +10,10 @@ import {
   trimTrailingBlankLines,
   classifyInputProfile,
   countDuplicatePackages,
+  cleanPackageInput,
+  collectBrowserSearchNames,
+  isInstallArchiveUrl,
+  isGithubRepositoryUrl,
 } from "./utils";
 
 describe("normalizePackageInputDisplay", () => {
@@ -159,5 +163,94 @@ describe("countDuplicatePackages", () => {
 
   it("returns 0 when no duplicates", () => {
     expect(countDuplicatePackages("dplyr\nggplot2")).toBe(0);
+  });
+});
+
+describe("URL 输入分类（与后端 input.rs / url_validation.rs 对齐）", () => {
+  it("GitHub 仓库 URL 归入 repositories，不计入 archiveUrls", () => {
+    expect(classifyInputProfile("https://github.com/tidyverse/dplyr")).toEqual({
+      total: 1,
+      archiveUrls: 0,
+      repositories: 1,
+    });
+  });
+
+  it("接受 .git 后缀的 GitHub 仓库 URL", () => {
+    expect(isGithubRepositoryUrl("https://github.com/tidyverse/dplyr.git")).toBe(true);
+    expect(classifyInputProfile("https://github.com/tidyverse/dplyr.git")).toEqual({
+      total: 1,
+      archiveUrls: 0,
+      repositories: 1,
+    });
+  });
+
+  it("拒绝带子路径、查询参数、片段、凭据或端口的 GitHub URL", () => {
+    expect(isGithubRepositoryUrl("https://github.com/tidyverse/dplyr/tree/main")).toBe(false);
+    expect(isGithubRepositoryUrl("https://github.com/tidyverse/dplyr?tab=readme")).toBe(false);
+    expect(isGithubRepositoryUrl("https://github.com/tidyverse/dplyr#readme")).toBe(false);
+    expect(isGithubRepositoryUrl("https://user:pass@github.com/tidyverse/dplyr")).toBe(false);
+    expect(isGithubRepositoryUrl("https://github.com:8443/tidyverse/dplyr")).toBe(false);
+    expect(isGithubRepositoryUrl("http://github.com/tidyverse/dplyr")).toBe(false);
+  });
+
+  it("归档 URL 归入 archiveUrls", () => {
+    expect(classifyInputProfile("https://x.example/pkg_1.0.tar.gz")).toEqual({
+      total: 1,
+      archiveUrls: 1,
+      repositories: 0,
+    });
+    expect(isInstallArchiveUrl("http://192.168.5.250:8011/pkg_1.0.zip")).toBe(true);
+  });
+
+  it("非归档 http(s) 行不计入 total", () => {
+    const value = [
+      "https://x.example/index.html",
+      "https://x.example/pkg_1.0.tar.gz?token=abc",
+      "https://x.example/pkg_1.0.tar.gz#frag",
+      "https://user:pass@x.example/pkg_1.0.tar.gz",
+    ].join("\n");
+    expect(classifyInputProfile(value)).toEqual({ total: 0, archiveUrls: 0, repositories: 0 });
+    expect(isInstallArchiveUrl("https://x.example/index.html")).toBe(false);
+    expect(isInstallArchiveUrl("https://x.example/pkg_1.0.tar.gz?token=abc")).toBe(false);
+  });
+
+  it("混合输入分别归类", () => {
+    expect(
+      classifyInputProfile(
+        ["dplyr", "https://github.com/tidyverse/dplyr", "https://x.example/pkg_1.0.tgz"].join("\n"),
+      ),
+    ).toEqual({ total: 3, archiveUrls: 1, repositories: 1 });
+  });
+
+  it("extractCanonicalInput 只保留可识别的 http(s) 行", () => {
+    expect(
+      extractCanonicalInput(
+        ["https://github.com/tidyverse/dplyr", "https://x.example/index.html"].join("\n"),
+      ),
+    ).toBe("https://github.com/tidyverse/dplyr");
+  });
+});
+
+describe("cleanPackageInput", () => {
+  it("去除首尾空白与空行并统一全角分隔符", () => {
+    expect(cleanPackageInput("  dplyr，tidyr  \n\n  ggplot2  \n")).toBe("dplyr,tidyr\nggplot2");
+  });
+
+  it("保留注释行", () => {
+    expect(cleanPackageInput("# 注释\n\n  dplyr  ")).toBe("# 注释\ndplyr");
+  });
+
+  it("仍会规范化 Markdown 表格", () => {
+    expect(cleanPackageInput("| 包名 | 来源 |\n| --- | --- |\n| DMwR | CRAN |")).toBe("DMwR");
+  });
+});
+
+describe("collectBrowserSearchNames", () => {
+  it("拒绝以数字开头的包名（对齐 R 包名规范）", () => {
+    expect(collectBrowserSearchNames("3Dpack\ndplyr", 10).names).toEqual(["dplyr"]);
+  });
+
+  it("从仓库路径中提取包名", () => {
+    expect(collectBrowserSearchNames("tidyverse/dplyr", 10).names).toEqual(["dplyr"]);
   });
 });

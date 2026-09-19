@@ -208,6 +208,23 @@ pub(crate) fn clear_invalidated_cache(app: &AppHandle) -> Result<usize, String> 
     save_cache(app, &c)?;
     Ok(n - c.len())
 }
+/// 缓存身份匹配：大小写敏感，GitHub 身份仅靠 `repository` 区分。
+/// 大小写不同的包名（如 `Scissor` 与 `scissor`）必须视为不同记录。
+pub(crate) fn cache_entry_matches(
+    entry: &PackageCacheEntry,
+    package: &str,
+    source: &str,
+    version: &str,
+    repository: &str,
+    real_name: &str,
+) -> bool {
+    entry.package_name == package.trim()
+        && entry.source == source
+        && entry.version == version
+        && entry.repository == repository
+        && entry.real_name == real_name
+}
+
 pub(crate) fn delete_cache_entry(
     app: &AppHandle,
     package: &str,
@@ -221,13 +238,7 @@ pub(crate) fn delete_cache_entry(
     }
     let mut c = load_cache(app)?;
     let n = c.len();
-    c.retain(|_, e| {
-        !(e.package_name.eq_ignore_ascii_case(package.trim())
-            && e.source == source
-            && e.version == version
-            && e.repository == repository
-            && e.real_name == real_name)
-    });
+    c.retain(|_, e| !cache_entry_matches(e, package, source, version, repository, real_name));
     if c.len() == n {
         return Err("没有找到匹配的缓存记录".to_string());
     }

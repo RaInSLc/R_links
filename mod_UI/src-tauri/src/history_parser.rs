@@ -4,10 +4,13 @@ use crate::models::{
 };
 use regex::Regex;
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 const MAX_HISTORY_SCAN_LINES: usize = MAX_HISTORY_RECORDS;
 const MAX_VERSION_CHARS: usize = 64;
+/// 进程内自增序号，保证同一毫秒内多次构建也不会产生重复 id。
+static HISTORY_ID_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static HISTORY_VERSION_RE: OnceLock<Regex> = OnceLock::new();
 static BASE_HISTORY_RE: OnceLock<[Regex; 4]> = OnceLock::new();
 static INSTALL_URL_HISTORY_RE: OnceLock<Regex> = OnceLock::new();
@@ -41,7 +44,10 @@ pub fn build_history_records(script: &str) -> Vec<HistoryRecord> {
         .enumerate()
         .map(
             |(index, (command, package_name, version, tool_name))| HistoryRecord {
-                id: format!("{now}-{index}"),
+                id: format!(
+                    "{now}-{}-{index}",
+                    HISTORY_ID_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+                ),
                 command,
                 package_name,
                 version,

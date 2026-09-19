@@ -1,6 +1,7 @@
 export * from "./utils-types";
 export * from "./utils-sanitize";
 export * from "./utils-input";
+export * from "./utils-url";
 export * from "./utils-script";
 export * from "./utils-suggestions";
 import { resultIdentityKey, utf8Length } from "./utils-sanitize";

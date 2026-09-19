@@ -57,6 +57,7 @@ interface WorkspaceViewProps {
   onTempFilter: (text: string, mode: "chars" | "lines") => void;
   onCopyScript: () => void;
   onCleanComments: () => void;
+  onCleanInput: () => void;
   onDownloadScript: () => void;
   onDownloadPowerShellScript: () => void;
   onDownloadBashScript: () => void;
@@ -75,7 +76,7 @@ export function WorkspaceView({
   searching, paused, openingSearchTabs, onInputChange, onPaste, onClear, onOpenSearchTabs, onStartSearch, onStopSearch,
   onMethodChange, pinnedMethods, onPinnedMethodsChange, onApplySmartSuggestion, onConditionalChange, onInstallDependenciesChange,
   onShowRemoteVersionChange, onVerifyInstallChange, onParallelInstallChange, onFullSearchChange, onUseCacheChange, onTempFilter,
-  onCopyScript, onCleanComments, onDownloadScript, onDownloadPowerShellScript, onDownloadBashScript, onDownloadSystemRequirements,
+  onCopyScript, onCleanComments, onCleanInput, onDownloadScript, onDownloadPowerShellScript, onDownloadBashScript, onDownloadSystemRequirements,
   onTogglePause = () => {}, copyWithLineNumbers, onCopyWithLineNumbersChange, isMethodDisabled,
 }: WorkspaceViewProps) {
   const [pasteHint, setPasteHint] = useState(false);
@@ -98,13 +99,14 @@ export function WorkspaceView({
           input={input} inputTooLarge={inputTooLarge} inputProfile={inputProfile} ecosystem={ecosystem}
           settings={settings} duplicateCount={duplicateCount} smartSuggestions={smartSuggestions} searching={searching}
           pasteHint={pasteHint} onInputChange={onInputChange} onApplySmartSuggestion={onApplySmartSuggestion}
-          onCleanComments={onCleanComments} onDismissPasteHint={() => setPasteHint(false)}
+          onCleanInput={onCleanInput} onDismissPasteHint={() => setPasteHint(false)}
         />
         <WorkspaceInputActions
           input={input} inputTooLarge={inputTooLarge} duplicateCount={duplicateCount} searching={searching} paused={paused}
           openingSearchTabs={openingSearchTabs} onInputChange={onInputChange} onPaste={onPaste} onClear={onClear}
           onImportFile={() => inputEditorRef.current?.openFilePicker()} onOpenSearchTabs={onOpenSearchTabs}
           onStartSearch={onStartSearch} onStopSearch={onStopSearch} onTogglePause={onTogglePause} onTempFilter={onTempFilter}
+          onCleanInput={onCleanInput}
         />
       </section>
       <WorkspaceStrategyPanel

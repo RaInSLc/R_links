@@ -31,9 +31,9 @@ fn write_synced_new_file(path: &std::path::Path, content: &str) -> std::io::Resu
 }
 
 pub(crate) use cache_storage::{
-    clear_cache, clear_invalidated_cache, delete_cache_entry, export_cache, import_cache,
-    load_cache, load_dependency_cache, package_cache_key, save_cache, save_dependency_cache,
-    DependencyCacheEntry,
+    cache_entry_matches, clear_cache, clear_invalidated_cache, delete_cache_entry, export_cache,
+    import_cache, load_cache, load_dependency_cache, package_cache_key, save_cache,
+    save_dependency_cache, DependencyCacheEntry,
 };
 pub(crate) use history_storage::{load_history, save_history};
 pub(crate) use settings_storage::{

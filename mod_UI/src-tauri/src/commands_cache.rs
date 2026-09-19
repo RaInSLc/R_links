@@ -165,10 +165,7 @@ fn matches(
     repository: &str,
     real_name: &str,
 ) -> bool {
-    e.source == source
-        && e.version == version
-        && e.repository == repository
-        && e.real_name.eq_ignore_ascii_case(real_name)
+    storage::cache_entry_matches(e, &e.package_name, source, version, repository, real_name)
 }
 #[tauri::command]
 pub(crate) fn rate_cache_result(

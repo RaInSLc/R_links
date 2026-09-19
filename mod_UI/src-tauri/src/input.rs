@@ -16,6 +16,13 @@ static LOCAL_ARCHIVE_RE: OnceLock<Regex> = OnceLock::new();
 
 use crate::logic::*;
 
+/// 本地归档路径（`C:\...` 或 UNC `\\server\...`）的正则，供整行识别复用。
+fn local_archive_regex() -> &'static Regex {
+    LOCAL_ARCHIVE_RE.get_or_init(|| {
+        Regex::new(r"(?i)^(?:[A-Z]:[\\/]|\\\\)[^\r\n]+$").expect("固定本地路径正则必须有效")
+    })
+}
+
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
     parse_inputs_filtered(input, &InputRules::default())
@@ -43,7 +50,7 @@ pub fn parse_inputs_filtered(input: &str, rules: &InputRules) -> Result<Vec<Pack
                 .filter(|item| !item.is_empty())
             {
                 let pkg = parse_input_line(item)
-                    .ok_or_else(|| format!("第 {line_idx} 行包管理器输入格式无效"))?;
+                    .ok_or_else(|| format!("第 {} 行包管理器输入格式无效", line_idx + 1))?;
                 packages.push(pkg);
                 if packages.len() > MAX_PACKAGE_LINES {
                     return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
@@ -74,6 +81,19 @@ pub fn parse_inputs_filtered(input: &str, rules: &InputRules) -> Result<Vec<Pack
                 packages.push(pkg);
             } else {
                 return Err(format!("第 {line_num} 行 URL 输入格式无效"));
+            }
+            if packages.len() > MAX_PACKAGE_LINES {
+                return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
+            }
+            continue;
+        }
+
+        // 本地归档路径整行处理，避免路径中的 `,`/`;` 被分隔符拆断。
+        if local_archive_regex().is_match(trimmed) {
+            if let Some(pkg) = parse_input_line(trimmed) {
+                packages.push(pkg);
+            } else {
+                return Err(format!("第 {line_num} 行本地归档路径格式无效"));
             }
             if packages.len() > MAX_PACKAGE_LINES {
                 return Err(format!("单次最多处理 {MAX_PACKAGE_LINES} 行输入"));
@@ -250,24 +270,14 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
         });
     }
 
-    let local_archive_re = LOCAL_ARCHIVE_RE.get_or_init(|| {
-        Regex::new(r"(?i)^(?:[A-Z]:[\\/]|\\\\)[^\r\n]+$").expect("固定本地路径正则必须有效")
-    });
-    if local_archive_re.is_match(raw) {
+    if local_archive_regex().is_match(raw) {
         let path = normalize_local_archive_path(raw).ok()?;
         let name = path
             .replace('\\', "/")
             .rsplit('/')
             .next()
-            .and_then(|file| {
-                let stem = package_name_from_archive_file(file)?;
-                stem.rsplit_once('_')
-                    .filter(|(_, version)| {
-                        version.chars().next().is_some_and(|c| c.is_ascii_digit())
-                    })
-                    .map(|(name, _)| name.to_string())
-                    .or(Some(stem))
-            })
+            .and_then(package_name_from_archive_file)
+            .map(|stem| strip_archive_version(&stem))
             .filter(|name| is_valid_package_name(name))?;
         return Some(PackageInput {
             raw: path,
@@ -347,11 +357,12 @@ pub fn extract_package_name(input: &str) -> String {
                 .to_string();
         }
         let file = value.rsplit('/').next().unwrap_or(value);
-        if let Some((name, _)) = file.split_once('_') {
-            return name.to_string();
-        }
-        if let Some(name) = package_name_from_archive_file(file) {
-            return name;
+        // 归档文件名统一剥离扩展名与 `_`/`-` 版本号后缀，避免把版本并入包名。
+        if let Some(stem) = package_name_from_archive_file(file) {
+            let name = strip_archive_version(&stem);
+            if is_valid_package_name(&name) {
+                return name;
+            }
         }
         return file
             .trim_end_matches(".html")

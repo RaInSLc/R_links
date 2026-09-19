@@ -101,7 +101,8 @@ fn is_allowed_cran_package_path(url: &Url) -> bool {
             && segments[0] == "web"
             && segments[1] == "packages"
             && is_valid_search_package_query(segments[2])
-            && segments[3] == "index.html"
+            // `index.html` 为包页面，`DESCRIPTION` 为依赖元数据。
+            && matches!(segments[3], "index.html" | "DESCRIPTION")
     })
 }
 
@@ -131,6 +132,9 @@ fn is_allowed_bioc_package_path(url: &Url) -> bool {
             [_, _, "data", "annotation" | "experiment", "html", file] => {
                 is_allowed_bioc_package_file(file)
             }
+            // 依赖元数据：`/packages/{version}/{category}/src/contrib/PACKAGES`
+            [_, _, "bioc" | "workflows", "src", "contrib", "PACKAGES"] => true,
+            [_, _, "data", "annotation" | "experiment", "src", "contrib", "PACKAGES"] => true,
             _ => false,
         }
     })
@@ -224,7 +228,7 @@ fn is_allowed_r_binary_path(url: &Url) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_search_request_url_with_mirror;
+    use super::{validate_search_request_url, validate_search_request_url_with_mirror};
 
     #[test]
     fn accepts_standard_package_path_under_configured_cran_directory() {
@@ -242,5 +246,45 @@ mod tests {
             Some("https://mirrors.tuna.tsinghua.edu.cn/CRAN/"),
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn accepts_dependency_metadata_paths() {
+        assert!(validate_search_request_url(
+            "https://cloud.r-project.org/web/packages/dplyr/DESCRIPTION"
+        )
+        .is_ok());
+        assert!(validate_search_request_url(
+            "https://bioconductor.org/packages/release/bioc/src/contrib/PACKAGES"
+        )
+        .is_ok());
+        assert!(validate_search_request_url(
+            "https://bioconductor.org/packages/3.18/data/annotation/src/contrib/PACKAGES"
+        )
+        .is_ok());
+        assert!(validate_search_request_url(
+            "https://raw.githubusercontent.com/cran/dplyr/master/DESCRIPTION"
+        )
+        .is_ok());
+        assert!(validate_search_request_url(
+            "https://raw.githubusercontent.com/owner/repo/devel/DESCRIPTION"
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn still_rejects_unrelated_paths_on_allowed_hosts() {
+        assert!(validate_search_request_url(
+            "https://bioconductor.org/packages/release/bioc/src/contrib/INDEX"
+        )
+        .is_err());
+        assert!(validate_search_request_url(
+            "https://raw.githubusercontent.com/cran/dplyr/master/README.md"
+        )
+        .is_err());
+        assert!(
+            validate_search_request_url("https://cloud.r-project.org/web/packages/dplyr/NEWS")
+                .is_err()
+        );
     }
 }

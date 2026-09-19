@@ -18,16 +18,74 @@ Suggests:
     future
 ";
     let meta = parse_description(content);
-    assert_eq!(meta.get("Package").unwrap(), "Seurat");
-    assert_eq!(meta.get("Version").unwrap(), "5.1.0");
+    assert_eq!(meta.get("package").unwrap(), "Seurat");
+    assert_eq!(meta.get("version").unwrap(), "5.1.0");
     assert_eq!(
-        meta.get("Depends").unwrap(),
+        meta.get("depends").unwrap(),
         "R (>= 4.0.0), SeuratObject (>= 5.0.1)"
     );
     assert_eq!(
-        meta.get("Imports").unwrap(),
+        meta.get("imports").unwrap(),
         "fitdistrplus, ggplot2 (>= 3.0.0)"
     );
+}
+
+#[test]
+fn description_field_names_are_case_insensitive() {
+    let content = "\
+package: demo
+version: 1.0.0
+imports: rlang,
+    cli
+LINKINGTO: Rcpp
+";
+
+    let meta = parse_description(content);
+    assert_eq!(meta.get("package").unwrap(), "demo");
+    assert_eq!(meta.get("version").unwrap(), "1.0.0");
+    assert_eq!(meta.get("imports").unwrap(), "rlang, cli");
+    assert_eq!(meta.get("linkingto").unwrap(), "Rcpp");
+
+    let (heavy, _light, version) = parse_package_dependencies(content);
+    assert_eq!(version, "1.0.0");
+    assert!(heavy.contains(&"rlang".to_string()));
+    assert!(heavy.contains(&"cli".to_string()));
+    assert!(heavy.contains(&"Rcpp".to_string()));
+}
+
+#[test]
+fn dependency_metadata_urls_pass_search_url_validation() {
+    use super::dependency_fetch::build_dependency_urls;
+    use crate::search_urls::validate_search_request_url_with_mirror;
+
+    let mirror = "https://cloud.r-project.org";
+    let cases = [
+        ("dplyr", "cran", "", mirror),
+        ("GSVA", "bioc", "", mirror),
+        ("GSVA", "biocGit", "3.18", mirror),
+        ("owner/repo", "github", "owner/repo", mirror),
+        ("dplyr", "none", "", mirror),
+    ];
+
+    for (package, source, repository, mirror) in cases {
+        let urls = build_dependency_urls(package, source, repository, mirror);
+        assert!(!urls.is_empty(), "来源 {source} 应构造出候选依赖元数据 URL");
+        for (url, _) in urls {
+            assert!(
+                validate_search_request_url_with_mirror(&url, Some(mirror)).is_ok(),
+                "{source} 构造的 URL 未通过校验: {url}"
+            );
+        }
+    }
+}
+
+#[test]
+fn dependency_metadata_urls_drop_invalid_github_repository() {
+    use super::dependency_fetch::build_dependency_urls;
+
+    // 非法的仓库路径不应出现在候选 URL 中。
+    let urls = build_dependency_urls("demo", "github", "owner/repo/../../etc", "");
+    assert!(urls.iter().all(|(url, _)| !url.contains("..")));
 }
 
 #[test]

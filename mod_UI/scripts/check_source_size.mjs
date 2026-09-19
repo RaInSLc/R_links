@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const projectRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(?:[A-Za-z]:)/, (value) => value.slice(1))), "../..");
-const roots = [path.join(projectRoot, "mod_UI/src"), path.join(projectRoot, "mod_UI/src-tauri/src")];
+// 脚本位于 mod_UI/scripts/，工程根为 mod_UI/
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const roots = [path.join(projectRoot, "src"), path.join(projectRoot, "src-tauri/src")];
 const extensions = new Set([".ts", ".tsx", ".rs"]);
 const violations = [];
 

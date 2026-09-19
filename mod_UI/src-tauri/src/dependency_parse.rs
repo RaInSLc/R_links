@@ -36,7 +36,8 @@ pub(crate) fn parse_description(content: &str) -> HashMap<String, String> {
                 val.push_str(line.trim());
             }
         } else if let Some(pos) = line.find(':') {
-            let key = line[..pos].trim().to_string();
+            // 字段名统一小写归一化，兼容 `Imports` / `imports` / `IMPORTS` 等写法。
+            let key = line[..pos].trim().to_ascii_lowercase();
             let val = line[pos + 1..].trim().to_string();
             current_key = key.clone();
             map.insert(key, val);
@@ -69,18 +70,18 @@ pub(crate) fn parse_package_dependencies(content: &str) -> (Vec<String>, Vec<Str
     let meta = parse_description(content);
     let mut heavy_deps = Vec::new();
     let mut light_deps = Vec::new();
-    let version = meta.get("Version").cloned().unwrap_or_default();
+    let version = meta.get("version").cloned().unwrap_or_default();
 
-    if let Some(depends) = meta.get("Depends") {
+    if let Some(depends) = meta.get("depends") {
         heavy_deps.extend(parse_dependency_field(depends));
     }
-    if let Some(imports) = meta.get("Imports") {
+    if let Some(imports) = meta.get("imports") {
         heavy_deps.extend(parse_dependency_field(imports));
     }
-    if let Some(linking_to) = meta.get("LinkingTo") {
+    if let Some(linking_to) = meta.get("linkingto") {
         heavy_deps.extend(parse_dependency_field(linking_to));
     }
-    if let Some(suggests) = meta.get("Suggests") {
+    if let Some(suggests) = meta.get("suggests") {
         light_deps.extend(parse_dependency_field(suggests));
     }
 

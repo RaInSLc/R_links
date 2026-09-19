@@ -51,6 +51,13 @@ export function useSearch(setStatus: SetStatus) {
   const searchStartTime = useRef(0);
   const listenerReadyRef = useRef<Promise<void>>(Promise.resolve());
   const flushEventsRef = useRef<() => void>(() => {});
+  // 暂停状态以后端为准：本地 ref 作为即时真值，避免渲染闭包读到过期状态。
+  const pausedRef = useRef(false);
+  const pausePendingRef = useRef(false);
+  const updatePaused = (value: boolean) => {
+    pausedRef.current = value;
+    setPaused(value);
+  };
 
   useEffect(() => {
     let active = true;
@@ -135,7 +142,7 @@ export function useSearch(setStatus: SetStatus) {
     }
     searchingRef.current = true;
     setSearching(true);
-    setPaused(false);
+    updatePaused(false);
     setSearchDuration(null);
     setStageTimings([]);
     searchStartTime.current = Date.now();
@@ -166,7 +173,7 @@ export function useSearch(setStatus: SetStatus) {
         const elapsed = Date.now() - searchStartTime.current;
         setSearchDuration(elapsed);
         setSearching(false);
-        setPaused(false);
+        updatePaused(false);
         searchingRef.current = false;
         activeSearchRunId.current = 0;
       }
@@ -187,7 +194,7 @@ export function useSearch(setStatus: SetStatus) {
     try { await listenerReadyRef.current; }
     catch (error) { activeSearchRunId.current = 0; searchingRef.current = false; setStatus(`检索监听初始化失败: ${formatError(error)}`); return; }
     searchingRef.current = true;
-    setSearching(true); setPaused(false); setSearchDuration(null); setResults([]); setLogs([]); setDependencyGraph(null); setStatus("正在检索 R 二进制包"); onViewReport();
+    setSearching(true); updatePaused(false); setSearchDuration(null); setResults([]); setLogs([]); setDependencyGraph(null); setStatus("正在检索 R 二进制包"); onViewReport();
     setStageTimings([]);
     searchStartTime.current = Date.now();
     try {
@@ -198,7 +205,7 @@ export function useSearch(setStatus: SetStatus) {
     } catch (error) {
       if (runId === activeSearchRunId.current) setStatus(`R 二进制包检索失败: ${formatError(error)}`);
     } finally {
-      if (runId === activeSearchRunId.current) { setSearchDuration(Date.now() - searchStartTime.current); setSearching(false); setPaused(false); searchingRef.current = false; activeSearchRunId.current = 0; }
+      if (runId === activeSearchRunId.current) { setSearchDuration(Date.now() - searchStartTime.current); setSearching(false); updatePaused(false); searchingRef.current = false; activeSearchRunId.current = 0; }
     }
   }
 
@@ -223,7 +230,7 @@ export function useSearch(setStatus: SetStatus) {
     }
     searchingRef.current = true;
     setSearching(true);
-    setPaused(false);
+    updatePaused(false);
     setSearchDuration(null);
     setStageTimings([]);
     setResults([]);
@@ -248,7 +255,7 @@ export function useSearch(setStatus: SetStatus) {
       if (runId === activeSearchRunId.current) {
         setSearchDuration(Date.now() - searchStartTime.current);
         setSearching(false);
-        setPaused(false);
+        updatePaused(false);
         searchingRef.current = false;
         activeSearchRunId.current = 0;
       }
@@ -271,16 +278,25 @@ export function useSearch(setStatus: SetStatus) {
 
   async function togglePauseSearch() {
     const runId = activeSearchRunId.current;
-    if (!runId) return;
-    const nextPaused = !paused;
+    // pending 期间忽略重复点击，避免连点造成前后端暂停状态漂移。
+    if (!runId || pausePendingRef.current) return;
+    pausePendingRef.current = true;
+    const nextPaused = !pausedRef.current;
     try {
       const accepted = await invoke<boolean>(nextPaused ? "pause_search" : "resume_search", { runId });
-      if (accepted && runId === activeSearchRunId.current) {
-        setPaused(nextPaused);
+      if (runId !== activeSearchRunId.current) return;
+      if (accepted) {
+        updatePaused(nextPaused);
         setStatus(nextPaused ? "检索已暂停" : "检索已继续");
+      } else {
+        // 后端拒绝（任务已结束或 runId 不匹配）：以后端状态为准复位本地暂停标记。
+        updatePaused(false);
+        setStatus("检索任务已结束，无法切换暂停状态");
       }
     } catch (error) {
       setStatus(`检索任务控制失败: ${formatError(error)}`);
+    } finally {
+      pausePendingRef.current = false;
     }
   }
 

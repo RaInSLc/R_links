@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## [2026-09-19 19:30:00 +08:00]
+
+### Fixed
+- **输入 URL 分类前后端一致**：新增 `mod_UI/src/utils-url.ts`，镜像 Rust `url_validation.rs` 的判定规则；GitHub 仓库 URL 计入 `repositories`，归档 URL 计入 `archiveUrls`，其余 http(s) 行视为非法且不计入 `total`；`extractCanonicalInput` 只收录可识别的 http(s) 行。
+- **输入清理语义**：粘贴提示条「清理」按钮改为清理输入本身（新增 `cleanPackageInput` 与 `cleanInput` 动作），保留注释行，不再误调用脚本注释清理；受控输入 `onChange` 只保留不破坏编辑态的校验。
+- **手动输入编辑态**：`acceptInputValue` 仅对 `source === "clipboard"` 调用 `normalizePackageInputDisplay`，手动输入不再被改写，Markdown 表格行与尾随空行原样保留。
+- **检索暂停状态漂移**：`togglePauseSearch` 改用 `pausedRef`/`pausePendingRef`，连点只提交一次请求；后端拒绝时以 `accepted=false` 复位本地暂停标记并提示任务已结束。
+- **Rust 输入解析**：托管包管理器输入错误改为 1 基行号；含 `,`/`;` 的本地归档路径整行识别，不再被分隔符拆断；归档文件名统一剥离扩展名与 `_`/`-` 版本后缀。
+- **Bioconductor 历史版本**：推断出的版本插到候选队首（`versions.insert(0, inferred)`）并直接使用该版本；单个版本请求失败只记录日志并继续遍历，不再让整包被判为未找到。
+- **历史记录 id 唯一**：新增进程内 `AtomicU64` 序号，同一毫秒内多次构建也不再产生重复 id。
+- **DESCRIPTION 字段名大小写**：`parse_description` 的键统一小写归一化，`parse_package_dependencies` 与 `extract_packages_index_entry` 的字段读取同步改为小写，兼容 `Imports`/`imports`/`IMPORTS`。
+- **依赖元数据 URL 校验**：新增 `build_dependency_urls`，与检索路径共用 `validate_search_request_url_with_mirror`，GitHub 仓库经 `normalize_github_repository` 归一化；`search_urls.rs` 放行 CRAN `web/packages/{pkg}/DESCRIPTION` 与 Bioc `src/contrib/PACKAGES`。
+- **包名首字符**：Rust `is_valid_package_name` 与前端 `collectBrowserSearchNames` 均要求首字符为 ASCII 字母，数字开头的包名不再被接受。
+- **缓存身份大小写敏感**：新增 `cache_entry_matches`，缓存删除与反馈路径统一使用精确匹配，`Scissor` 与 `scissor` 视为不同记录。
+
+### Changed
+- **工程化目录归位**：`integration_baselines.rs` 由 `报告/ai_codes/` 移入 `mod_UI/src-tauri/src/` 并以 `#[cfg(test)] mod integration_baselines;` 挂载；`eslint.config.mjs` 与 `check_source_size.mjs` 分别移入 `mod_UI/` 与 `mod_UI/scripts/`，脚本内路径改为基于自身位置解析，`.gitignore` 中对应的三行白名单同时删除。
+- **前端 Lint 门禁**：ESLint 启用 typescript-eslint recommended 与 `max-len`（200，既有源码 warn，本次新增模块 `src/utils-url.ts` 为 error），测试文件排除在类型规则之外；`npm run lint` 退出 0（0 error / 38 项既有 max-len 警告）。
+- **opener 能力评估（结论：保持现状）**：`open_package_page`/`open_package_search` 在 Rust 侧先做 `is_allowed_package_page_url`/`is_allowed_browser_search_url` 校验，再直接调用 `tauri_plugin_opener::OpenerExt::opener(&app).open_url(...)`，不经过 ACL/scope；`capabilities/default.json` 未授予 webview 任何 opener 权限，前端无法绕过这两个受校验命令。当前配置与行为自洽，本轮不做收窄，待用户确认后再决定是否调整。
+
+### Added
+- **新增模块**：`mod_UI/src/utils-url.ts`（前端 URL 分类）与 `mod_UI/src-tauri/src/search_bioc_tests.rs`（Bioc 历史版本回归测试），后者用于把 `search_tests_2.rs` 控制在 500 行以内。
+
+### Tests
+- **前端**：新增 URL 分类、`cleanPackageInput`、手动输入保留 Markdown/尾随空行、粘贴提示清理输入、暂停连点与后端拒绝等用例；`npm test -- --run` 12 个文件 179 项全部通过，`npm run build`、`npm run lint`、`npm run check:size` 均退出 0。
+- **Rust**：新增本地归档路径含分隔符、1 基行号、版本后缀剥离、数字开头包名、历史 id 唯一、DESCRIPTION 大小写、依赖元数据 URL 校验、Bioc 失败继续与推断版本优先、缓存大小写敏感等 13 项回归测试；`cargo fmt --all -- --check` 退出 0。
+- **环境缺陷说明**：本机 `aws-lc-sys v0.41.0` 构建脚本在 stdalign 编译器特性探测后永久阻塞（零 CPU、无子进程，19:02 与 18:51 两次复现，累计 6 次失败），属本机既有环境缺陷，与本次改动无关；为完成编译与测试验证，临时把 `reqwest` 的 `rustls` 特性换成 `native-tls`（验证后已还原 `Cargo.toml`/`Cargo.lock`），在该临时配置下 `cargo check`、`cargo check --all-targets` 与 `cargo test --lib` 均退出 0，`cargo test --lib` 为 226 通过 / 0 失败 / 3 忽略。
+
 ## [2026-09-12 21:45:00 +08:00]
 
 ### Changed

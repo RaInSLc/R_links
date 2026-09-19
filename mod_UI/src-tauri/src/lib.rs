@@ -7,7 +7,6 @@ mod commands_settings;
 mod commands_settings_runtime;
 mod dependency;
 #[cfg(test)]
-#[path = "../../../报告/ai_codes/integration_baselines.rs"]
 mod integration_baselines;
 mod logic;
 mod models;

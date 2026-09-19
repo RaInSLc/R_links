@@ -129,6 +129,48 @@ fn package_cache_key_preserves_case_sensitive_github_identity() {
 }
 
 #[test]
+fn cache_entry_matching_is_case_sensitive() {
+    let entry = PackageCacheEntry {
+        package_name: "Scissor".to_string(),
+        real_name: "Scissor".to_string(),
+        source: "github".to_string(),
+        version: "1.0.0".to_string(),
+        repository: "sunduanchen/Scissor".to_string(),
+        cached_at: "1800000000".to_string(),
+        verified_count: 1,
+        up_votes: 0,
+        down_votes: 0,
+        invalidated: false,
+    };
+
+    assert!(cache_entry_matches(
+        &entry,
+        "Scissor",
+        "github",
+        "1.0.0",
+        "sunduanchen/Scissor",
+        "Scissor"
+    ));
+    // 大小写不同的包名属于不同身份，删除/反馈不得互相影响。
+    assert!(!cache_entry_matches(
+        &entry,
+        "scissor",
+        "github",
+        "1.0.0",
+        "statgarten/scissor",
+        "scissor"
+    ));
+    assert!(!cache_entry_matches(
+        &entry,
+        "SCISSOR",
+        "github",
+        "1.0.0",
+        "sunduanchen/Scissor",
+        "Scissor"
+    ));
+}
+
+#[test]
 fn ensure_storage_directory_creates_and_accepts_plain_directory() {
     let directory = std::env::temp_dir().join(format!("mod-ui-data-dir-{}", unique_file_suffix()));
 

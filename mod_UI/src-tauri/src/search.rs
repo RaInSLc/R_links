@@ -50,6 +50,9 @@ pub(crate) use search_http::*;
 pub(crate) use search_orchestration::*;
 pub(crate) use search_result::*;
 #[cfg(test)]
+#[path = "search_bioc_tests.rs"]
+mod search_bioc_tests;
+#[cfg(test)]
 #[path = "search_tests_1.rs"]
 mod search_tests_1;
 #[cfg(test)]

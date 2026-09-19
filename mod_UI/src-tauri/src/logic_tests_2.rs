@@ -31,6 +31,21 @@ mod tests {
     }
 
     #[test]
+    fn history_record_ids_stay_unique_across_rapid_builds() {
+        let script = "install.packages(\"dplyr\", repos = \"https://cloud.r-project.org\", dependencies = TRUE)";
+
+        let first = build_history_records(script);
+        let second = build_history_records(script);
+
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1);
+        assert_ne!(
+            first[0].id, second[0].id,
+            "同一毫秒内的两次构建也必须产生不同 id"
+        );
+    }
+
+    #[test]
     fn rejects_unsupported_history_commands() {
         assert!(supported_history_command("system(\"calc.exe\")").is_none());
         assert!(supported_history_command("not_a_supported_command()").is_none());

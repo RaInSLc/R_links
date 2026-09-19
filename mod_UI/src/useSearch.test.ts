@@ -206,4 +206,60 @@ describe('useSearch Hook', () => {
     finishSearch();
     await act(async () => { await searchPromise; });
   });
+
+  it('连点暂停按钮只提交一次请求且状态与后端一致', async () => {
+    let finishSearch: () => void = () => {};
+    const pauseCommands: string[] = [];
+    vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
+      if (cmd === 'start_search') {
+        await new Promise<void>((resolve) => { finishSearch = resolve; });
+        return { runId: 1, results: [], logs: [], stopped: false };
+      }
+      if (cmd === 'pause_search' || cmd === 'resume_search') { pauseCommands.push(cmd); return true; }
+      return null;
+    });
+    const setStatus = vi.fn();
+    const { result } = renderHook(() => useSearch(setStatus));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    let searchPromise: Promise<void> | undefined;
+    act(() => { searchPromise = result.current.startSearch('ggplot2', {} as any, false, vi.fn(), vi.fn()); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    await act(async () => {
+      await Promise.all([result.current.togglePauseSearch(), result.current.togglePauseSearch()]);
+    });
+
+    expect(pauseCommands).toEqual(['pause_search']);
+    expect(result.current.paused).toBe(true);
+    expect(setStatus).toHaveBeenLastCalledWith('检索已暂停');
+
+    finishSearch();
+    await act(async () => { await searchPromise; });
+  });
+
+  it('后端拒绝暂停请求时以后端为准复位本地状态', async () => {
+    let finishSearch: () => void = () => {};
+    vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
+      if (cmd === 'start_search') {
+        await new Promise<void>((resolve) => { finishSearch = resolve; });
+        return { runId: 1, results: [], logs: [], stopped: false };
+      }
+      if (cmd === 'pause_search') return false;
+      return null;
+    });
+    const setStatus = vi.fn();
+    const { result } = renderHook(() => useSearch(setStatus));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    let searchPromise: Promise<void> | undefined;
+    act(() => { searchPromise = result.current.startSearch('ggplot2', {} as any, false, vi.fn(), vi.fn()); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    await act(async () => { await result.current.togglePauseSearch(); });
+
+    expect(result.current.paused).toBe(false);
+    expect(setStatus).toHaveBeenLastCalledWith('检索任务已结束，无法切换暂停状态');
+
+    finishSearch();
+    await act(async () => { await searchPromise; });
+  });
 });

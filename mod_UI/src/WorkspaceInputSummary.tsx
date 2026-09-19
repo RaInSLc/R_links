@@ -13,7 +13,7 @@ interface WorkspaceInputSummaryProps {
   pasteHint: boolean;
   onInputChange: (value: string, source: "manual" | "clipboard") => string;
   onApplySmartSuggestion: (suggestion: SmartSuggestion) => void;
-  onCleanComments: () => void;
+  onCleanInput: () => void;
   onDismissPasteHint: () => void;
 }
 
@@ -29,7 +29,7 @@ export function WorkspaceInputSummary({
   pasteHint,
   onInputChange,
   onApplySmartSuggestion,
-  onCleanComments,
+  onCleanInput,
   onDismissPasteHint,
 }: WorkspaceInputSummaryProps) {
   const searchPlan = buildSearchPlanPreview(inputProfile, { fullSearch: settings.fullSearch, useCache: settings.useCache, duplicateCount });
@@ -71,7 +71,7 @@ export function WorkspaceInputSummary({
         <div className="paste-hint-bar">
           <span>检测到粘贴内容可能含多余空白、空行或逗号分隔，建议清理后检索</span>
           <div style={{ display: "flex", gap: "6px" }}>
-            <button type="button" className="button ghost compact-btn" onClick={() => { onCleanComments(); onDismissPasteHint(); }}>清理</button>
+            <button type="button" className="button ghost compact-btn" onClick={() => { onCleanInput(); onDismissPasteHint(); }}>清理</button>
             <button type="button" className="button ghost compact-btn" onClick={onDismissPasteHint}>忽略</button>
           </div>
         </div>

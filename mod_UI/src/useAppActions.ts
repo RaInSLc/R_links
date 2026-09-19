@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
   dedupePackageInput, formatError, generateSystemRequirementsScript, generateMultiEcosystemScript,
+  cleanPackageInput,
   MAX_HISTORY_RECORDS, MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES,
   MAX_SCRIPT_CHARS, methodSupportsInput, nonEmptyLineBytesExceeds,
   normalizePackageInputDisplay, scriptValueTooLarge, trimTrailingBlankLines,
@@ -70,7 +71,9 @@ export function useAppActions(context: AppActionContext) {
   } = context;
 
   function acceptInputValue(value: string, source: "manual" | "clipboard") {
-    const displayValue = normalizePackageInputDisplay(value);
+    // 受控输入的 onChange 只允许做不破坏编辑态的校验：
+    // 仅剪贴板来源才规范化显示（Markdown 表格改写、去尾随空行），手动输入原样保留。
+    const displayValue = source === "clipboard" ? normalizePackageInputDisplay(value) : value;
     const normalizedValue = source === "clipboard" ? trimTrailingBlankLines(displayValue) : displayValue;
     if (searchingRef.current) { setStatus("检索期间不能修改输入，请先停止当前任务"); return "rejected"; }
     if (normalizedValue.length > MAX_INPUT_CHARS || /[\p{C}]/u.test(normalizedValue.replace(/[\r\n\t]/g, "")) ||
@@ -153,6 +156,12 @@ export function useAppActions(context: AppActionContext) {
     try { const cleaned = await invoke<string>("clean_script", { script: source }); if (seq !== requestSeq.current || source !== latestScriptRef.current) return; setScript(cleaned); setStatus("已移除脚本注释"); }
     catch (error) { if (seq === requestSeq.current && source === latestScriptRef.current) setStatus(`清理失败: ${formatError(error)}`); }
   }
+  function cleanInput() {
+    const cleaned = cleanPackageInput(input);
+    if (cleaned === input) { setStatus("输入内容已整理，无需清理"); return; }
+    if (acceptInputValue(cleaned, "manual") !== "rejected") setStatus("已清理输入内容（保留注释行）");
+  }
+
   async function applyHistoryRecord(record: HistoryRecord) {
     const clean = sanitizeHistoryList([record])[0]; if (!clean) return;
     let value = clean.input || clean.packageName; const match = clean.command.match(/install_url\("([^"]+)"/); if (match?.[1]) value = match[1];
@@ -164,5 +173,5 @@ export function useAppActions(context: AppActionContext) {
 
   useEffect(() => { if (inputProfile.total === 0 || methodSupportsInput(method, inputProfile)) return; setMethod(inputProfile.archiveUrls === inputProfile.total ? "remotes" : inputProfile.repositories === inputProfile.total ? "github" : "auto"); }, [inputProfile, method, setMethod]);
   useEffect(() => { if (view !== "workspace") return; const onKeydown = (e: KeyboardEvent) => { if (!(e.ctrlKey || e.metaKey)) return; if (e.key === "Enter") { e.preventDefault(); if (searching) stopSearch(); else if (input.trim() && !inputTooLarge) handleStartSearch(); } else if (e.shiftKey && e.key.toLowerCase() === "c") { e.preventDefault(); void copyScript(); } else if (!e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); downloadScript(); } else if (e.shiftKey && e.key.toLowerCase() === "k") { e.preventDefault(); if (!searching && input.trim()) acceptInputValue("", "manual"); } else if (!e.shiftKey && e.key.toLowerCase() === "d") { e.preventDefault(); if (!searching && input.trim()) acceptInputValue(dedupePackageInput(input), "manual"); } }; window.addEventListener("keydown", onKeydown); return () => window.removeEventListener("keydown", onKeydown); });
-  return { acceptInputValue, pasteInput, handleStartSearch, copyScript, downloadScript, downloadWrapperScript, downloadSystemRequirements, cleanComments, applyHistoryRecord, handleTempFilter, saveInputRules, isMethodDisabled };
+  return { acceptInputValue, pasteInput, handleStartSearch, copyScript, downloadScript, downloadWrapperScript, downloadSystemRequirements, cleanComments, cleanInput, applyHistoryRecord, handleTempFilter, saveInputRules, isMethodDisabled };
 }

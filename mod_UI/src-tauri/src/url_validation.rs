@@ -87,6 +87,19 @@ pub(crate) fn package_name_from_archive_file(file_name: &str) -> Option<String> 
         .map(ToString::to_string)
 }
 
+/// 从归档文件名主干（已去除扩展名）中剥离 `_`/`-` 版本号后缀。
+/// 例如 `my-pkg-1.0` -> `my-pkg`、`pkg_1.0.3` -> `pkg`；版本段必须以数字开头。
+pub(crate) fn strip_archive_version(stem: &str) -> String {
+    for separator in ['_', '-'] {
+        if let Some((name, version)) = stem.rsplit_once(separator) {
+            if !name.is_empty() && version.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+                return name.to_string();
+            }
+        }
+    }
+    stem.to_string()
+}
+
 pub(crate) fn escape_r(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
@@ -138,8 +151,9 @@ pub fn is_valid_package_name(value: &str) -> bool {
         return is_valid_github_repository(value);
     }
     let mut chars = value.chars();
+    // R 包名必须以 ASCII 字母开头（数字开头的包名不合法）。
     match chars.next() {
-        Some(first) if first.is_ascii_alphanumeric() => {}
+        Some(first) if first.is_ascii_alphabetic() => {}
         _ => return false,
     }
     chars.all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-'))

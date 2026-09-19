@@ -53,6 +53,7 @@ describe("WorkspaceView", () => {
     onTempFilter: vi.fn(),
     onCopyScript: vi.fn(),
     onCleanComments: vi.fn(),
+    onCleanInput: vi.fn(),
     onDownloadScript: vi.fn(),
     onDownloadPowerShellScript: vi.fn(),
     onDownloadBashScript: vi.fn(),
@@ -164,5 +165,28 @@ describe("WorkspaceView", () => {
 
     expect(onPowerShell).toHaveBeenCalledOnce();
     expect(onBash).toHaveBeenCalledOnce();
+  });
+
+  it("粘贴提示条的清理按钮清理输入而非脚本注释", () => {
+    const onCleanInput = vi.fn();
+    const onCleanComments = vi.fn();
+    render(
+      <WorkspaceView
+        {...defaultProps}
+        input={"dplyr, ggplot2\n\n  tidyr  "}
+        onCleanInput={onCleanInput}
+        onCleanComments={onCleanComments}
+      />,
+    );
+    const textarea = screen.getByRole("textbox", { name: "R 包输入列表" });
+
+    fireEvent.paste(textarea, { clipboardData: { getData: () => "dplyr, ggplot2\n\n  tidyr  " } });
+    const hintBar = screen.getByText(/建议清理后检索/).closest(".paste-hint-bar") as HTMLElement;
+    expect(hintBar).not.toBeNull();
+
+    fireEvent.click(within(hintBar).getByRole("button", { name: "清理" }));
+
+    expect(onCleanInput).toHaveBeenCalledTimes(1);
+    expect(onCleanComments).not.toHaveBeenCalled();
   });
 });

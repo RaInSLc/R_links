@@ -47,7 +47,11 @@ pub(crate) async fn find_bioc_history(
     package: &PackageInput,
     category: &str,
 ) -> Result<Option<SearchResult>, String> {
-    let mut versions = BIOC_VERSIONS.to_vec();
+    // 用拥有的字符串保存候选版本，便于把推断出的版本直接插到队首。
+    let mut versions = BIOC_VERSIONS
+        .iter()
+        .map(|value| (*value).to_string())
+        .collect::<Vec<String>>();
     let parts = package
         .version
         .split('.')
@@ -56,9 +60,9 @@ pub(crate) async fn find_bioc_history(
     if parts.len() >= 2 {
         if let Some(inferred) = infer_bioc_version(parts[0], parts[1]) {
             let inferred = format!("3.{inferred}");
-            if let Some(position) = versions.iter().position(|value| *value == inferred) {
+            if let Some(position) = versions.iter().position(|value| value == &inferred) {
                 versions.remove(position);
-                versions.insert(0, BIOC_VERSIONS[position]);
+                versions.insert(0, inferred);
             }
         }
     }
@@ -79,7 +83,7 @@ pub(crate) async fn find_bioc_history(
                         return Ok(Some(found_result(
                             package,
                             &version,
-                            bioc_version,
+                            &bioc_version,
                             &package.name,
                             "biocGit",
                         )));
@@ -88,7 +92,10 @@ pub(crate) async fn find_bioc_history(
             }
             Ok(None) => {}
             Err(error) => {
-                return Err(error);
+                // 单个 Bioc 版本请求失败不应中断整个历史版本遍历，否则包会被误判为未找到。
+                context.log(&format!(
+                    "Bioconductor {bioc_version} 请求失败，继续尝试其它版本: {error}"
+                ));
             }
         }
     }

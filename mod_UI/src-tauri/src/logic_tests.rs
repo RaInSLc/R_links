@@ -37,6 +37,50 @@ mod tests {
     }
 
     #[test]
+    fn parses_local_archive_path_containing_separator_characters() {
+        let packages = parse_inputs_filtered(r"C:\my,dir\pkg_1.0.tar.gz", &InputRules::default())
+            .expect("含逗号的本地归档路径应整行解析，不应被分隔符拆断");
+
+        assert_eq!(packages.len(), 1);
+        assert_eq!(packages[0].name, "pkg");
+        assert_eq!(packages[0].source_hint.as_deref(), Some("local"));
+    }
+
+    #[test]
+    fn managed_input_error_reports_one_based_line_number() {
+        let error = parse_inputs_filtered("dplyr\ninstall.packages(\"@\")", &InputRules::default())
+            .expect_err("非法包管理器输入应报错");
+
+        assert!(
+            error.contains("第 2 行"),
+            "错误信息应使用 1-based 行号，实际为: {error}"
+        );
+    }
+
+    #[test]
+    fn strips_version_suffix_from_archive_file_name() {
+        assert_eq!(
+            extract_package_name("https://example.org/src/contrib/my-pkg-1.0.tar.gz"),
+            "my-pkg"
+        );
+        assert_eq!(
+            extract_package_name("https://example.org/src/contrib/my-pkg_2.3.4.zip"),
+            "my-pkg"
+        );
+        assert_eq!(
+            extract_package_name("https://example.org/src/contrib/ggplot2-3.5.0.tar.gz"),
+            "ggplot2"
+        );
+    }
+
+    #[test]
+    fn rejects_package_names_starting_with_digit() {
+        assert!(!is_valid_package_name("3Dpack"));
+        assert!(!is_valid_package_name("2to3"));
+        assert!(is_valid_package_name("edgeR"));
+    }
+
+    #[test]
     fn extracts_github_repository_name() {
         assert_eq!(
             extract_package_name("https://github.com/buenrostrolab/FigR/"),

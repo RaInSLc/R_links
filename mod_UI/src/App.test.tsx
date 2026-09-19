@@ -260,4 +260,22 @@ describe('App Component Input Validation', () => {
       }));
     });
   });
+
+  it('手动输入 Markdown 表格行不应被改写', async () => {
+    render(<App />);
+
+    const textarea = screen.getByLabelText('R 包输入列表');
+    fireEvent.change(textarea, { target: { value: '| dplyr | CRAN |' } });
+
+    await waitFor(() => expect(textarea).toHaveValue('| dplyr | CRAN |'));
+  });
+
+  it('手动输入应保留尾随空行', async () => {
+    render(<App />);
+
+    const textarea = screen.getByLabelText('R 包输入列表');
+    fireEvent.change(textarea, { target: { value: 'dplyr\n\n' } });
+
+    await waitFor(() => expect(textarea).toHaveValue('dplyr\n\n'));
+  });
 });

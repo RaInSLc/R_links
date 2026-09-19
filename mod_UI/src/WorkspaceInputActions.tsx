@@ -17,6 +17,7 @@ interface WorkspaceInputActionsProps {
   onStopSearch: () => void;
   onTogglePause: () => void;
   onTempFilter: (text: string, mode: "chars" | "lines") => void;
+  onCleanInput: () => void;
 }
 
 export function WorkspaceInputActions({
@@ -35,6 +36,7 @@ export function WorkspaceInputActions({
   onStopSearch,
   onTogglePause,
   onTempFilter,
+  onCleanInput,
 }: WorkspaceInputActionsProps) {
   const [filterText, setFilterText] = useState("");
 
@@ -51,16 +53,6 @@ export function WorkspaceInputActions({
     onInputChange(active.join("\n"), "manual");
   }
 
-  function cleanInput() {
-    const cleaned = input
-      .split(/\r?\n/)
-      .map((line) => line.trim().replace(/[;,\s]+$/, ""))
-      .filter((line, index, lines) => line !== "" || (index > 0 && index < lines.length - 1 && lines[index - 1] !== "" && lines[index + 1] !== ""))
-      .join("\n")
-      .replace(/[ \t]+/g, " ");
-    onInputChange(cleaned, "manual");
-  }
-
   return (
     <>
       <div className="temp-filter-bar">
@@ -72,7 +64,7 @@ export function WorkspaceInputActions({
         <button className="button ghost" onClick={onPaste} disabled={searching}>粘贴</button>
         <button className="button ghost" onClick={onClear} disabled={searching}>清空</button>
         <button className="button ghost" onClick={sortInputAlphabetical} disabled={searching || !input.trim()} title="按字母排序">排序</button>
-        <button className="button ghost" onClick={cleanInput} disabled={searching || !input.trim()} title="去除行首尾空白、行尾分号逗号、合并多余空格、移除连续空行">清理</button>
+        <button className="button ghost" onClick={onCleanInput} disabled={searching || !input.trim()} title="去除行首尾空白与空行、统一全角分隔符（保留注释行）">清理</button>
         <button className="button ghost" onClick={sortInputAlphabetical} disabled={searching || !input.trim()} title="按字母 A-Z 排序（保留注释行位置）">A-Z</button>
         <button className="button ghost" onClick={() => onInputChange(dedupePackageInput(input), "manual")} disabled={searching || duplicateCount === 0} title="大小写不敏感去重">去重{duplicateCount > 0 ? `(${duplicateCount})` : ""}</button>
         <button className="button ghost" onClick={onImportFile} disabled={searching} title="导入 .txt / .csv / .r 文件">导入文件</button>
