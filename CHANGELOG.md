@@ -23,7 +23,7 @@
 
 ### Tests
 
-- **前端**：`npm run lint` 退出 0（0 error / 0 warning）；`npm test -- --run` 13 个文件 184 项全部通过（较原 179 项新增 5 项回归）；`npm run build`（`tsc && vite build`）退出 0；`npm run check:size` 未产生新的超长行违规（ReportActions 15→8、SettingsView 11→9，其余持平）。
+- **前端**：`npm run lint` 退出 0（0 error / 0 warning）；`npm test -- --run` 13 个文件 187 项全部通过（较原 179 项新增 8 项回归）；`npm run build`（`tsc && vite build`）退出 0；`npm run check:size` 未产生新的超长行违规（ReportActions 15→8、SettingsView 11→9，其余持平）。
 - **Rust**：`cargo test --release` 241 通过 / 0 失败 / 3 忽略（较既有 226 项新增 8 项回归：CRAN 页面 URL 闭环 3 项、协议大小写 3 项、缓存匹配 2 项）。
 
 ### Build

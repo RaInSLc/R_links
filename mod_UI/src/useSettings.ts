@@ -39,19 +39,32 @@ export function useSettings(setStatus: SetStatus) {
   const settingsActionSeq = useRef(0);
   const settingsBusyRef = useRef(false);
   const pendingSettingsSaveRef = useRef(false);
+  const userOverridesRef = useRef<Partial<Settings>>({});
+  const settingsSavedRef = useRef(false);
 
   function applySettings(next: Settings) {
     latestSettingsRef.current = next;
     setSettings(next);
   }
 
+  /** 收集用户显式改动的字段，供迟到的 load_settings 做增量合并。 */
+  function collectChangedFields(previous: Settings, next: Settings): Partial<Settings> {
+    const changed: Partial<Settings> = {};
+    (Object.keys(previous) as Array<keyof Settings>).forEach((key) => {
+      if (next[key] !== previous[key]) Object.assign(changed, { [key]: next[key] });
+    });
+    return changed;
+  }
+
   useEffect(() => {
     let active = true;
-    const loadSeq = settingsActionSeq.current;
     invoke<PublicSettings>("load_settings")
       .then((saved) => {
-        if (!active || loadSeq !== settingsActionSeq.current) return;
+        // 若已经成功保存过一次，这份挂载时的快照就是陈旧数据，直接忽略。
+        if (!active || settingsSavedRef.current) return;
         const clean = sanitizePublicSettings(saved);
+        // 不再因为"加载期间发生过用户改动"就整份丢弃磁盘配置：只有用户显式改过的
+        // 字段覆盖磁盘值，其余字段采用磁盘值，避免把用户其余已保存设置静默重置为默认值。
         applySettings({
           proxy: clean.proxy,
           githubToken: "",
@@ -73,27 +86,37 @@ export function useSettings(setStatus: SetStatus) {
           pinnedMethods: clean.pinnedMethods,
           pipIndex: clean.pipIndex,
           condaChannels: clean.condaChannels,
+          ...userOverridesRef.current,
         });
         setTokenConfigured(clean.githubTokenConfigured);
         setSettingsLoaded(true);
       })
       .catch((error) => {
-        if (active && loadSeq === settingsActionSeq.current) {
+        if (active) {
           setStatus(`设置加载失败: ${formatError(error)}`);
         }
       });
     return () => { active = false; };
-  // 设置仅在挂载时加载，状态提示回调变化不应覆盖用户编辑。
+  // 设置仅在挂载时加载一次：若把 setStatus 放进依赖，宿主传入非稳定回调时
+  // 本 effect 会在每次渲染后重新发起 load_settings，形成「加载→应用→重渲染」死循环。
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function updateSettingsFromUser(update: (current: Settings) => Settings) {
     settingsActionSeq.current += 1;
-    applySettings(update(latestSettingsRef.current));
+    const previous = latestSettingsRef.current;
+    const next = update(previous);
+    userOverridesRef.current = {
+      ...userOverridesRef.current,
+      ...collectChangedFields(previous, next),
+    };
+    applySettings(next);
   }
 
   function replaceSettingsFromUser(next: Settings) {
     settingsActionSeq.current += 1;
+    // 整份替换（如恢复默认值）：全部字段都视为用户意图，不再回退到磁盘值。
+    userOverridesRef.current = { ...next };
     applySettings(next);
   }
 
@@ -145,6 +168,8 @@ export function useSettings(setStatus: SetStatus) {
         await invoke<PublicSettings>("save_settings", { settings: settingsSnapshot }),
       );
       setTokenConfigured(publicSettings.githubTokenConfigured);
+      // 保存成功后，挂载时发出的 load_settings 快照即成为陈旧数据。
+      settingsSavedRef.current = true;
       if (actionSeq !== settingsActionSeq.current) {
         setStatus("设置已保存；检测到新的界面修改，请再次保存");
         return;

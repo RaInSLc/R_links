@@ -99,6 +99,46 @@ describe('useSettings', () => {
     expect(result.current.settings.maxDependencyNodes).toBe(250);
   });
 
+  it('磁盘配置迟到返回时，只让用户改动过的字段覆盖磁盘值', async () => {
+    const saved = {
+      proxy: 'http://127.0.0.1:7890', githubTokenConfigured: false,
+      cranMirror: 'https://cloud.r-project.org/', rLibPath: 'D:/R/lib',
+      fullSearch: false, searchConcurrency: 8, archiveGithubMajorGap: 2,
+      conditional: true, installDependencies: true, showRemoteVersion: true,
+      useCache: true, maxCacheEntries: 1000, useFilter: true,
+      resolveDependencies: false, maxDependencyDepth: 4,
+      includeLightDependencies: true, maxDependencyNodes: 250,
+      pinnedMethods: ['auto'], pipIndex: 'https://pypi.org', condaChannels: ['conda-forge'],
+    };
+    let resolveLoad: ((value: unknown) => void) | undefined;
+    vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
+      if (cmd === 'load_settings') {
+        return new Promise((resolve) => { resolveLoad = resolve; });
+      }
+      return saved;
+    });
+
+    const { result } = renderHook(() => useSettings(vi.fn()));
+    // 模拟 load_settings 尚未返回时用户就改了一个字段。
+    act(() => {
+      result.current.updateSettingsFromUser((current) => ({ ...current, fullSearch: true }));
+    });
+    await act(async () => {
+      resolveLoad?.(saved);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    // 回归：旧实现在此分支整份丢弃磁盘配置，把用户其余已保存设置静默重置为默认值。
+    expect(result.current.settings.fullSearch).toBe(true);
+    expect(result.current.settings.searchConcurrency).toBe(8);
+    expect(result.current.settings.archiveGithubMajorGap).toBe(2);
+    expect(result.current.settings.resolveDependencies).toBe(false);
+    expect(result.current.settings.maxDependencyDepth).toBe(4);
+    expect(result.current.settings.includeLightDependencies).toBe(true);
+    expect(result.current.settings.maxDependencyNodes).toBe(250);
+    expect(result.current.settings.rLibPath).toBe('D:/R/lib');
+  });
+
   it('should queue a save requested while another save is pending', async () => {
     let resolveFirst: ((value: any) => void) | undefined;
     const saved = { proxy: '', githubTokenConfigured: false, cranMirror: 'https://cloud.r-project.org/', fullSearch: false, searchConcurrency: 6, archiveGithubMajorGap: 1, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100, pinnedMethods: ['auto', 'base', 'biocManager', 'github'] };

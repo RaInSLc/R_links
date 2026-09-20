@@ -27,7 +27,10 @@ use reqwest::Client;
 
 const MAX_MULTI_DURATION: Duration = Duration::from_secs(300);
 const MAX_MULTI_HTTP_REQUESTS: usize = 200;
-const MAX_MULTI_RESULTS: usize = 16_000;
+/// 与前端 `utils-types.ts` 的 `MAX_SEARCH_RESULTS`（`MAX_PACKAGE_LINES * 16`）
+/// 严格对齐：后端若产出更多条，前端 `sanitizeSearchResponse` 会静默丢弃超出部分，
+/// 既浪费检索配额，也让"结果条数"在两个层面出现不一致的语义。
+const MAX_MULTI_RESULTS: usize = crate::models::MAX_PACKAGE_LINES * 16;
 const MAX_MULTI_LOGS: usize = 1_000;
 const MULTI_STOP_POLL: Duration = Duration::from_millis(100);
 

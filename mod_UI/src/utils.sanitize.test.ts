@@ -358,4 +358,45 @@ describe("diagnoseDependencyGraph", () => {
     const diagnostics = diagnoseDependencyGraph({ roots: ["a"], nodes: [node("a", "1.0"), node("b", "1.0"), node("A", "2.0")], edges: [{ from: "a", to: "b", relation: "Imports", strength: "heavy", depth: 1 }, { from: "b", to: "a", relation: "Imports", strength: "heavy", depth: 1 }], summary: { totalNodes: 3, totalEdges: 2, heavyNodes: 2, lightNodes: 0, sharedNodes: 0 } });
     expect(diagnostics.map((item) => item.type)).toEqual(expect.arrayContaining(["cycle", "version-conflict"]));
   });
+
+  it("多汇聚路径下仍能检测到环（记忆化不改变环检测结果）", () => {
+    // a -> b -> d -> b 构成环，同时 a -> c -> d 与 b 共享汇聚点 d。
+    // 记忆化剪枝后环仍必须被恰好报告一次。
+    const graph = {
+      roots: ["a"],
+      nodes: [node("a", "1.0"), node("b", "1.0"), node("c", "1.0"), node("d", "1.0")],
+      edges: [
+        { from: "a", to: "b", relation: "Imports", strength: "heavy", depth: 1 },
+        { from: "a", to: "c", relation: "Imports", strength: "heavy", depth: 1 },
+        { from: "b", to: "d", relation: "Imports", strength: "heavy", depth: 2 },
+        { from: "c", to: "d", relation: "Imports", strength: "heavy", depth: 2 },
+        { from: "d", to: "b", relation: "Imports", strength: "heavy", depth: 3 },
+      ],
+      summary: { totalNodes: 4, totalEdges: 5, heavyNodes: 4, lightNodes: 0, sharedNodes: 1 },
+    };
+    const cycles = diagnoseDependencyGraph(graph).filter((item) => item.type === "cycle");
+    expect(cycles).toHaveLength(1);
+    expect(cycles[0].packages).toEqual(["b", "d", "b"]);
+  });
+
+  it("大型汇聚图上不会重复展开同一节点（记忆化生效）", () => {
+    // 25 层共享汇聚点：无记忆化时路径数随层数指数增长，此用例会直接卡死。
+    const layers = 25;
+    const nodes = [node("root", "1.0")];
+    const edges = [{ from: "root", to: "l0a", relation: "Imports", strength: "heavy", depth: 1 }, { from: "root", to: "l0b", relation: "Imports", strength: "heavy", depth: 1 }];
+    for (let i = 0; i < layers; i += 1) {
+      nodes.push(node(`l${i}a`, "1.0"), node(`l${i}b`, "1.0"));
+      const next = i + 1 < layers ? [`l${i + 1}a`, `l${i + 1}b`] : [];
+      for (const from of [`l${i}a`, `l${i}b`]) {
+        for (const to of next) edges.push({ from, to, relation: "Imports", strength: "heavy", depth: i + 2 });
+      }
+    }
+    const started = Date.now();
+    const diagnostics = diagnoseDependencyGraph({
+      roots: ["root"], nodes, edges,
+      summary: { totalNodes: nodes.length, totalEdges: edges.length, heavyNodes: nodes.length, lightNodes: 0, sharedNodes: 0 },
+    });
+    expect(diagnostics.filter((item) => item.type === "cycle")).toHaveLength(0);
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
 });

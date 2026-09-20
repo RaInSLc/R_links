@@ -321,7 +321,12 @@ export function sanitizePublicSettings(value: unknown): PublicSettings {
   };
 }
 
-function detectCycle(node: string, path: string[], visiting: Set<string>, cycles: Set<string>, adjacency: Map<string, string[]>, out: DependencyDiagnostic[]) {
+function detectCycle(node: string, path: string[], visiting: Set<string>, settled: Set<string>, cycles: Set<string>, adjacency: Map<string, string[]>, out: DependencyDiagnostic[]) {
+  // `settled` 是记忆化：该节点已被完整展开且其可达范围内不再存在未发现的环。
+  // 依赖图是多汇聚的有向图，同一节点可能被大量路径重复到达；缺少记忆化时
+  // 深链会退化为指数级重复遍历进而卡死渲染。环检测的正确性不受影响：
+  // 任何经过该节点的环都会在它第一次被展开时（`visiting` 命中）记录。
+  if (settled.has(node)) return;
   if (visiting.has(node)) {
     const start = path.indexOf(node);
     if (start < 0) return;
@@ -335,9 +340,10 @@ function detectCycle(node: string, path: string[], visiting: Set<string>, cycles
   }
   visiting.add(node);
   for (const child of adjacency.get(node) ?? []) {
-    detectCycle(child, [...path, node], visiting, cycles, adjacency, out);
+    detectCycle(child, [...path, node], visiting, settled, cycles, adjacency, out);
   }
   visiting.delete(node);
+  settled.add(node);
 }
 
 function collectVersionConflicts(graph: DependencyGraph, out: DependencyDiagnostic[]) {
@@ -367,9 +373,10 @@ export function diagnoseDependencyGraph(graph: DependencyGraph): DependencyDiagn
     adjacency.set(edge.from, [...(adjacency.get(edge.from) ?? []), edge.to]);
   }
   const visiting = new Set<string>();
+  const settled = new Set<string>();
   const cycles = new Set<string>();
   for (const node of graph.nodes) {
-    detectCycle(node.package, [], visiting, cycles, adjacency, out);
+    detectCycle(node.package, [], visiting, settled, cycles, adjacency, out);
   }
   collectVersionConflicts(graph, out);
   return out;
