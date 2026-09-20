@@ -24,7 +24,18 @@
 ### Tests
 
 - **前端**：`npm run lint` 退出 0（0 error / 0 warning）；`npm test -- --run` 13 个文件 184 项全部通过（较原 179 项新增 5 项回归）；`npm run build`（`tsc && vite build`）退出 0；`npm run check:size` 未产生新的超长行违规（ReportActions 15→8、SettingsView 11→9，其余持平）。
-- **Rust**：新增 8 项回归测试（CRAN 页面 URL 闭环 3 项、协议大小写 3 项、缓存匹配 2 项）。
+- **Rust**：`cargo test --release` 241 通过 / 0 失败 / 3 忽略（较既有 226 项新增 8 项回归：CRAN 页面 URL 闭环 3 项、协议大小写 3 项、缓存匹配 2 项）。
+
+### Build
+
+- **Windows 安装包已产出**（v0.2.5，x64）：
+  - `release/R_Package_Command Center_0.2.5_x64-setup.exe`（NSIS 安装程序，3.58 MB）
+  - `release/R_Package_Command Center_0.2.5_x64_zh-CN.msi`（WiX MSI，6.14 MB）
+  - `release/R_Package_Command Center_0.2.5_portable.exe`（免安装主程序，12.65 MB）
+  - 源产物位于 `mod_UI/src-tauri/target/release/` 及其 `bundle/{nsis,msi}/`。
+- **打包链路环境缺陷（已定位，非工程缺陷）**：`npm run` 会把 `TEMP` / `TMP` / `USERPROFILE` 从脚本环境中剥离（`npm run env` 只剩 40 个变量，且不含这三个）。MSVC `link.exe` 在超长命令行场景下需要写 `%TEMP%\lnk{GUID}.tmp`，因拿不到 `TEMP` 而回退到 `C:\Windows`，触发 `LNK1104: 无法打开文件 C:\Windows\lnk{...}.tmp` 导致 `tauri build` 必然失败。
+  - **规避方式**：改为直接调用 CLI（`./node_modules/.bin/tauri build`），绕开 npm 的环境剥离。若必须在 `npm run` 下执行，需要显式 `set TEMP=...` / `set TMP=...`。
+  - 另附：Rust 全量编译在本机网络盘上会间歇性 `os error 5（拒绝访问）`，采用「失败即重试」循环（见 `报告/ai_codes/retry_build.sh`）配合 cargo 增量缓存完成，未改动任何工程源码来绕开环境问题。
 
 ## [2026-09-20 11:35:00 +08:00]
 ### mod_UI 前端
