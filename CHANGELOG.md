@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [2026-09-20 11:00:00 +08:00]
+
+### Fixed
+- **CRAN 反向依赖 HTML 读取不再 OOM**：`mod_UI/src-tauri/src/commands_diagnostics.rs` 的 `fetch_reverse_dependencies` 改用新的 `read_limited_response_body`（基于 `reqwest::Response::bytes_stream` 的流式读取，累计字节达到 `MAX_REVERSE_DEPS_HTML_BYTES` 立即中止并返回 `Ok(None)`，再被调用方翻译为「响应过大」错误），不再依赖 Content-Length（可被服务端伪造/省略），也不再 `.text().await` 把整页读进内存。
+- **诊断导出中的代理凭据泄露**：`export_diagnostics` 现在通过新增的 `redact_proxy_url` 私有 helper 渲染 `proxy` 字段：`user:pass@` 形态被替换为 `[redacted]`，空值显示「未配置」，其余凭据形如 `http://user@host` 也按相同规则脱敏；新增 `proxy_redaction_tests` 三个回归测试。
+- **检索请求镜像识别不再误伤**：`mod_UI/src-tauri/src/search_http.rs::get_text` 把 `url.contains("/web/packages/") || url.contains("/src/contrib/Archive/")` 替换为 `is_cran_mirror_request_url(url, &context.settings.cran_mirror)`，用 `url::Url::parse` 解析两侧后做 host 大小写不敏感比较，避免 `https://example.com/web/packages/foo` 这类非镜像 URL 被误判为镜像请求；新增 `cran_mirror_request_detection_tests` 四个回归测试。
+
+### Changed
+- **浏览器调起入口收敛**：`mod_UI/src-tauri/src/commands_browser.rs` 抽出 `open_validated_url(app, limiter, url)` 私有函数，把 `limiter.try_acquire` + `tauri_plugin_opener::OpenerExt::opener(&app).open_url(...)` 两步合并；`open_package_search` 与 `open_package_page` 都改为先各自校验 URL，再调用同一 helper，避免在两处复制调用链。
+- **体积门禁真正加强**：`mod_UI/scripts/check_source_size.mjs` 在原有「500 行」总规模门禁之上，新增「单行字符 > 200」门禁，对齐 `mod_UI/eslint.config.mjs` 的 `max-len` 阈值；与 eslint 一致地排除 `*.test.{ts,tsx}` 与仅含 `//` / `/* */` 注释的行；违规以文件 + 行号 + 字符数格式逐项列出。**本提交落地后门禁会标红 ~37 个既有源文件，留待批次 D 重排时清理**。
+
+### Tests
+- **前端**：`npm run lint` 0 error / 38 warning（warning 全部为既有 max-len 项），`npm test -- --run` 12 文件 179 项全部通过，`npm run build`（`tsc && vite build`）退出 0。
+- **Rust**：本轮新增 7 项 `#[cfg(test)]` 回归测试（3 项代理脱敏 + 4 项镜像识别）；本机 `cargo test` 仍受 `aws-lc-sys v0.41.0` 构建脚本探测阻塞，未在本机复跑，提交前由静态审读确认 helper 逻辑与边界。
+
 ## [2026-09-20 10:30:00 +08:00]
 
 ### Fixed

@@ -4,9 +4,11 @@ use crate::{
     logic, models,
     models::{MirrorSpeedResult, NetworkDiagnostic},
 };
+use futures_util::StreamExt;
 use reqwest::Client;
 use std::time::{Duration, Instant};
 use tauri::AppHandle;
+use url::Url;
 fn client(
     proxy: Option<&str>,
     connect: Duration,
@@ -202,18 +204,49 @@ pub(crate) async fn fetch_reverse_dependencies(
             response.status().as_u16()
         ));
     }
-    if response
-        .content_length()
-        .is_some_and(|n| n > MAX_REVERSE_DEPS_HTML_BYTES)
-    {
-        return Err("CRAN 页面响应过大，已拒绝".to_string());
-    }
-    let html = response.text().await.map_err(|e| e.to_string())?;
-    if html.len() as u64 > MAX_REVERSE_DEPS_HTML_BYTES {
-        return Err("CRAN 页面响应过大，已拒绝".to_string());
-    }
+    let html = read_limited_response_body(response, MAX_REVERSE_DEPS_HTML_BYTES)
+        .await?
+        .ok_or_else(|| "CRAN 页面响应过大，已拒绝".to_string())?;
     logic::parse_reverse_dependencies(&html, &package_name)
         .ok_or_else(|| format!("无法解析 {} 的反向依赖信息", package_name))
+}
+
+/// 流式读取响应体，遇到累计字节超过上限立即中止，避免被恶意或异常服务
+/// 拖入 OOM。返回 `Ok(None)` 表示体积超限，`Ok(Some(html))` 表示读取成功。
+async fn read_limited_response_body(
+    response: reqwest::Response,
+    max_bytes: u64,
+) -> Result<Option<String>, String> {
+    let max = max_bytes as usize;
+    let mut buf: Vec<u8> = Vec::new();
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| e.to_string())?;
+        if buf.len().saturating_add(chunk.len()) > max {
+            return Ok(None);
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    String::from_utf8(buf)
+        .map(Some)
+        .map_err(|e| format!("CRAN 页面不是有效 UTF-8: {e}"))
+}
+
+/// 诊断导出专用：剔除代理字符串中可能存在的 `user:pass@` 凭据。
+fn redact_proxy_url(proxy: &str) -> String {
+    let trimmed = proxy.trim();
+    if trimmed.is_empty() {
+        return "未配置".to_string();
+    }
+    match Url::parse(trimmed) {
+        Ok(parsed)
+            if !parsed.username().is_empty() || parsed.password().is_some() =>
+        {
+            "[redacted]".to_string()
+        }
+        Ok(_) => trimmed.to_string(),
+        Err(_) => trimmed.to_string(),
+    }
 }
 #[tauri::command]
 pub(crate) fn export_diagnostics(
@@ -224,6 +257,40 @@ pub(crate) fn export_diagnostics(
 ) -> Result<String, String> {
     let s = load_existing_settings_for_runtime(&app)?;
     let p = s.public_view();
-    let v = serde_json::json!({"schema_version":2,"app_version":env!("CARGO_PKG_VERSION"),"settings":{"full_search":p.full_search,"proxy":p.proxy,"cran_mirror":p.cran_mirror,"github_token_configured":p.github_token_configured,"r_lib_path_configured":configured_flag(&p.r_lib_path)},"cache_entries":crate::storage::load_cache(&app).map(|x|x.len()).unwrap_or(0),"history_entries":crate::storage::load_history(&app).map(|x|x.len()).unwrap_or(0),"platform":std::env::consts::OS,"arch":std::env::consts::ARCH,"toolchain":check_system_toolchain(),"search_summary":search_summary,"failed_categories":failed_categories,"update_status":update_status});
+    let v = serde_json::json!({"schema_version":2,"app_version":env!("CARGO_PKG_VERSION"),"settings":{"full_search":p.full_search,"proxy":redact_proxy_url(&p.proxy),"cran_mirror":p.cran_mirror,"github_token_configured":p.github_token_configured,"r_lib_path_configured":configured_flag(&p.r_lib_path)},"cache_entries":crate::storage::load_cache(&app).map(|x|x.len()).unwrap_or(0),"history_entries":crate::storage::load_history(&app).map(|x|x.len()).unwrap_or(0),"platform":std::env::consts::OS,"arch":std::env::consts::ARCH,"toolchain":check_system_toolchain(),"search_summary":search_summary,"failed_categories":failed_categories,"update_status":update_status});
     serde_json::to_string_pretty(&v).map_err(|e| format!("诊断信息序列化失败: {e}"))
+}
+
+#[cfg(test)]
+mod proxy_redaction_tests {
+    use super::redact_proxy_url;
+
+    #[test]
+    fn redacts_credentials() {
+        assert_eq!(
+            redact_proxy_url("http://user:pass@127.0.0.1:7890"),
+            "[redacted]"
+        );
+        assert_eq!(redact_proxy_url("https://u:p@example.com"), "[redacted]");
+        assert_eq!(redact_proxy_url("http://user@host"), "[redacted]");
+    }
+
+    #[test]
+    fn keeps_no_credential_proxy() {
+        assert_eq!(
+            redact_proxy_url("http://127.0.0.1:7890"),
+            "http://127.0.0.1:7890"
+        );
+        assert_eq!(
+            redact_proxy_url("https://proxy.example.com"),
+            "https://proxy.example.com"
+        );
+    }
+
+    #[test]
+    fn empty_or_invalid_returns_unset_or_passthrough() {
+        assert_eq!(redact_proxy_url(""), "未配置");
+        assert_eq!(redact_proxy_url("   "), "未配置");
+        assert_eq!(redact_proxy_url("not a url"), "not a url");
+    }
 }
