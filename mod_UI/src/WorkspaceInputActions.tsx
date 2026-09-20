@@ -66,9 +66,30 @@ export function WorkspaceInputActions({
         <button className="button ghost" onClick={sortInputAlphabetical} disabled={searching || !input.trim()} title="按字母排序">排序</button>
         <button className="button ghost" onClick={onCleanInput} disabled={searching || !input.trim()} title="去除行首尾空白与空行、统一全角分隔符（保留注释行）">清理</button>
         <button className="button ghost" onClick={sortInputAlphabetical} disabled={searching || !input.trim()} title="按字母 A-Z 排序（保留注释行位置）">A-Z</button>
-        <button className="button ghost" onClick={() => onInputChange(dedupePackageInput(input), "manual")} disabled={searching || duplicateCount === 0} title="大小写不敏感去重">去重{duplicateCount > 0 ? `(${duplicateCount})` : ""}</button>
-        <button className="button ghost" onClick={onImportFile} disabled={searching} title="导入 .txt / .csv / .r 文件">导入文件</button>
-        <button className="button ghost" onClick={() => onInputChange("Seurat\nggplot2\ndplyr\nDESeq2\nClusterProfiler\nbuenrostrolab/FigR\nGSVA\nSingleCellExperiment\nlimma\ntidyverse", "manual")} disabled={searching} title="填充常用生物信息学 R 包示例">示例</button>
+        <button
+          className="button ghost"
+          onClick={() => onInputChange(dedupePackageInput(input), "manual")}
+          disabled={searching || duplicateCount === 0}
+          title="大小写不敏感去重"
+        >
+          去重{duplicateCount > 0 ? `(${duplicateCount})` : ""}
+        </button>
+        <button className="button ghost" onClick={onImportFile} disabled={searching} title="导入 .txt / .csv / .r 文件">
+          导入文件
+        </button>
+        <button
+          className="button ghost"
+          onClick={() =>
+            onInputChange(
+              "Seurat\nggplot2\ndplyr\nDESeq2\nClusterProfiler\nbuenrostrolab/FigR\nGSVA\nSingleCellExperiment\nlimma\ntidyverse",
+              "manual",
+            )
+          }
+          disabled={searching}
+          title="填充常用生物信息学 R 包示例"
+        >
+          示例
+        </button>
         <button className="button ghost wide" onClick={onOpenSearchTabs} disabled={searching || openingSearchTabs || inputTooLarge}>{openingSearchTabs ? "正在打开..." : "浏览器搜索"}</button>
         {searching ? (
           <>

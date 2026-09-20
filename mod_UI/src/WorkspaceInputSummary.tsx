@@ -41,10 +41,24 @@ export function WorkspaceInputSummary({
         <div className="input-stats-bar">
           <span className="input-stat-chip">行数 <strong>{input.split("\n").filter((line) => line.trim()).length}</strong></span>
           <span className="input-stat-chip">字符 <strong>{input.length}</strong></span>
-          {inputProfile.total > 0 && <span className="input-stat-chip">{ecosystem === "r-binary" ? "待生成" : "CRAN/Bioc"} <strong>{inputProfile.total - inputProfile.archiveUrls - inputProfile.repositories}</strong></span>}
+          {inputProfile.total > 0 && (
+            <span className="input-stat-chip">
+              {ecosystem === "r-binary" ? "待生成" : "CRAN/Bioc"}{" "}
+              <strong>{inputProfile.total - inputProfile.archiveUrls - inputProfile.repositories}</strong>
+            </span>
+          )}
           {inputProfile.repositories > 0 && <span className="input-stat-chip">GitHub <strong>{inputProfile.repositories}</strong></span>}
           {inputProfile.archiveUrls > 0 && <span className="input-stat-chip">URL <strong>{inputProfile.archiveUrls}</strong></span>}
-          {duplicateCount > 0 && <button type="button" className="input-stat-chip warn dedupe-btn" title="点击去除重复包名" onClick={() => onInputChange(dedupePackageInput(input), "manual")}>重复 <strong>{duplicateCount}</strong> · 去重</button>}
+          {duplicateCount > 0 && (
+            <button
+              type="button"
+              className="input-stat-chip warn dedupe-btn"
+              title="点击去除重复包名"
+              onClick={() => onInputChange(dedupePackageInput(input), "manual")}
+            >
+              重复 <strong>{duplicateCount}</strong> · 去重
+            </button>
+          )}
         </div>
       )}
       {inputProfile.total > 0 && ecosystem !== "r-binary" && (

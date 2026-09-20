@@ -34,9 +34,38 @@ export function EcosystemSourceConfig({
         </div>
         <span className="ecosystem-hint">{ecosystem === "r" ? "CRAN / Bioconductor / GitHub" : ecosystem === "r-binary" ? "独立检索预编译 R 包" : ecosystem === "pip" ? "Python 包索引" : "Conda channel"}</span>
       </div>
-      {ecosystem === "r-binary" && <div className="source-config-row"><label>R 二进制镜像</label><input value={rBinaryMirror} onChange={(event) => onRBinaryMirrorChange(event.currentTarget.value)} placeholder="https://packagemanager.posit.co/cran/latest" /></div>}
-      {ecosystem === "pip" && <div className="source-config-row"><label>Index URL</label><input value={pipIndex} onChange={(event) => onPipIndexChange(event.currentTarget.value)} placeholder="https://pypi.org" /></div>}
-      {ecosystem === "conda" && <div className="source-config-row"><label>Channels</label><input value={condaChannels.join(", ")} onChange={(event) => onCondaChannelsChange(event.currentTarget.value.split(/\s*,\s*/).filter(Boolean))} placeholder="conda-forge, bioconda" /></div>}
+      {ecosystem === "r-binary" && (
+        <div className="source-config-row">
+          <label>R 二进制镜像</label>
+          <input
+            value={rBinaryMirror}
+            onChange={(event) => onRBinaryMirrorChange(event.currentTarget.value)}
+            placeholder="https://packagemanager.posit.co/cran/latest"
+          />
+        </div>
+      )}
+      {ecosystem === "pip" && (
+        <div className="source-config-row">
+          <label>Index URL</label>
+          <input
+            value={pipIndex}
+            onChange={(event) => onPipIndexChange(event.currentTarget.value)}
+            placeholder="https://pypi.org"
+          />
+        </div>
+      )}
+      {ecosystem === "conda" && (
+        <div className="source-config-row">
+          <label>Channels</label>
+          <input
+            value={condaChannels.join(", ")}
+            onChange={(event) =>
+              onCondaChannelsChange(event.currentTarget.value.split(/\s*,\s*/).filter(Boolean))
+            }
+            placeholder="conda-forge, bioconda"
+          />
+        </div>
+      )}
     </>
   );
 }

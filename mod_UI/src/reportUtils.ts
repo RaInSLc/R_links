@@ -25,7 +25,9 @@ export function mergeInstallCommands(results: SearchResult[], settings: Settings
     const packages = settings.conditional ? `Filter(function(p) !requireNamespace(p, quietly = TRUE), ${names})` : names;
     const lib = settings.rLibPath.trim() ? `, lib = ${quote(settings.rLibPath.trim())}` : "";
     const args = `dependencies = ${settings.installDependencies ? "TRUE" : "FALSE"}${lib}`;
-    return source === "cran" ? `install.packages(${packages}, repos = ${quote(settings.cranMirror || defaultSettings.cranMirror)}, ${args})` : `BiocManager::install(${packages}, update = FALSE, ask = FALSE, ${args})`;
+    return source === "cran"
+      ? `install.packages(${packages}, repos = ${quote(settings.cranMirror || defaultSettings.cranMirror)}, ${args})`
+      : `BiocManager::install(${packages}, update = FALSE, ask = FALSE, ${args})`;
   });
   return ["# 合并未指定版本的 CRAN/Bioconductor 包，安装镜像当前版本；显式版本与其他来源保留原指令。", ...merged, ...new Set(separate)].join("\n");
 }
@@ -59,7 +61,15 @@ export function getInstallCommand(result: SearchResult): string {
   if (result.source === "pip" || result.source === "conda") {
     const version = result.requestedVersion || result.latestVersion;
     const requirement = `${result.package}${version ? /^[=!<>~]/.test(version) ? version : `==${version}` : ""}`;
-    return generateMultiEcosystemScript(requirement, result.source, result.source === "pip" ? result.repository : "", result.source === "conda" ? [result.repository || "conda-forge"] : []).split("\n").filter((line) => line && !line.startsWith("#") && line !== "set -e").join("\n");
+    return generateMultiEcosystemScript(
+      requirement,
+      result.source,
+      result.source === "pip" ? result.repository : "",
+      result.source === "conda" ? [result.repository || "conda-forge"] : [],
+    )
+      .split("\n")
+      .filter((line) => line && !line.startsWith("#") && line !== "set -e")
+      .join("\n");
   }
   if (result.source === "cran" && /\/Archive\//.test(result.repository)) return `remotes::install_url(${JSON.stringify(result.repository)}, upgrade = "never")`;
   if (result.source === "cran") return result.requestedVersion ? `remotes::install_version("${result.package}", version = "${result.requestedVersion}", repos = "https://cloud.r-project.org", upgrade = "never")` : `install.packages("${result.package}")`;

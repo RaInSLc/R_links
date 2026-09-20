@@ -13,7 +13,9 @@ const SYSTEM_REQUIREMENT_PACKAGES: Record<string, [string, string, string]> = {
   curl: ["libcurl4-openssl-dev", "libcurl-devel", "curl"],
 };
 const PIP_INDEX_DEFAULT = "https://pypi.org";
-const PYTHON_PACKAGE_COMMAND_RE = /\b(?:install\.packages|BiocManager::install|remotes::install_|devtools::install_|install_url|install_github|packageVersion|library|require|cat|stop|message|warning)\s*\(/;
+const PYTHON_PACKAGE_COMMAND_RE = new RegExp(
+  "\\b(?:install\\.packages|BiocManager::install|remotes::install_|devtools::install_|install_url|install_github|packageVersion|library|require|cat|stop|message|warning)\\s*\\(",
+);
 const CONDA_CHANNEL_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export function parseMultiRequirements(input: string): string[] {
@@ -142,7 +144,22 @@ function buildBashSystemScript(requirements: Set<string>): string {
   const dnf = buildNativeInstallCommand("sudo dnf install -y", 1, requirements);
   const yum = buildNativeInstallCommand("sudo yum install -y", 1, requirements);
   const brew = buildNativeInstallCommand("brew install", 2, requirements);
-  return `#!/usr/bin/env bash\nset -e\n# 根据当前包管理器选择对应的原生依赖名称。\nif command -v apt-get >/dev/null 2>&1; then\n  sudo apt-get update\n  ${apt}\nelif command -v dnf >/dev/null 2>&1; then\n  ${dnf}\nelif command -v yum >/dev/null 2>&1; then\n  ${yum}\nelif command -v brew >/dev/null 2>&1; then\n  ${brew}\nelse\n  echo 'No supported package manager detected; install system requirements manually.'\nfi\n`;
+  const branches = [
+    "if command -v apt-get >/dev/null 2>&1; then",
+    "  sudo apt-get update",
+    `  ${apt}`,
+    "elif command -v dnf >/dev/null 2>&1; then",
+    `  ${dnf}`,
+    "elif command -v yum >/dev/null 2>&1; then",
+    `  ${yum}`,
+    "elif command -v brew >/dev/null 2>&1; then",
+    `  ${brew}`,
+    "else",
+    "  echo 'No supported package manager detected; install system requirements manually.'",
+    "fi",
+  ];
+  const body = branches.join("\n");
+  return `#!/usr/bin/env bash\nset -e\n# 根据当前包管理器选择对应的原生依赖名称。\n${body}\n`;
 }
 
 function buildPowerShellSystemScript(windows: Set<string>): string {
@@ -151,7 +168,15 @@ function buildPowerShellSystemScript(windows: Set<string>): string {
     return `# Windows 原生依赖需要人工确认安装。\n$ErrorActionPreference = "Stop"\nWrite-Host 'No known system requirements detected.'\n`;
   }
   const listLiteral = detected.map((item) => `"${item}"`).join(", ");
-  return `# Windows 原生依赖需要人工确认安装。\n$ErrorActionPreference = "Stop"\n$requirements = @(${listLiteral})\nWrite-Host "Detected native requirements:"\n$requirements | ForEach-Object { Write-Host " - $_" }\nWrite-Host "Install the listed components manually; they are not Chocolatey package identifiers."\n`;
+  const lines = [
+    "# Windows 原生依赖需要人工确认安装。",
+    '$ErrorActionPreference = "Stop"',
+    `$requirements = @(${listLiteral})`,
+    'Write-Host "Detected native requirements:"',
+    "$requirements | ForEach-Object { Write-Host \" - $_\" }",
+    'Write-Host "Install the listed components manually; they are not Chocolatey package identifiers."',
+  ];
+  return `${lines.join("\n")}\n`;
 }
 
 export function generateSystemRequirementsScript(input: string, kind: "bash" | "powershell") {
