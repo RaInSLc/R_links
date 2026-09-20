@@ -131,6 +131,75 @@ describe('App Component Input Validation', () => {
     });
   });
 
+  it('点击「保存设置」时应发出可 JSON 序列化的保存负载', async () => {
+    const publicSettings = {
+      proxy: '', githubTokenConfigured: false, cranMirror: 'https://cloud.r-project.org', rLibPath: '',
+      fullSearch: false, searchConcurrency: 6, archiveGithubMajorGap: 1, conditional: true,
+      installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000,
+      useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false,
+      maxDependencyNodes: 100, pinnedMethods: ['auto', 'base', 'biocManager', 'github'],
+      pipIndex: 'https://pypi.org', condaChannels: ['conda-forge'],
+    };
+    const invoke = vi.mocked(tauriCore.invoke);
+    invoke.mockImplementation(async (cmd) => {
+      if (cmd === 'load_history') return [];
+      if (cmd === 'load_input_rules') return { separators: [','], commentChars: ['#'], stripQuotes: true, stripCParens: true, splitSpaces: false, excludeRegex: [], excludeKeywords: [] };
+      if (cmd === 'load_settings' || cmd === 'save_settings') return { ...publicSettings };
+      if (cmd === 'generate_script') return 'install.packages("ggplot2")';
+      return null;
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByText('网络设置'));
+    fireEvent.click(screen.getByText('保存设置'));
+
+    await waitFor(() => {
+      const call = invoke.mock.calls.find(([cmd]) => cmd === 'save_settings');
+      expect(call).toBeDefined();
+      // 回归：若 onClick 直接绑定 persistSettings，React 会把合成事件当作 overrides 传入；
+      // 展开事件对象后序列化会因循环引用抛错，保存永远无法成功。
+      expect(() => JSON.stringify(call?.[1])).not.toThrow();
+      const payload = call?.[1] as { settings: Record<string, unknown> } | undefined;
+      expect(typeof payload?.settings?.cranMirror).toBe('string');
+      expect(typeof payload?.settings?.searchConcurrency).toBe('number');
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('设置已保存并立即生效');
+    });
+  });
+
+  it('点击「保存过滤规则」时应发出完整的 InputRules 而非事件对象', async () => {
+    const invoke = vi.mocked(tauriCore.invoke);
+    invoke.mockImplementation(async (cmd) => {
+      if (cmd === 'load_history') return [];
+      if (cmd === 'load_input_rules') return { separators: [','], commentChars: ['#'], stripQuotes: true, stripCParens: true, splitSpaces: false, excludeRegex: [], excludeKeywords: [] };
+      if (cmd === 'save_input_rules') return null;
+      if (cmd === 'generate_script') return 'install.packages("ggplot2")';
+      return null;
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByText('网络设置'));
+    fireEvent.click(screen.getByText('输入过滤'));
+    fireEvent.click(screen.getByText('保存过滤规则'));
+
+    await waitFor(() => {
+      const call = invoke.mock.calls.find(([cmd]) => cmd === 'save_input_rules');
+      expect(call).toBeDefined();
+      // 回归：直接把 onSaveInputRules 交给 onClick 会把 MouseEvent 当作 rules 发给后端，
+      // 后端因缺少必需字段反序列化失败，且形参默认值 inputRules 永不生效。
+      const { rules } = call?.[1] as { rules: Record<string, unknown> };
+      expect(Array.isArray(rules.separators)).toBe(true);
+      expect(Array.isArray(rules.commentChars)).toBe(true);
+      expect(Array.isArray(rules.excludeRegex)).toBe(true);
+      expect(Array.isArray(rules.excludeKeywords)).toBe(true);
+      expect(typeof rules.stripQuotes).toBe('boolean');
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('过滤规则已保存并立即生效');
+    });
+  });
+
   it('更新清单缺失时应显示明确提示', async () => {
     vi.mocked(check).mockRejectedValueOnce(new Error('Could not fetch a valid release JSON from the remote'));
     render(<App />);

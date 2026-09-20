@@ -1,22 +1,118 @@
 import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, type SearchPlanPreview } from "./utils-types";
-import { utf8Length, isActiveInputLine, nonEmptyLineCountExceeds } from "./utils-sanitize";
+import { utf8Length, isActiveInputLine, isCommentLine, nonEmptyLineCountExceeds } from "./utils-sanitize";
 import { classifyUrlInput, isRecognizedUrlInput } from "./utils-url";
-const DEFAULT_SEPARATORS = [",", ";"];
+import { defaultInputRules, type InputRules } from "./types";
 const URL_RE = /^https?:\/\//i;
-const splitLine = (line: string, separators: string[] = DEFAULT_SEPARATORS) => {
+
+/**
+ * 输入预览口径（计数 / 去重 / 浏览器搜索名单）与后端解析的关系。
+ *
+ * `InputRules` 的全部可配置项都已在此镜像，且与 Rust `input.rs::parse_inputs_filtered`
+ * 的语义逐条对齐：`commentChars`（注释行）、`separators`（分隔符 + 全角标点归一化）、
+ * `stripQuotes`（引号剥离）、`stripCParens`（含 R 调用包装前缀表）、`splitSpaces`、
+ * `excludeRegex`（行级与段级）、`excludeKeywords`（包名不做大小写区分）。
+ *
+ * **仍未镜像的部分（后端才是解析权威）**：托管包管理器输入行（`pip install ...` 等）、
+ * Markdown 表格行改写、内建黑名单（`if`/`else`/`library` 等词）、以及
+ * `parse_input_line` 的包名合法性判定与整批报错语义。因此预览是"与实际解析高度一致"
+ * 而非逐字节等价，界面在输入过滤面板中对此有明确提示。
+ */
+
+/**
+ * 与 Rust `input.rs::strip_r_parens_wrapper` 对齐的包装前缀表。
+ * 只剥离前缀与最后一个 `)` 之间的内容，未匹配则原样返回。
+ */
+const WRAPPER_PREFIXES = [
+  "c(",
+  "list(",
+  "library(",
+  "require(",
+  "requireNamespace(",
+  "install.packages(",
+  "devtools::install_github(",
+  "remotes::install_github(",
+  "remotes::install_version(",
+  "BiocManager::install(",
+];
+
+const stripParensWrapper = (line: string) => {
+  for (const prefix of WRAPPER_PREFIXES) {
+    if (line.startsWith(prefix)) {
+      const end = line.lastIndexOf(")");
+      if (end >= 0) return line.slice(prefix.length, end);
+    }
+  }
+  return line;
+};
+
+interface PreviewContext {
+  commentChars: string[];
+  stripQuotes: boolean;
+  stripCParens: boolean;
+  splitSpaces: boolean;
+  separatorPattern: RegExp | null;
+  excludes: RegExp[];
+  excludeKeywords: string[];
+}
+
+/**
+ * 把输入过滤规则预编译成单次遍历可复用的上下文。
+ * 逐行调用 `new RegExp` 会在大输入上产生可观测的开销，因此每次顶层调用只编译一次。
+ */
+/**
+ * 防御性取值：规则对象来自后端 `load_input_rules`，缺字段时退回 `defaultInputRules`
+ * 的对应默认值，而不是让整个界面因 `undefined is not iterable` 落入错误边界。
+ * 显式传入的空数组（例如"不设置任何注释字符"）仍会原样生效。
+ */
+const listOr = (value: unknown, fallback: string[]): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : fallback;
+const boolOr = (value: unknown, fallback: boolean): boolean =>
+  typeof value === "boolean" ? value : fallback;
+
+const buildPreviewContext = (rules: InputRules): PreviewContext => {
+  const safeSeparators = listOr(rules.separators, defaultInputRules.separators)
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  const separatorPattern = safeSeparators.length
+    ? new RegExp(safeSeparators.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"))
+    : null;
+  const excludes: RegExp[] = [];
+  for (const pattern of listOr(rules.excludeRegex, [])) {
+    try { excludes.push(new RegExp(pattern)); } catch { /* 非法正则与 Rust 侧一致地忽略 */ }
+  }
+  return {
+    commentChars: listOr(rules.commentChars, defaultInputRules.commentChars),
+    stripQuotes: boolOr(rules.stripQuotes, defaultInputRules.stripQuotes),
+    stripCParens: boolOr(rules.stripCParens, defaultInputRules.stripCParens),
+    splitSpaces: boolOr(rules.splitSpaces, defaultInputRules.splitSpaces),
+    separatorPattern,
+    excludes,
+    excludeKeywords: listOr(rules.excludeKeywords, [])
+      .filter(Boolean)
+      .map((keyword) => keyword.toLowerCase()),
+  };
+};
+
+/** 与 Rust 一致：排除正则同时作用于「整行」与「拆分后的每一段」。 */
+const isExcludedLine = (line: string, context: PreviewContext) =>
+  context.excludes.some((regex) => regex.test(line));
+
+const isExcludedSegment = (value: string, context: PreviewContext) =>
+  context.excludes.some((regex) => regex.test(value)) ||
+  context.excludeKeywords.includes(value.toLowerCase());
+
+const splitLine = (line: string, rules: InputRules, context?: PreviewContext) => {
+  const ctx = context ?? buildPreviewContext(rules);
   // 全角标点统一归一化为半角；`；` 的处理与 Rust `input.rs::split_by_separators`
   // 保持一致——`，`、`、`、`；` 三者都映射为 `,`，而不是把全角分号映射为 `;`。
   const t = line.replace(/[，、；]/g, ",").trim();
-  if (!t || t.startsWith("#")) return [];
-  const match = t.match(/^(?:c|list)\((.+)\)$/s);
-  const content = match ? match[1] : t;
-  const safe = separators.filter(Boolean).sort((a, b) => b.length - a.length);
-  const pattern = safe.length
-    ? new RegExp(safe.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"))
-    : null;
-  return (pattern ? content.split(pattern) : [content])
-    .map((s) => s.trim().replace(/^["']|["']$/g, "").trim())
-    .filter(Boolean);
+  if (!t || isCommentLine(t, ctx.commentChars)) return [];
+  const content = ctx.stripCParens ? stripParensWrapper(t) : t;
+  let parts = (ctx.separatorPattern ? content.split(ctx.separatorPattern) : [content]).map((s) => s.trim());
+  if (ctx.splitSpaces) parts = parts.flatMap((s) => s.split(/\s+/));
+  return parts
+    .map((s) => (ctx.stripQuotes ? s.replace(/^["']|["']$/g, "") : s).trim())
+    .filter((s) => Boolean(s) && !isExcludedSegment(s, ctx));
 };
 export const normalizePackageInputDisplay = (value: string) => { let changed = false; const lines = value.split(/\r?\n/).flatMap((line) => { const t = line.trim(); if (!t.startsWith("|") || !t.endsWith("|")) return [line]; changed = true; const cells = t.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim()); const p = cells[0] ?? ""; return !p || cells.every((c) => /^:?-{2,}:?$/.test(c)) || /^(包名|package)$/i.test(p) ? [] : [p]; }); while (changed && lines.length && !lines[lines.length - 1]?.trim()) lines.pop(); return changed ? lines.join("\n") : value; };
 export const trimTrailingBlankLines = (value: string) => value.replace(/(?:\r?\n[\t ]*)+$/g, "");
@@ -57,13 +153,20 @@ export function extractCanonicalInput(value: string) {
   }
   return out.join("\n");
 }
-export const activeInputLineCount = (value: string, separators?: string[]) => value.split(/\r?\n/).reduce((n, l) => n + (isActiveInputLine(l) ? splitLine(l, separators).length : 0), 0);
+export const activeInputLineCount = (value: string, rules: InputRules = defaultInputRules) => {
+  const context = buildPreviewContext(rules);
+  return value.split(/\r?\n/).reduce((n, l) => {
+    const trimmed = l.trim();
+    if (!isActiveInputLine(l, context.commentChars) || isExcludedLine(trimmed, context)) return n;
+    return n + splitLine(l, rules, context).length;
+  }, 0);
+};
 export const nonEmptyLineBytesExceeds = (value: string, limit: number) => value.split(/\r?\n/).some((l) => l.trim() && utf8Length(l) > limit);
 export const inputHasDisallowedControlCharacters = (value: string) => /[\p{C}]/u.test(value.replace(/[\r\n\t]/g, ""));
-export const inputValueTooLarge = (value: string) =>
+export const inputValueTooLarge = (value: string, rules: InputRules = defaultInputRules) =>
   value.length > MAX_INPUT_CHARS
   || inputHasDisallowedControlCharacters(value)
-  || nonEmptyLineCountExceeds(value, MAX_PACKAGE_LINES)
+  || nonEmptyLineCountExceeds(value, MAX_PACKAGE_LINES, rules.commentChars)
   || nonEmptyLineBytesExceeds(value, MAX_INPUT_LINE_BYTES)
   || utf8Length(value) > MAX_INPUT_CHARS;
 export const githubTokenTextAllowed = (value: string) => /^[\x21-\x7E]*$/.test(value);
@@ -118,18 +221,37 @@ export function parseProjectDependencyFile(fileName: string, text: string) {
   return null;
 }
 export function extractSystemRequirements(fileName: string, text: string) { if (!fileName.toLowerCase().endsWith("description")) return null; const lines = text.split(/\r?\n/), start = lines.findIndex((l) => /^SystemRequirements:\s*/i.test(l)); if (start < 0) return null; const value = [lines[start].replace(/^SystemRequirements:\s*/i, "").trim(), ...lines.slice(start + 1).filter((l) => /^\s+/.test(l)).map((l) => l.trim())].filter(Boolean).join(" ").replace(/\s+/g, " ").trim(); return value || null; }
-export function dedupePackageInput(value: string) { const seen = new Set<string>(), out: string[] = []; for (const line of value.split(/\r?\n/)) { const t = line.trim(); if (!t) { if (out.length) out.push(""); continue; } if (t.startsWith("#")) { out.push(line); continue; } for (const s of URL_RE.test(t) ? [t] : splitLine(t)) { if (!seen.has(s.toLowerCase())) { seen.add(s.toLowerCase()); out.push(s); } } } return out.join("\n"); }
-export function countDuplicatePackages(value: string) {
-  const items = value.split(/\r?\n/).filter(isActiveInputLine).flatMap((l) =>
-    URL_RE.test(l.trim()) ? [l.trim().toLowerCase()] : splitLine(l).map((s) => s.toLowerCase()),
-  );
+export function dedupePackageInput(value: string, rules: InputRules = defaultInputRules) {
+  const context = buildPreviewContext(rules);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of value.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t) { if (out.length) out.push(""); continue; }
+    if (isCommentLine(t, context.commentChars)) { out.push(line); continue; }
+    if (isExcludedLine(t, context)) continue;
+    for (const segment of URL_RE.test(t) ? [t] : splitLine(t, rules, context)) {
+      if (!seen.has(segment.toLowerCase())) { seen.add(segment.toLowerCase()); out.push(segment); }
+    }
+  }
+  return out.join("\n");
+}
+export function countDuplicatePackages(value: string, rules: InputRules = defaultInputRules) {
+  const context = buildPreviewContext(rules);
+  const items = value.split(/\r?\n/)
+    .filter((line) => isActiveInputLine(line, context.commentChars) && !isExcludedLine(line.trim(), context))
+    .flatMap((line) => URL_RE.test(line.trim())
+      ? [line.trim().toLowerCase()]
+      : splitLine(line, rules, context).map((s) => s.toLowerCase()));
   return items.length - new Set(items).size;
 }
-export function classifyInputProfile(value: string, separators?: string[]) {
+export function classifyInputProfile(value: string, rules: InputRules = defaultInputRules) {
+  const context = buildPreviewContext(rules);
   const profile = { total: 0, archiveUrls: 0, repositories: 0 };
   for (const line of value.split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
+    if (!trimmed || isCommentLine(trimmed, context.commentChars)) continue;
+    if (isExcludedLine(trimmed, context)) continue;
     if (URL_RE.test(trimmed)) {
       // 与后端 parse_inputs_filtered 对齐：GitHub 仓库归入 repositories，
       // 归档 URL 归入 archiveUrls，其余 http(s) 行非法且不计入 total。
@@ -139,7 +261,7 @@ export function classifyInputProfile(value: string, separators?: string[]) {
       if (kind === "archive") profile.archiveUrls++;
       else profile.repositories++;
     } else {
-      for (const segment of splitLine(trimmed, separators)) {
+      for (const segment of splitLine(trimmed, rules, context)) {
         profile.total++;
         if (segment.includes("/")) profile.repositories++;
       }
@@ -149,13 +271,15 @@ export function classifyInputProfile(value: string, separators?: string[]) {
   return profile;
 }
 export const methodSupportsInput = (method: string, p: { total: number; archiveUrls: number; repositories: number }) => p.total === 0 || method === "auto" || method === "checkSystem" || (["devtools", "remotes"].includes(method) ? p.archiveUrls === p.total : method === "github" ? p.repositories === p.total : p.archiveUrls === 0 && p.repositories === 0);
-export function collectBrowserSearchNames(value: string, limit: number, separators?: string[]) {
+export function collectBrowserSearchNames(value: string, limit: number, rules: InputRules = defaultInputRules) {
+  const context = buildPreviewContext(rules);
   const names: string[] = [];
   const seen = new Set<string>();
   let total = 0;
   for (const line of value.split(/\r?\n/)) {
-    if (!isActiveInputLine(line)) continue;
-    for (const segment of splitLine(line, separators)) {
+    if (!isActiveInputLine(line, context.commentChars)) continue;
+    if (isExcludedLine(line.trim(), context)) continue;
+    for (const segment of splitLine(line, rules, context)) {
       if (++total > MAX_PACKAGE_LINES) break;
       const name = segment.split("/").pop() ?? segment;
       // R 包名必须以 ASCII 字母开头，与后端 is_valid_package_name 保持一致。

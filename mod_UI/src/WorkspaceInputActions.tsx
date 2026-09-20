@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { dedupePackageInput } from "./utils";
+import { isCommentLine } from "./utils-sanitize";
+import type { InputRules } from "./types";
 
 interface WorkspaceInputActionsProps {
   input: string;
   inputTooLarge: boolean;
+  inputRules: InputRules;
   duplicateCount: number;
   searching: boolean;
   paused?: boolean;
@@ -23,6 +26,7 @@ interface WorkspaceInputActionsProps {
 export function WorkspaceInputActions({
   input,
   inputTooLarge,
+  inputRules,
   duplicateCount,
   searching,
   paused,
@@ -45,7 +49,7 @@ export function WorkspaceInputActions({
     const comments: { idx: number; line: string }[] = [];
     input.split(/\r?\n/).forEach((line) => {
       const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) comments.push({ idx: active.length, line });
+      if (!trimmed || isCommentLine(trimmed, inputRules.commentChars)) comments.push({ idx: active.length, line });
       else active.push(line);
     });
     active.sort((a, b) => a.trim().toLowerCase().localeCompare(b.trim().toLowerCase()));
@@ -68,7 +72,7 @@ export function WorkspaceInputActions({
         <button className="button ghost" onClick={sortInputAlphabetical} disabled={searching || !input.trim()} title="按字母 A-Z 排序（保留注释行位置）">A-Z</button>
         <button
           className="button ghost"
-          onClick={() => onInputChange(dedupePackageInput(input), "manual")}
+          onClick={() => onInputChange(dedupePackageInput(input, inputRules), "manual")}
           disabled={searching || duplicateCount === 0}
           title="大小写不敏感去重"
         >

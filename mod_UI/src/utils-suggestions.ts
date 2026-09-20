@@ -1,6 +1,7 @@
 import type { SearchResult, SmartSuggestion } from "./utils-types";
+import type { InputRules } from "./types";
 import { isActiveInputLine } from "./utils-sanitize";
-import { dedupePackageInput, extractCanonicalInput } from "./utils-input";
+import { countDuplicatePackages, dedupePackageInput, extractCanonicalInput } from "./utils-input";
 
 const COMMON = [
   "ggplot2", "dplyr", "tidyr", "readr", "stringr", "purrr", "tibble", "rlang",
@@ -28,11 +29,11 @@ export function buildInputSmartSuggestions(
   input: string,
   profile: { total: number; archiveUrls: number; repositories: number },
   method: string,
-  options: { verifyInstall?: boolean } = {},
+  options: { verifyInstall?: boolean; inputRules?: InputRules } = {},
 ): SmartSuggestion[] {
   if (!profile.total) return [];
   const out: SmartSuggestion[] = [];
-  const lines = input.split(/\r?\n/).filter(isActiveInputLine);
+  const lines = input.split(/\r?\n/).filter((l) => isActiveInputLine(l, options.inputRules?.commentChars));
   const hasCall = lines.some((l) =>
     /\b(?:install\.packages|BiocManager::install|library|require|remotes::install_|devtools::install_)\s*\(/.test(l),
   );
@@ -43,9 +44,6 @@ export function buildInputSmartSuggestions(
     /\b\d+\.\d+(?:[.\-][0-9A-Za-z]+)*\b/.test(l),
   );
   const canonical = hasCall ? extractCanonicalInput(input) : "";
-  const items = lines.flatMap((l) => l.split(/[,;]/)).map((l) =>
-    l.trim().toLowerCase(),
-  );
   const typo = lines.length === 1 && /^[A-Za-z0-9._-]+$/.test(lines[0])
     ? COMMON.map((correct) => ({
       correct,
@@ -109,14 +107,16 @@ export function buildInputSmartSuggestions(
       value: canonical || undefined,
     });
   }
-  if (new Set(items).size !== items.length) {
+  // 重复检测复用与计数/去重同一套预览口径，避免此前的硬编码 split(/[,;]/) 与
+  // 用户自定义分隔符不一致而误报。
+  if (countDuplicatePackages(input, options.inputRules) > 0) {
     out.push({
       id: "duplicate-packages",
       title: "检测到重复包名",
       detail: "输入中包含重复的包名，建议去重后再生成脚本。",
       actionLabel: "一键去重",
       action: "replaceInput",
-      value: dedupePackageInput(input),
+      value: dedupePackageInput(input, options.inputRules),
     });
   }
   if (profile.total > 20 && !options.verifyInstall) {

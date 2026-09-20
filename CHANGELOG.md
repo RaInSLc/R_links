@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## [2026-09-20 16:33:00 +08:00] - v0.2.5（同版本重新打包）
+
+### Added
+
+- **前端补齐输入过滤规则口径（P2）**：工作台的包数、重复数、去重结果与浏览器搜索名单此前只按 `separators` 计算，`commentChars` / `excludeRegex` / `excludeKeywords` / `splitSpaces` / `stripQuotes` / `stripCParens` 仅在 Rust 侧生效，导致预览与真实解析脱节。现全部下沉到前端预览层：
+  - `mod_UI/src/utils-input.ts`：新增 `buildPreviewContext`（每次顶层调用只编译一次正则，避免逐行 `new RegExp`）、`WRAPPER_PREFIXES`（对齐 Rust `strip_r_parens_wrapper` 的 10 个 R 调用前缀）、`isExcludedLine`/`isExcludedSegment`；`splitLine` / `activeInputLineCount` / `classifyInputProfile` / `countDuplicatePackages` / `dedupePackageInput` / `collectBrowserSearchNames` 改为接收完整 `InputRules`。
+  - `mod_UI/src/utils-sanitize.ts`：新增 `isCommentLine` 与 `DEFAULT_COMMENT_CHARS`，`isActiveInputLine` / `nonEmptyLineCountExceeds` 接受 `commentChars`（不再硬编码 `#`）。
+  - 调用点同步串接：`AppContent`、`useSearch::openSearchTabs`、`useAppActions`、`WorkspaceView`、`WorkspaceInputActions`、`WorkspaceInputSummary`、`utils-suggestions`。`utils-suggestions` 的重复检测改用 `countDuplicatePackages` 同一口径，去掉原先硬编码的 `split(/[,;]/)`（该项此前会在自定义分隔符下误报重复）。
+  - **仍仅由后端处理的部分**已在代码注释与「输入过滤」面板中显式说明：托管包管理器输入行（`pip install ...` 等）、Markdown 表格行改写、内建黑名单词，以及 `parse_input_line` 的包名合法性判定与整批报错语义；最终解析结果以后端为准。
+
+### Fixed
+
+- **`load_input_rules` 返回值未清洗导致整页落入错误边界**：`mod_UI/src/AppContent.tsx` 改为先经 `sanitizeImportedInputRules` 补齐字段再进状态。此前只读取 `separators`，所以缺字段的对象不报错；本轮预览层开始读取全部字段后，缺字段会抛 `rules.excludeRegex is not iterable` 并由 `AppErrorBoundary` 接管整个界面。同时 `buildPreviewContext` 对每个字段做默认值兜底（缺字段退回 `defaultInputRules`，显式空数组仍原样生效），使畸形配置降级为"不过滤"而不是白屏。
+
+### Changed
+
+- **`AGENTS.md` 新增两条硬性约定**：
+  - 「前端验证」：`() => void` 形状的回调 prop 只能写 `onClick={() => handler()}`，不得写 `onClick={handler}`（`persistSettings(overrides?)`、`saveInputRules(rules?)` 这类带可选参数的实现会被 React 传入合成事件）；对应的组件测试必须断言 `toHaveBeenCalledWith()`，并在 `App.test.tsx` 保留端到端用例断言保存负载可被 `JSON.stringify` 序列化；后端配置对象必须在边界用 `sanitizeImported*` 补齐后再进状态。
+  - 「构建与发布」：打包必须绕开 npm 的环境剥离（`npm run` 会删除 `TEMP`/`TMP`/`USERPROFILE`，使 MSVC `link.exe` 回退到不可写的 `C:\Windows` 并报 `LNK1104`），正确命令为 `cd mod_UI && ./node_modules/.bin/tauri build`；网络盘编译使用 `报告/ai_codes/retry_build.sh` 做失败即重试（实测约 11~13 crate/min，对比 `cargo test -j 1` 的约 2.7 crate/min）；产物构建后归档到根目录 `release/`。
+
+### Tests
+
+- **前端**：新增 8 项回归用例——6 项规则镜像（注释字符按配置生效、排除关键词不区分大小写、排除正则作用于整行与段级、引号与 `c()` 剥离开关、空格分割开关、R 调用包装前缀表）、2 项 App 级端到端（「保存设置」负载可 `JSON.stringify` 序列化且字段类型正确、「保存过滤规则」发出含全部数组/布尔字段的完整 `InputRules`）。
+- `npm test -- --run` 13 个文件 **195 项全部通过**（较原 187 项新增 8 项）；`npm run lint` 退出 0（0 error / 0 warning）；`tsc --noEmit` 退出 0；`npm run build` 退出 0；`npm run check:size` 无新增超长行违规（`utils-input.ts` 5→4、`AppContent.tsx` 14→13）；改动文件均在 500 行门禁内。
+- **Rust**：本轮未改动 `mod_UI/src-tauri/src/`，沿用上一轮 `cargo test --release` 241 通过 / 0 失败 / 3 忽略 的结果。
+- **打包**：`./node_modules/.bin/tauri build` 重新产出 v0.2.5 的 MSI 与 NSIS 安装程序，并复制到 `release/`。
+
 ## [2026-09-20 14:31:00 +08:00] - v0.2.5
 
 ### Fixed

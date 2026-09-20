@@ -14,7 +14,10 @@ import {
   collectBrowserSearchNames,
   isInstallArchiveUrl,
   isGithubRepositoryUrl,
+  activeInputLineCount,
 } from "./utils";
+import { defaultInputRules } from "./types";
+const withSeparators = (separators: string[]) => ({ ...defaultInputRules, separators });
 
 describe("normalizePackageInputDisplay", () => {
   it("preserves package manager commands and normalizes full-width separators", () => {
@@ -118,7 +121,7 @@ describe("classifyInputProfile", () => {
   });
 
   it("uses configured separators for input statistics", () => {
-    expect(classifyInputProfile("dplyr|ggplot2", ["|"])).toEqual({
+    expect(classifyInputProfile("dplyr|ggplot2", withSeparators(["|"]))).toEqual({
       total: 2,
       archiveUrls: 0,
       repositories: 0,
@@ -259,15 +262,62 @@ describe("全角标点归一化（与 Rust split_by_separators 对齐）", () =>
   it("全角分号与全角逗号、顿号一样映射为半角逗号", () => {
     // Rust `input.rs::split_by_separators` 用 replace(['，','、','；'], ",")，
     // 前端若把 `；` 映射为 `;`，在用户只把 `,` 配成分隔符时两侧包数会对不上。
-    expect(classifyInputProfile("dplyr；ggplot2", [","])).toEqual({
+    expect(classifyInputProfile("dplyr；ggplot2", withSeparators([","]))).toEqual({
       total: 2,
       archiveUrls: 0,
       repositories: 0,
     });
-    expect(classifyInputProfile("dplyr、ggplot2，tidyr", [","]).total).toBe(3);
+    expect(classifyInputProfile("dplyr、ggplot2，tidyr", withSeparators([","])).total).toBe(3);
   });
 
   it("显式清理与显示规范化对全角标点保持同一口径", () => {
     expect(cleanPackageInput("dplyr；ggplot2")).toBe("dplyr,ggplot2");
+  });
+});
+
+describe("输入过滤规则镜像（与 Rust parse_inputs_filtered 同口径）", () => {
+  it("注释字符按配置生效，而不是固定 #", () => {
+    const rules = { ...defaultInputRules, commentChars: ["#", "//"] };
+    expect(activeInputLineCount("//dplyr\n#tidyr\nggplot2", rules)).toBe(1);
+    expect(classifyInputProfile("//dplyr\nggplot2", rules).total).toBe(1);
+    // 未把 `//` 配成注释字符时，它就是普通包名
+    expect(activeInputLineCount("//dplyr\n#tidyr\nggplot2", defaultInputRules)).toBe(2);
+    // 注释字符为空数组时不把任何行当注释
+    expect(activeInputLineCount("#dplyr\nggplot2", { ...defaultInputRules, commentChars: [] })).toBe(2);
+  });
+
+  it("排除关键词按包名（不区分大小写）剔除", () => {
+    const rules = { ...defaultInputRules, excludeKeywords: ["dplyr"] };
+    expect(classifyInputProfile("dplyr\nggplot2", rules).total).toBe(1);
+    expect(activeInputLineCount("DPlyr\nggplot2", rules)).toBe(1);
+  });
+
+  it("排除正则同时作用于整行与拆分后的每一段", () => {
+    const lineLevel = { ...defaultInputRules, excludeRegex: ["^library\\("] };
+    expect(classifyInputProfile("library(dplyr)\nggplot2", lineLevel).total).toBe(1);
+    const segmentLevel = { ...defaultInputRules, excludeRegex: ["^ggplot"] };
+    expect(classifyInputProfile("dplyr,ggplot2", segmentLevel).total).toBe(1);
+  });
+
+  it("关闭引号剥离 / c() 剥离后行为与后端一致", () => {
+    expect(dedupePackageInput('"dplyr"\ndplyr', defaultInputRules)).toBe("dplyr");
+    const keepQuotes = { ...defaultInputRules, stripQuotes: false };
+    expect(dedupePackageInput('"dplyr"\ndplyr', keepQuotes)).toBe('"dplyr"\ndplyr');
+    expect(activeInputLineCount("c(dplyr, ggplot2)", defaultInputRules)).toBe(2);
+    // 剥离 c() 后 `c(dplyr)` 与裸 `dplyr` 视为同一个包；关闭剥离时两者不同。
+    expect(dedupePackageInput("c(dplyr)\ndplyr", defaultInputRules)).toBe("dplyr");
+    const keepParens = { ...defaultInputRules, stripCParens: false };
+    expect(dedupePackageInput("c(dplyr)\ndplyr", keepParens)).toBe("c(dplyr)\ndplyr");
+  });
+
+  it("空格分割开关与后端 split_spaces 一致", () => {
+    expect(activeInputLineCount("dplyr ggplot2 tidyr", defaultInputRules)).toBe(1);
+    expect(activeInputLineCount("dplyr ggplot2 tidyr", { ...defaultInputRules, splitSpaces: true })).toBe(3);
+  });
+
+  it("R 调用包装前缀表与后端 strip_r_parens_wrapper 一致", () => {
+    expect(classifyInputProfile('install.packages("dplyr")').total).toBe(1);
+    expect(classifyInputProfile("library(dplyr, ggplot2)").total).toBe(2);
+    expect(classifyInputProfile('BiocManager::install("edgeR")').total).toBe(1);
   });
 });

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { useSettings } from "./useSettings";
+import { sanitizeImportedInputRules } from "./settingsSanitize";
 import { useHistory } from "./useHistory";
 import { useSearch } from "./useSearch";
 import { useScriptGeneration } from "./useScriptGeneration";
@@ -55,10 +56,10 @@ export function AppContent() {
   const { history, historySearch, setHistorySearch, sanitizeHistoryList, enqueueHistorySave, copyHistoryRecord, deleteHistoryRecord, clearAllHistory } = historyHook;
   const latestInputRef = useRef(localStorage.getItem("rlinks_input") || ""); const copyWithLineNumbersRef = useRef(false);
   useEffect(() => { copyWithLineNumbersRef.current = copyWithLineNumbers; }, [copyWithLineNumbers]);
-  const packageCount = useMemo(() => activeInputLineCount(input, inputRules.separators), [input, inputRules.separators]);
-  const inputProfile = useMemo(() => classifyInputProfile(input, inputRules.separators), [input, inputRules.separators]);
+  const packageCount = useMemo(() => activeInputLineCount(input, inputRules), [input, inputRules]);
+  const inputProfile = useMemo(() => classifyInputProfile(input, inputRules), [input, inputRules]);
   const inputTooLarge = utf8Length(input) > MAX_INPUT_CHARS || packageCount > MAX_PACKAGE_LINES || nonEmptyLineBytesExceeds(input, MAX_INPUT_LINE_BYTES);
-  const smartSuggestions = useMemo(() => buildInputSmartSuggestions(input, inputProfile, method, { verifyInstall }), [input, inputProfile, method, verifyInstall]);
+  const smartSuggestions = useMemo(() => buildInputSmartSuggestions(input, inputProfile, method, { verifyInstall, inputRules }), [input, inputProfile, method, verifyInstall, inputRules]);
   const resultSuggestions = useMemo(() => buildResultSmartSuggestions(results, { fullSearch: settings.fullSearch, searching }), [results, settings.fullSearch, searching]);
   const uniqueFoundCount = useMemo(() => new Set(results.filter((result) => result.found).map((result) => result.package)).size, [results]);
   const { script, latestScriptRef, requestSeq, setScript } = useScriptGeneration(
@@ -68,7 +69,14 @@ export function AppContent() {
   );
   const actions = useAppActions({ view, setView, input, setInput, inputProfile, inputRules, inputTooLarge, method, setMethod, ecosystem, pipIndex, rBinaryMirror, conditional, setConditional: (v) => { setConditionalState(v); localStorage.setItem("rlinks_conditional", v ? "1" : "0"); }, installDependencies, setInstallDependencies: (v) => { setInstallDependenciesState(v); localStorage.setItem("rlinks_install_deps", v ? "1" : "0"); }, showRemoteVersion, setShowRemoteVersion: (v) => { setShowRemoteVersionState(v); localStorage.setItem("rlinks_show_remote_version", v ? "1" : "0"); }, verifyInstall, setVerifyInstall: (v) => { setVerifyInstallState(v); localStorage.setItem("rlinks_verify_install", v ? "1" : "0"); }, settings, updateAndPersistSettings: (update) => { let next: Settings | undefined; updateSettingsFromUser((current) => (next = update(current))); if (next) void persistSettings(next); }, searching, searchingRef, hasSearchEvidenceRef, latestInputRef, latestScriptRef, copyWithLineNumbersRef, setLogs, setStatus, requestSeq, setScript, startSearch, startBinarySearch, startMultiEcosystemSearch, stopSearch, sanitizeHistoryList, enqueueHistorySave, copyHistoryRecord, deleteHistoryRecord, clearAllHistory, setInputRulesBusy });
   useEffect(() => { localStorage.setItem("rlinks_input", input); localStorage.setItem("rlinks_method", method); }, [input, method]);
-  useEffect(() => { invoke<InputRules>("load_input_rules").then(setInputRules).catch(() => {}); import("@tauri-apps/api/app").then(({ getVersion }) => getVersion()).then(setAppVersion).catch(() => setAppVersion("0.2.5")); }, []);
+  useEffect(() => {
+    // 后端返回的过滤规则必须先在边界处补齐并校验：缺字段的对象会被后续预览逻辑读取，
+    // 直接使用会让整个界面落入错误边界（此前只读 separators 才没暴露）。
+    invoke<InputRules>("load_input_rules")
+      .then((rules) => setInputRules(sanitizeImportedInputRules(rules, defaultInputRules)))
+      .catch(() => {});
+    import("@tauri-apps/api/app").then(({ getVersion }) => getVersion()).then(setAppVersion).catch(() => setAppVersion("0.2.5"));
+  }, []);
   const initialInput = useRef(input);
   useEffect(() => {
     const requestedInput = initialInput.current;
@@ -128,12 +136,12 @@ export function AppContent() {
     summaryProgress: packageCount ? Math.min(100, uniqueFoundCount / packageCount * 100) : 0,
     input, inputTooLarge, inputProfile, method, conditional, installDependencies, parallelInstall, ecosystem, pipIndex, condaChannels, rBinaryMirror,
     showRemoteVersion, verifyInstall, settings, smartSuggestions, script,
-    scriptTooLarge: scriptValueTooLarge(script), scriptCommandCount: countScriptCommands(script), duplicateCount: countDuplicatePackages(input),
+    scriptTooLarge: scriptValueTooLarge(script), scriptCommandCount: countScriptCommands(script), duplicateCount: countDuplicatePackages(input, inputRules),
     paused, openingSearchTabs, logs, dependencyGraph, resultSuggestions, searchDuration, stageTimings, inputRules, inputRulesBusy,
     tokenConfigured, showToken, settingsBusy, currentTheme, currentFont, currentFontSize, checkingUpdate, updateState, updateMessage, appVersion, updateVersion,
     copyWithLineNumbers, pinnedMethods: settings.pinnedMethods, ...actions, setStatus, cancelSearchPackage, updateAndPersistSettings,
     onInputChange: actions.acceptInputValue, onPaste: actions.pasteInput, onClear: () => actions.acceptInputValue("", "manual"),
-    onOpenSearchTabs: () => { void openSearchTabs(input, inputTooLarge, ecosystem, inputRules.separators); },
+    onOpenSearchTabs: () => { void openSearchTabs(input, inputTooLarge, ecosystem, inputRules); },
     onStopSearch: () => { void stopSearch(); }, onTogglePause: () => { void togglePauseSearch(); }, onMethodChange: setMethod,
     onEcosystemChange: (value) => { setEcosystem(value); localStorage.setItem("rlinks_ecosystem", value); },
     onPipIndexChange: (value) => { setPipIndex(value); localStorage.setItem("rlinks_pip_index", value); updateAndPersistSettings((current) => ({ ...current, pipIndex: value })); },

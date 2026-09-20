@@ -6,12 +6,13 @@ import { WorkspaceInputActions } from "./WorkspaceInputActions";
 import { WorkspaceInputSummary } from "./WorkspaceInputSummary";
 import { WorkspaceStrategyPanel } from "./WorkspaceStrategyPanel";
 import { PanelHeader } from "./components";
-import type { Ecosystem, Method, Settings } from "./types";
+import type { Ecosystem, InputRules, Method, Settings } from "./types";
 import { MAX_INPUT_CHARS, MAX_PACKAGE_LINES, type SmartSuggestion } from "./utils";
 
 interface WorkspaceViewProps {
   input: string;
   inputTooLarge: boolean;
+  inputRules: InputRules;
   inputProfile: { total: number; archiveUrls: number; repositories: number };
   method: Method;
   ecosystem?: Ecosystem;
@@ -68,7 +69,7 @@ interface WorkspaceViewProps {
 }
 
 export function WorkspaceView({
-  input, inputTooLarge, inputProfile, method,
+  input, inputTooLarge, inputRules, inputProfile, method,
   conditional, installDependencies, showRemoteVersion, verifyInstall, parallelInstall, settings,
   ecosystem = "r", pipIndex = "", condaChannels = [], rBinaryMirror = "",
   onEcosystemChange = () => {}, onPipIndexChange = () => {}, onCondaChannelsChange = () => {}, onRBinaryMirrorChange = () => {},
@@ -100,13 +101,13 @@ export function WorkspaceView({
           onInputChange={onInputChange} onStartSearch={onStartSearch} onPasteIssues={() => setPasteHint(true)}
         />
         <WorkspaceInputSummary
-          input={input} inputTooLarge={inputTooLarge} inputProfile={inputProfile} ecosystem={ecosystem}
+          input={input} inputTooLarge={inputTooLarge} inputRules={inputRules} inputProfile={inputProfile} ecosystem={ecosystem}
           settings={settings} duplicateCount={duplicateCount} smartSuggestions={smartSuggestions} searching={searching}
           pasteHint={pasteHint} onInputChange={onInputChange} onApplySmartSuggestion={onApplySmartSuggestion}
           onCleanInput={onCleanInput} onDismissPasteHint={() => setPasteHint(false)}
         />
         <WorkspaceInputActions
-          input={input} inputTooLarge={inputTooLarge} duplicateCount={duplicateCount} searching={searching} paused={paused}
+          input={input} inputTooLarge={inputTooLarge} inputRules={inputRules} duplicateCount={duplicateCount} searching={searching} paused={paused}
           openingSearchTabs={openingSearchTabs} onInputChange={onInputChange} onPaste={onPaste} onClear={onClear}
           onImportFile={() => inputEditorRef.current?.openFilePicker()} onOpenSearchTabs={onOpenSearchTabs}
           onStartSearch={onStartSearch} onStopSearch={onStopSearch} onTogglePause={onTogglePause} onTempFilter={onTempFilter}

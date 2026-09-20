@@ -139,6 +139,9 @@ If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is 
 - 修改输入组件或输入工具函数时，必须覆盖手动输入、Enter 换行、粘贴、文件导入和受控状态回写场景。
 - 受控输入组件的 `onChange` 只允许执行不会破坏编辑态的校验；去重、去空行、规范化和排序应通过显式操作或保存阶段执行。
 - 多行字段不得在每次输入时调用 `trim()`、`filter(Boolean)` 或无条件删除尾随换行。
+- `() => void` 形状的回调 prop 只能写成 `onClick={() => handler()}`，不得写 `onClick={handler}`。若实现实际接收可选参数（如 `useSettings` 的 `persistSettings(overrides?)`、`useAppActions` 的 `saveInputRules(rules?)`），React 会把合成事件当作该参数传入，事件对象展开后再序列化会因循环引用抛错，保存类功能会整体失效。
+- 上述约定必须由测试固定：组件测试断言 `toHaveBeenCalledWith()`（零实参），且 `App.test.tsx` 保留端到端用例断言保存请求的负载可被 `JSON.stringify` 序列化、字段类型正确。
+- 从后端加载的配置对象（`load_input_rules`、`load_settings`）必须在边界处用 `settingsSanitize.ts` 的 `sanitizeImported*` 补齐字段后再进入状态，不得让消费方假设字段完整。
 
 ### Tauri 与 Rust 验证
 
@@ -153,6 +156,9 @@ If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is 
 - 修改前端源码后不得只运行旧安装包验证；必须重新执行前端构建并重新打包安装程序。
 - `tauri.key`、Token、代理凭据和用户数据不得提交。
 - 未经用户明确要求，不提交 `README.md` 等无关工作区改动。
+- **打包必须绕开 npm 的环境剥离**：`npm run` 会把 `TEMP`、`TMP`、`USERPROFILE` 从脚本环境中删掉（`npm run env` 只剩约 40 个变量），MSVC `link.exe` 取不到 `%TEMP%` 时会回退到对当前用户不可写的 `C:\Windows`，报 `LNK1104: 无法打开文件 "C:\Windows\lnk{...}.tmp"`，使 `npm run tauri build` **必然失败**。正确命令是在 `mod_UI/` 下执行 `./node_modules/.bin/tauri build`（直接调用 CLI 的 node 入口，继承完整环境）。
+- 本机 `Z:` 是 SMB 网络共享（`\\10.0.0.163\pythonProject`），Rust 全量编译会间歇性报 `os error 5（拒绝访问）`（并发写入竞争，已排除磁盘空间与权限）。使用 `报告/ai_codes/retry_build.sh <工作目录> <日志文件> <最大次数> -- <命令>` 做"失败即重试"，依托 cargo 增量缓存逐次推进：实测约 11~13 crate/min，明显快于 `cargo test -j 1` 的约 2.7 crate/min（后者虽稳定但代价过高）。
+- 产物归档：安装程序与免安装主程序在构建后复制到根目录 `release/`（该目录已被 `.gitignore` 忽略）。
 
 ### 配置与文档
 

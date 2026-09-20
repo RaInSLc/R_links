@@ -8,7 +8,7 @@ import {
   BROWSER_SEARCH_CONFIRM_THRESHOLD, MAX_SEARCH_LOGS, MAX_SEARCH_RESULTS, MAX_SEARCH_TABS,
   type SearchResponse, type SearchResult, type DependencyGraph, type SearchStageTiming,
 } from "./utils";
-import type { Settings, SearchLogBatchEvent, SearchProgressEvent } from "./types";
+import type { InputRules, Settings, SearchLogBatchEvent, SearchProgressEvent } from "./types";
 
 type SetStatus = (s: string) => void;
 
@@ -322,13 +322,13 @@ export function useSearch(setStatus: SetStatus) {
     }
   }
 
-  async function openSearchTabs(input: string, inputTooLarge: boolean, ecosystem?: string, separators?: string[]) {
+  async function openSearchTabs(input: string, inputTooLarge: boolean, ecosystem?: string, rules?: InputRules) {
     if (browserOpenInProgress.current) return;
     if (inputTooLarge) {
       setStatus("输入超出限制，无法打开浏览器搜索");
       return;
     }
-    const { names, total } = collectBrowserSearchNames(input, MAX_SEARCH_TABS, separators);
+    const { names, total } = collectBrowserSearchNames(input, MAX_SEARCH_TABS, rules);
     if (names.length === 0) {
       setStatus("没有可搜索的包名");
       return;

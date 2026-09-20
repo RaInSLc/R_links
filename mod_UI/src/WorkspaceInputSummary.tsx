@@ -1,9 +1,10 @@
-import type { Ecosystem, Settings } from "./types";
+import type { Ecosystem, InputRules, Settings } from "./types";
 import { MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, buildSearchPlanPreview, dedupePackageInput, type SmartSuggestion } from "./utils";
 
 interface WorkspaceInputSummaryProps {
   input: string;
   inputTooLarge: boolean;
+  inputRules: InputRules;
   inputProfile: { total: number; archiveUrls: number; repositories: number };
   ecosystem: Ecosystem;
   settings: Settings;
@@ -20,6 +21,7 @@ interface WorkspaceInputSummaryProps {
 export function WorkspaceInputSummary({
   input,
   inputTooLarge,
+  inputRules,
   inputProfile,
   ecosystem,
   settings,
@@ -54,7 +56,7 @@ export function WorkspaceInputSummary({
               type="button"
               className="input-stat-chip warn dedupe-btn"
               title="点击去除重复包名"
-              onClick={() => onInputChange(dedupePackageInput(input), "manual")}
+              onClick={() => onInputChange(dedupePackageInput(input, inputRules), "manual")}
             >
               重复 <strong>{duplicateCount}</strong> · 去重
             </button>

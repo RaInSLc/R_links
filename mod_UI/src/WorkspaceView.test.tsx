@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import "@testing-library/jest-dom";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { WorkspaceView } from "./WorkspaceView";
-import { defaultSettings, type Method } from "./types";
+import { defaultInputRules, defaultSettings, type Method } from "./types";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: vi.fn(),
@@ -12,6 +12,7 @@ describe("WorkspaceView", () => {
   const defaultProps = {
     input: "dplyr\ntidyr",
     inputTooLarge: false,
+    inputRules: defaultInputRules,
     inputProfile: { total: 2, archiveUrls: 0, repositories: 0 },
     method: "auto" as Method,
     conditional: false,

@@ -146,13 +146,29 @@ export function formatError(error: unknown) {
   }
 }
 
-export const isActiveInputLine = (value: string) =>
-  Boolean(value.trim()) && !value.trim().startsWith("#");
+/** 默认注释字符；与 Rust `InputRules::default()` 一致。 */
+export const DEFAULT_COMMENT_CHARS = ["#"];
 
-export function nonEmptyLineCountExceeds(value: string, limit: number) {
+/**
+ * 与 Rust `input.rs::is_comment_line` 对齐的注释行判定。
+ * 传空数组表示不把任何行当作注释。
+ */
+export const isCommentLine = (value: string, commentChars: string[] = DEFAULT_COMMENT_CHARS) => {
+  const trimmed = value.trim();
+  return commentChars.some((marker) => marker.length > 0 && trimmed.startsWith(marker));
+};
+
+export const isActiveInputLine = (value: string, commentChars: string[] = DEFAULT_COMMENT_CHARS) =>
+  Boolean(value.trim()) && !isCommentLine(value, commentChars);
+
+export function nonEmptyLineCountExceeds(
+  value: string,
+  limit: number,
+  commentChars: string[] = DEFAULT_COMMENT_CHARS,
+) {
   let count = 0;
   for (const line of value.split(/\r?\n/)) {
-    if (isActiveInputLine(line) && ++count > limit) return true;
+    if (isActiveInputLine(line, commentChars) && ++count > limit) return true;
   }
   return false;
 }
