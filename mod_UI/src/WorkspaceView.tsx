@@ -85,7 +85,11 @@ export function WorkspaceView({
   return (
     <div className="workspace-grid">
       <section className="panel input-panel">
-        <PanelHeader step="01" title="输入包列表" meta={`${inputProfile.total}/${MAX_PACKAGE_LINES} 项${duplicateCount > 0 ? ` · ${duplicateCount} 重复` : ""} · ${new Blob([input]).size}/${MAX_INPUT_CHARS}B`} />
+        <PanelHeader
+          step="01"
+          title="输入包列表"
+          meta={`${inputProfile.total}/${MAX_PACKAGE_LINES} 项${duplicateCount > 0 ? ` · ${duplicateCount} 重复` : ""} · ${new Blob([input]).size}/${MAX_INPUT_CHARS}B`}
+        />
         <EcosystemSourceConfig
           ecosystem={ecosystem} pipIndex={pipIndex} condaChannels={condaChannels} rBinaryMirror={rBinaryMirror} searching={searching}
           onEcosystemChange={onEcosystemChange} onPipIndexChange={onPipIndexChange}

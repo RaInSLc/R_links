@@ -205,7 +205,13 @@ export function useSearch(setStatus: SetStatus) {
     } catch (error) {
       if (runId === activeSearchRunId.current) setStatus(`R 二进制包检索失败: ${formatError(error)}`);
     } finally {
-      if (runId === activeSearchRunId.current) { setSearchDuration(Date.now() - searchStartTime.current); setSearching(false); updatePaused(false); searchingRef.current = false; activeSearchRunId.current = 0; }
+      if (runId === activeSearchRunId.current) {
+      setSearchDuration(Date.now() - searchStartTime.current);
+      setSearching(false);
+      updatePaused(false);
+      searchingRef.current = false;
+      activeSearchRunId.current = 0;
+    }
     }
   }
 

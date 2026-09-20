@@ -4,11 +4,15 @@ use crate::{
     logic, models,
     models::{MirrorSpeedResult, NetworkDiagnostic},
 };
-use futures_util::StreamExt;
+use futures_util::stream::{self, StreamExt};
 use reqwest::Client;
 use std::time::{Duration, Instant};
 use tauri::AppHandle;
 use url::Url;
+
+/// 同时发起镜像测速请求的最大并发数。镜像测速只关心"哪个最快"，
+/// 不需要一次性打满数十个远端，超过此值后队列内的新请求会等活跃槽位。
+const MAX_MIRROR_PING_CONCURRENCY: usize = 4;
 fn client(
     proxy: Option<&str>,
     connect: Duration,
@@ -90,7 +94,10 @@ pub(crate) async fn test_mirror_speed(
             }
         }
     });
-    let mut r = futures_util::future::join_all(tasks).await;
+    let mut r = stream::iter(tasks)
+        .buffer_unordered(MAX_MIRROR_PING_CONCURRENCY)
+        .collect::<Vec<_>>()
+        .await;
     r.sort_by_key(|x| if x.success { x.latency_ms } else { u64::MAX });
     Ok(r)
 }
@@ -257,7 +264,25 @@ pub(crate) fn export_diagnostics(
 ) -> Result<String, String> {
     let s = load_existing_settings_for_runtime(&app)?;
     let p = s.public_view();
-    let v = serde_json::json!({"schema_version":2,"app_version":env!("CARGO_PKG_VERSION"),"settings":{"full_search":p.full_search,"proxy":redact_proxy_url(&p.proxy),"cran_mirror":p.cran_mirror,"github_token_configured":p.github_token_configured,"r_lib_path_configured":configured_flag(&p.r_lib_path)},"cache_entries":crate::storage::load_cache(&app).map(|x|x.len()).unwrap_or(0),"history_entries":crate::storage::load_history(&app).map(|x|x.len()).unwrap_or(0),"platform":std::env::consts::OS,"arch":std::env::consts::ARCH,"toolchain":check_system_toolchain(),"search_summary":search_summary,"failed_categories":failed_categories,"update_status":update_status});
+    let v = serde_json::json!({
+        "schema_version": 2,
+        "app_version": env!("CARGO_PKG_VERSION"),
+        "settings": {
+            "full_search": p.full_search,
+            "proxy": redact_proxy_url(&p.proxy),
+            "cran_mirror": p.cran_mirror,
+            "github_token_configured": p.github_token_configured,
+            "r_lib_path_configured": configured_flag(&p.r_lib_path),
+        },
+        "cache_entries": crate::storage::load_cache(&app).map(|x| x.len()).unwrap_or(0),
+        "history_entries": crate::storage::load_history(&app).map(|x| x.len()).unwrap_or(0),
+        "platform": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "toolchain": check_system_toolchain(),
+        "search_summary": search_summary,
+        "failed_categories": failed_categories,
+        "update_status": update_status,
+    });
     serde_json::to_string_pretty(&v).map_err(|e| format!("诊断信息序列化失败: {e}"))
 }
 

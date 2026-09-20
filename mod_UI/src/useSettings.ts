@@ -10,7 +10,22 @@ import type { Settings } from "./types";
 import { defaultSettings } from "./types";
 
 type SettingsBoolField = "fullSearch" | "conditional" | "installDependencies" | "showRemoteVersion" | "useCache" | "useFilter" | "resolveDependencies" | "includeLightDependencies";
-type SettingsPersistOverrides = Partial<Pick<Settings, SettingsBoolField | "searchConcurrency" | "archiveGithubMajorGap" | "maxCacheEntries" | "maxDependencyDepth" | "maxDependencyNodes" | "proxy" | "githubToken" | "cranMirror" | "rLibPath" | "pinnedMethods">>;
+type SettingsPersistOverrides = Partial<
+  Pick<
+    Settings,
+    | SettingsBoolField
+    | "searchConcurrency"
+    | "archiveGithubMajorGap"
+    | "maxCacheEntries"
+    | "maxDependencyDepth"
+    | "maxDependencyNodes"
+    | "proxy"
+    | "githubToken"
+    | "cranMirror"
+    | "rLibPath"
+    | "pinnedMethods"
+  >
+>;
 
 type SetStatus = (s: string) => void;
 

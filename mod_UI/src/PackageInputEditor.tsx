@@ -78,7 +78,14 @@ export const PackageInputEditor = forwardRef<PackageInputEditorHandle, PackageIn
       return;
     }
     const lines = text.split("\n").filter((line) => line.trim());
-    if (lines.length > 1 && (lines.some((line) => line !== line.trim()) || lines.some((line) => line.includes(",")) || lines.some((line) => line.includes("\t")) || text.includes("\n\n"))) onPasteIssues();
+    if (
+      lines.length > 1 &&
+      (lines.some((line) => line !== line.trim()) ||
+        lines.some((line) => line.includes(",")) ||
+        lines.some((line) => line.includes("\t")) ||
+        text.includes("\n\n"))
+    )
+      onPasteIssues();
     const installPkgs = text.match(/install\.packages\s*\(\s*["'`]([^"'`]+)["'`]/g);
     const biocPkgs = text.match(/BiocManager::install\s*\(\s*["'`]([^"'`]+)["'`]/g);
     const githubPkgs = text.match(/(?:remotes|devtools)::install_github\s*\(\s*["'`]([^"'`]+)["'`]/g);

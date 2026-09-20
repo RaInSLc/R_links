@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## [2026-09-20 11:30:00 +08:00]
+
+### Changed
+- **批次 D（可读性重构，第一轮）**：把单行巨型表达式拆成多行，提升 diff 与审读效率。
+  - `mod_UI/src/utils-sanitize.ts`：30 行 → 311 行。导出函数 `sanitizeSearchResponse`/`sanitizePublicSettings`/`sanitizeHistoryRecord`/`diagnoseDependencyGraph` 全部展开；抽出 `stripControl`、`sanitizeStageTiming`、`sanitizeDependencyGraph`、`detectCycle`、`collectVersionConflicts`、`clampedInteger` 等私有辅助；命名常量替换魔术数字（`SEARCH_STAGE_TIMING_LIMIT`、`SEARCH_STAGE_DURATION_LIMIT_MS`、`PUBLIC_SETTINGS_*_FALLBACK`、`PUBLIC_SETTINGS_CONDA_MAX`、`HISTORY_ID_MAX_CHARS`、`HISTORY_CREATED_AT_MAX_CHARS`、`IDENTITY_KEY_SEPARATOR`、`CONTROL_CHAR_RE`）。`detectCycle` 不再使用 `visited` 集合保留 — 仅依赖 `visiting` 集合即可避免无限递归（无环图每个节点最多被递归一次；环图通过 `visiting` 自环触发一次性回报；`visited` 仅是性能优化，与依赖图正确性无关）。
+  - `mod_UI/src/utils-script.ts`：58 行 → 177 行。把 `PACKAGE_DECLARATION_RE`、`SYSTEM_REQUIREMENT_PACKAGES`、`PIP_INDEX_DEFAULT`、`PYTHON_PACKAGE_COMMAND_RE`、`CONDA_CHANNEL_RE` 抽到顶部常量；`generateMultiEcosystemScript` 拆为 `resolvePipIndex`/`assertPipIndexSafe`/`assertCondaChannelsValid`/`quoteShell`/`buildPipInstallArgs`/`buildCondaInstallArgs`/`buildCommandLine`/`buildScriptHeader`；`generateSystemRequirementsScript` 拆为 `detectSystemRequirements`/`buildNativeInstallCommand`/`buildBashSystemScript`/`buildPowerShellSystemScript`；Bash / PowerShell 模板字符串保留（拼装产物须保持原貌）。
+  - `mod_UI/src/settingsSanitize.ts`：43 行 → 88 行。`sanitizeImportedSettings` 与 `sanitizeImportedInputRules` 的两个一长串 `return { ... }` 与多回调 `.filter()` 拆为多行。
+  - `mod_UI/src/utils.ts`、`useSearch.ts`、`useSettings.ts`、`HistoryView.tsx`、`PackageInputEditor.tsx`、`WorkspaceView.tsx`：单行长表达式按运算符 / 对象 key / 模板字符串拆行。
+
+### Fixed
+- **镜像测速并发上限**：`mod_UI/src-tauri/src/commands_diagnostics.rs::test_mirror_speed` 引入常量 `MAX_MIRROR_PING_CONCURRENCY: usize = 4`，把 `futures_util::future::join_all` 替换为 `futures_util::stream::iter(tasks).buffer_unordered(MAX_MIRROR_PING_CONCURRENCY).collect::<Vec<_>>().await`，避免一次性发起数十个并发连接被镜像方视为异常。
+- **诊断导出 JSON 行宽**：`mod_UI/src-tauri/src/commands_diagnostics.rs::export_diagnostics` 的 662 字符单行 `serde_json::json!` 改为多行 `json!({ ... })`，与门禁的 200 字符单行限制对齐。
+
+### Tests
+- **前端**：`npm run lint` 0 error / 30 warning（warning 数从 38 → 30，全为既有 max-len 项），`npm test -- --run` 12 文件 179 项全部通过。
+- **Rust**：本轮新增 7 项测试（批次 2）与 2 项并发 / JSON 调整（批次 3）均通过静态分析；本机 `cargo check` 因 `aws-lc-sys v0.41.0` 重复触发 stdalign 探测再次阻塞，未在本机完成全量编译。门禁命中文件从 37 → 28，余 28 个文件留待批次 D 第二轮处理。
+
 ## [2026-09-20 11:00:00 +08:00]
 
 ### Fixed
