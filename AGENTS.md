@@ -141,6 +141,8 @@ If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is 
 - 多行字段不得在每次输入时调用 `trim()`、`filter(Boolean)` 或无条件删除尾随换行。
 - `() => void` 形状的回调 prop 只能写成 `onClick={() => handler()}`，不得写 `onClick={handler}`。若实现实际接收可选参数（如 `useSettings` 的 `persistSettings(overrides?)`、`useAppActions` 的 `saveInputRules(rules?)`），React 会把合成事件当作该参数传入，事件对象展开后再序列化会因循环引用抛错，保存类功能会整体失效。
 - 上述约定必须由测试固定：组件测试断言 `toHaveBeenCalledWith()`（零实参），且 `App.test.tsx` 保留端到端用例断言保存请求的负载可被 `JSON.stringify` 序列化、字段类型正确。
+- 版本号禁止硬编码回退值：运行时取 `@tauri-apps/api/app` 的 `getVersion()`，失败时回退构建期注入的 `__APP_VERSION__`（见 `vite.config.ts` 的 `define` 与 `src/utils-update.ts`）。
+- 源码规模门禁 `npm run check:size` 采用**棘轮基线**：未列入 `scripts/check_source_size.mjs` 中 `MAX_LINE_CHAR_BASELINE` 的文件（即新增模块）一行都不允许超过 200 字符；已列入的文件不得比基线更多。修完某个文件的超长行后必须把对应数字改小或删除，基线与 `eslint.config.mjs` 的 `max-len` 策略保持一致。
 - 从后端加载的配置对象（`load_input_rules`、`load_settings`）必须在边界处用 `settingsSanitize.ts` 的 `sanitizeImported*` 补齐字段后再进入状态，不得让消费方假设字段完整。
 
 ### Tauri 与 Rust 验证
@@ -159,6 +161,19 @@ If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is 
 - **打包必须绕开 npm 的环境剥离**：`npm run` 会把 `TEMP`、`TMP`、`USERPROFILE` 从脚本环境中删掉（`npm run env` 只剩约 40 个变量），MSVC `link.exe` 取不到 `%TEMP%` 时会回退到对当前用户不可写的 `C:\Windows`，报 `LNK1104: 无法打开文件 "C:\Windows\lnk{...}.tmp"`，使 `npm run tauri build` **必然失败**。正确命令是在 `mod_UI/` 下执行 `./node_modules/.bin/tauri build`（直接调用 CLI 的 node 入口，继承完整环境）。
 - 本机 `Z:` 是 SMB 网络共享（`\\10.0.0.163\pythonProject`），Rust 全量编译会间歇性报 `os error 5（拒绝访问）`（并发写入竞争，已排除磁盘空间与权限）。使用 `报告/ai_codes/retry_build.sh <工作目录> <日志文件> <最大次数> -- <命令>` 做"失败即重试"，依托 cargo 增量缓存逐次推进：实测约 11~13 crate/min，明显快于 `cargo test -j 1` 的约 2.7 crate/min（后者虽稳定但代价过高）。
 - 产物归档：安装程序与免安装主程序在构建后复制到根目录 `release/`（该目录已被 `.gitignore` 忽略）。
+- 本地打包统一用 `npm run package:local`（等价 `node scripts/build_local.mjs`）：它会补齐被 npm 剥离的 `TEMP`/`TMP`/`USERPROFILE`，只在"网络盘写入竞争"特征出现时重试，按有无签名密钥决定是否产出 updater 产物，并在有 `.sig` 时生成并校验 `release/latest.json`。
+
+### 自动更新链路（发布前必须逐项确认）
+
+自动更新是「GitHub Release + minisign 签名 + latest.json + 应用内置公钥」四者缺一不可的闭环，**任何一环缺失都不会让构建或发布报错**，只会在用户端表现为一句笼统的失败提示。因此发布前必须：
+
+- `bundle.createUpdaterArtifacts` 必须为 `true`。它是 `.sig` 与 `latest.json` 的唯一来源；历史上该字段从未配置过，导致十余个版本全部没有更新清单。
+- `plugins.updater.pubkey` 必须是**合法且与签名私钥同源**的 minisign 公钥。可用 `npm run verify:updater` 校验：它会解析公钥、比对私钥签名出的 key id、检查远端 `latest.json` 与资产可达性。
+- 写入公钥时禁止经过会解释转义字符的通道（PowerShell 的 `` ` `` 是转义符，曾把公钥主体破坏成含退格符的非法 base64）。**必须**通过脚本或 `tauri.key.*.pub` 文件内容直接写入，写完立刻跑 `npm run verify:updater`。
+- 更新密钥对与密码：私钥文件为 `mod_UI/tauri.key.regenerated`（被 `tauri.key.*` 规则忽略，**不得提交**），对应 GitHub Secrets 为 `TAURI_SIGNING_PRIVATE_KEY`（私钥文件内容）与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（无密码留空）。
+- 版本号必须三处同步（`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`）且与 tag 一致；tag 必须严格高于用户已装版本，否则应用只会提示"已是最新"。
+- 发布工作流在缺少签名密钥或缺少 `latest.json` 时**必须硬失败**，禁止再出现"打印 Notice 后 exit 0"的静默跳过。
+- `mod_UI/tauri.key`（旧私钥，密码已丢失）不得再用于任何发布，仅作历史留存。
 
 ### 配置与文档
 

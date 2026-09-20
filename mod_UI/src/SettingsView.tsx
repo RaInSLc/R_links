@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { CacheSettingsPanel, type PackageCacheEntry } from "./CacheSettingsPanel";
-import { mirrors, type InputRules, type Settings } from "./types";
+import { mirrors, type InputRules, type Settings, type UpdateFailureStage, type UpdateState, type UpdaterConfigInfo } from "./types";
 import type { MirrorSpeedResult, NetworkDiagnostic, ToolchainCheck } from "./utils";
 import { SettingsNetworkPanel } from "./SettingsNetworkPanel";
 import { SettingsStrategyPanel } from "./SettingsStrategyPanel";
@@ -11,7 +11,7 @@ import { SettingsBackupPanel } from "./SettingsBackupPanel";
 
 export interface SettingsViewProps {
   settings: Settings; tokenConfigured: boolean; showToken: boolean; settingsBusy: boolean; currentTheme: string; currentFont: string;
-  checkingUpdate: boolean; updateState: "idle" | "checking" | "available" | "downloading" | "installing" | "readyToRestart" | "upToDate" | "error"; updateMessage: string; appVersion: string; updateVersion: string;
+  checkingUpdate: boolean; updateState: UpdateState; updateStage: UpdateFailureStage | null; updateMessage: string; appVersion: string; updateVersion: string; updaterConfig: UpdaterConfigInfo | null;
   onProxyChange: (value: string) => void;
   onTokenChange: (value: string) => void;
   onTokenToggle: () => void;

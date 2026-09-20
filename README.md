@@ -47,7 +47,9 @@ npm run tauri build -- --no-bundle
 
 项目根目录的 `报告\build_exe.bat` 是 Windows 本地打包入口，会调用 `报告\build_exe.ps1`，执行 `npm ci` 和 `npm run tauri build` 后，将便携版 `mod_ui.exe` 复制为 `release\RLinks_UI.exe`。此脚本仅用于生成本地便携版，不生成自动更新清单。
 
-`release\` 是本地发布产物目录，默认不进入 Git。用于 GitHub Releases 的 `latest.json` 及所有更新签名（signature），完全由 GitHub Actions（`.github/workflows/release.yml`）在正式发版时自动生成并上传。
+本地打包推荐使用 `cd mod_UI && npm run package:local`：它会补齐被 npm 剥离的 `TEMP`/`TMP`/`USERPROFILE`、必要时重试、按有无签名密钥决定是否产出更新产物，并在存在 `.sig` 时生成并校验 `release/latest.json`。
+
+`release\` 是本地发布产物目录，默认不进入 Git。用于 GitHub Releases 的 `latest.json` 及所有更新签名（signature），由 GitHub Actions（`.github/workflows/release.yml`）在正式发版时自动生成并上传；发布前可用 `cd mod_UI && npm run verify:updater` 逐环校验公钥、私钥、清单与资产是否闭环。
 
 ## 4. 必要环境
 

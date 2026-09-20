@@ -22,6 +22,16 @@ pub struct NetworkDiagnostic {
     pub proxy: String,
     pub error: Option<String>,
 }
+/// 更新链路自检结果：直接读取 `tauri.conf.json` 中真正生效的更新端点与签名公钥，
+/// 避免界面、文档和配置各存一份"看起来一样"的真相。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdaterConfigInfo {
+    pub endpoints: Vec<String>,
+    /// 公钥可解析时为其密钥 ID；`None` 表示该公钥非法，更新包将永远无法通过验签。
+    pub pubkey_key_id: Option<String>,
+    pub current_version: String,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolchainCheck {

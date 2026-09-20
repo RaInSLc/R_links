@@ -4,6 +4,7 @@ use crate::{
     logic, models,
     models::{MirrorSpeedResult, NetworkDiagnostic},
 };
+use base64::Engine;
 use futures_util::stream::{self, StreamExt};
 use reqwest::Client;
 use std::time::{Duration, Instant};
@@ -244,27 +245,88 @@ fn redact_proxy_url(proxy: &str) -> String {
         return "未配置".to_string();
     }
     match Url::parse(trimmed) {
-        Ok(parsed)
-            if !parsed.username().is_empty() || parsed.password().is_some() =>
-        {
+        Ok(parsed) if !parsed.username().is_empty() || parsed.password().is_some() => {
             "[redacted]".to_string()
         }
         Ok(_) => trimmed.to_string(),
         Err(_) => trimmed.to_string(),
     }
 }
+/// 从 `updater.pubkey`（minisign 公钥文件内容的 base64 文本）中取出密钥 ID。
+///
+/// 解码链路与 `tauri-plugin-updater::verify_signature` 完全一致：base64 解出
+/// 文本 → 取第二行（公钥主体）→ base64 解出 42 字节 → `Ed` + 8 字节 key id
+/// + 32 字节公钥。返回 `None` 表示这个公钥无法解析，即**任何更新包都无法通过
+/// 验签**；而构建、打包、发布都不会因此报错，只能靠这里的显式校验暴露。
+pub(crate) fn minisign_public_key_id(pubkey: &str) -> Option<String> {
+    let engine = base64::engine::general_purpose::STANDARD;
+    let text = String::from_utf8(engine.decode(pubkey.trim()).ok()?).ok()?;
+    let body = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !line.starts_with("untrusted comment"))?;
+    let raw = engine.decode(body).ok()?;
+    // 42 = 2 字节算法标识 + 8 字节 key id + 32 字节公钥。
+    if raw.len() != 42 || !matches!(raw[..2], [0x45, 0x64] | [0x45, 0x44]) {
+        return None;
+    }
+    Some(
+        raw[2..10]
+            .iter()
+            .map(|byte| format!("{byte:02X}"))
+            .collect(),
+    )
+}
+
+/// 读取当前生效的更新端点与签名公钥，供设置页展示与诊断导出复用。
+pub(crate) fn updater_config_info(app: &AppHandle) -> models::UpdaterConfigInfo {
+    let updater = app.config().plugins.0.get("updater");
+    let endpoints = updater
+        .and_then(|value| value.get("endpoints"))
+        .and_then(|value| value.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    let pubkey_key_id = updater
+        .and_then(|value| value.get("pubkey"))
+        .and_then(|value| value.as_str())
+        .and_then(minisign_public_key_id);
+    models::UpdaterConfigInfo {
+        endpoints,
+        pubkey_key_id,
+        current_version: env!("CARGO_PKG_VERSION").to_string(),
+    }
+}
+
+#[tauri::command]
+pub(crate) fn inspect_updater_config(app: AppHandle) -> models::UpdaterConfigInfo {
+    updater_config_info(&app)
+}
+
 #[tauri::command]
 pub(crate) fn export_diagnostics(
     app: AppHandle,
     search_summary: Option<serde_json::Value>,
     failed_categories: Option<serde_json::Value>,
-    update_status: Option<String>,
+    // 结构化而非纯文本：便于诊断导出里保留更新阶段、端点与版本。
+    update_status: Option<serde_json::Value>,
 ) -> Result<String, String> {
     let s = load_existing_settings_for_runtime(&app)?;
     let p = s.public_view();
+    let updater = updater_config_info(&app);
     let v = serde_json::json!({
-        "schema_version": 2,
+        "schema_version": 3,
         "app_version": env!("CARGO_PKG_VERSION"),
+        "updater": {
+            "endpoints": updater.endpoints,
+            "pubkey_key_id": updater.pubkey_key_id,
+            "pubkey_parsable": updater.pubkey_key_id.is_some(),
+        },
         "settings": {
             "full_search": p.full_search,
             "proxy": redact_proxy_url(&p.proxy),
@@ -315,5 +377,79 @@ mod proxy_redaction_tests {
         assert_eq!(redact_proxy_url(""), "未配置");
         assert_eq!(redact_proxy_url("   "), "未配置");
         assert_eq!(redact_proxy_url("not a url"), "not a url");
+    }
+}
+
+#[cfg(test)]
+mod updater_config_tests {
+    use super::minisign_public_key_id;
+
+    const GOOD_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFGQzc1\
+        Njk2MzU1MDgyNEQKUldSTmdsQTFsbGJISC8yMm1EVTZHcTI3YTlyR0RpZitq\
+        Y0xjVjB3SFVYS1dIZDNCdnplQllGNTcK";
+
+    /// 历史上真实写入过配置的损坏公钥：公钥主体里混入了反引号与退格符
+    /// （PowerShell 把 `` ` `` 当作转义字符的典型后果），base64 无法解码。
+    const CORRUPTED_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFDMDE1\
+        QzhCN0VCNDc4NDAKUldSQWVMUitpMXdCckJkYAhWWVZCNXRSMkMzOXhHUmRr\
+        SFZNdnVQZG1PM0poWUZjZDlnSjBQdGMK";
+
+    fn bundled_config() -> serde_json::Value {
+        let raw = include_str!("../tauri.conf.json");
+        serde_json::from_str(raw).expect("tauri.conf.json 必须是合法 JSON")
+    }
+
+    /// 随包发布的公钥必须是可解析的 minisign 公钥。此前该字段被写坏，
+    /// 而构建、打包、发布全都不报错，只有在用户真正下载更新时才会验签失败。
+    #[test]
+    fn bundled_updater_pubkey_is_a_valid_minisign_key() {
+        let config = bundled_config();
+        let pubkey = config["plugins"]["updater"]["pubkey"]
+            .as_str()
+            .expect("必须配置 plugins.updater.pubkey");
+        assert!(
+            minisign_public_key_id(pubkey).is_some(),
+            "plugins.updater.pubkey 不是合法的 minisign 公钥"
+        );
+    }
+
+    /// 更新包必须带上签名产物，否则发布流程无法生成 latest.json。
+    #[test]
+    fn bundled_config_creates_updater_artifacts() {
+        let config = bundled_config();
+        assert_eq!(
+            config["bundle"]["createUpdaterArtifacts"].as_bool(),
+            Some(true),
+            "bundle.createUpdaterArtifacts 必须为 true，否则不会产出 .sig 与 latest.json"
+        );
+    }
+
+    #[test]
+    fn bundled_updater_endpoints_are_https() {
+        let config = bundled_config();
+        let endpoints = config["plugins"]["updater"]["endpoints"]
+            .as_array()
+            .expect("必须配置 plugins.updater.endpoints");
+        assert!(!endpoints.is_empty());
+        for endpoint in endpoints {
+            let url = endpoint.as_str().expect("更新端点必须是字符串");
+            assert!(url.starts_with("https://"), "更新端点必须使用 https: {url}");
+        }
+    }
+
+    #[test]
+    fn extracts_key_id_from_valid_pubkey() {
+        // raw[2..10] 为 key id；minisign 注释里打印的是它的逆序十六进制。
+        assert_eq!(
+            minisign_public_key_id(GOOD_PUBKEY).as_deref(),
+            Some("4D8250359656C71F")
+        );
+    }
+
+    #[test]
+    fn rejects_corrupted_pubkey() {
+        assert_eq!(minisign_public_key_id(CORRUPTED_PUBKEY), None);
+        assert_eq!(minisign_public_key_id(""), None);
+        assert_eq!(minisign_public_key_id("not base64 at all"), None);
     }
 }

@@ -130,3 +130,29 @@ export const sourceNames: Record<string, string> = {
   pip: "Pip",
   conda: "Conda",
 };
+
+/** 应用更新的状态机；界面（侧边栏版本徽标、设置页）与更新流程共用同一份定义。 */
+export type UpdateState =
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "installing"
+  | "readyToRestart"
+  | "upToDate"
+  | "error";
+
+/** 更新失败的阶段：用于把「跑不通」拆成可执行的结论，而不是一句笼统的失败。 */
+export type UpdateFailureStage =
+  | "manifest-missing"
+  | "signature"
+  | "permission"
+  | "network"
+  | "unknown";
+
+/** 由后端 `inspect_updater_config` 读取的、真正生效的更新配置。 */
+export interface UpdaterConfigInfo {
+  endpoints: string[];
+  pubkeyKeyId: string | null;
+  currentVersion: string;
+}

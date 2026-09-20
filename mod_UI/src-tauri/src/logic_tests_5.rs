@@ -158,14 +158,15 @@ mod tests {
 
     #[test]
     fn parses_uppercase_scheme_inputs_end_to_end() {
-        let github =
-            parse_inputs("HTTPS://github.com/tidyverse/dplyr").expect("大写协议头的 GitHub URL 应可解析");
+        let github = parse_inputs("HTTPS://github.com/tidyverse/dplyr")
+            .expect("大写协议头的 GitHub URL 应可解析");
         assert_eq!(github.len(), 1);
         assert_eq!(github[0].name, "tidyverse/dplyr");
         assert_eq!(github[0].source_hint.as_deref(), Some("github"));
 
-        let archive = parse_inputs("Http://cran.r-project.org/src/contrib/Archive/pkg/pkg_1.0.tar.gz")
-            .expect("大写协议头的归档 URL 应可解析");
+        let archive =
+            parse_inputs("Http://cran.r-project.org/src/contrib/Archive/pkg/pkg_1.0.tar.gz")
+                .expect("大写协议头的归档 URL 应可解析");
         assert_eq!(archive.len(), 1);
         assert_eq!(archive[0].name, "pkg");
     }

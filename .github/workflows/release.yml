@@ -54,6 +54,22 @@ jobs:
         working-directory: mod_UI
         run: npm ci
 
+      - name: Require updater signing key
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            Write-Host '缺少仓库 Secret TAURI_SIGNING_PRIVATE_KEY。'
+            Write-Host '没有签名密钥就不会产出 .sig 与 latest.json，发布出去的应用永远无法自动更新。'
+            Write-Host '请在 Settings > Secrets and variables > Actions 中配置：'
+            Write-Host '  TAURI_SIGNING_PRIVATE_KEY          —— mod_UI/tauri.key.regenerated 的内容'
+            Write-Host '  TAURI_SIGNING_PRIVATE_KEY_PASSWORD —— 密钥密码（无密码则留空）'
+            Write-Host '并确认 tauri.conf.json 的 plugins.updater.pubkey 与私钥同属一对密钥。'
+            throw '缺少 TAURI_SIGNING_PRIVATE_KEY，拒绝发布无法自动更新的版本。'
+          }
+          Write-Host '签名密钥已配置。'
+
       - name: Validate release tag
         shell: pwsh
         run: |
@@ -87,7 +103,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo clippy --manifest-path src-tauri\Cargo.toml --all-targets --locked -- -D warnings
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run tauri build
+          # 这里只验证编译与测试；签名构建由 tauri-action 完成，
+          # 若在此处直接 build 会因缺少签名环境变量而失败。
+          npm run tauri build -- --no-bundle
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $global:LASTEXITCODE = 0
           exit 0
@@ -159,9 +177,12 @@ jobs:
           }
 
           if (-not $downloaded) {
-            Write-Host "Notice: latest.json was not uploaded to release $tag (TAURI_SIGNING_PRIVATE_KEY repository secret may be unconfigured). Skipping updater manifest validation."
-            $global:LASTEXITCODE = 0
-            exit 0
+            Write-Host 'latest.json 未上传到 Release。'
+            Write-Host '此前这里只打印 Notice 后 exit 0，导致多个版本一路发布、客户端却永远无法自动更新。'
+            Write-Host '请检查：TAURI_SIGNING_PRIVATE_KEY 是否已配置、bundle.createUpdaterArtifacts 是否为 true、'
+            Write-Host 'plugins.updater.pubkey 与私钥是否同属一对密钥。'
+            Write-Error "latest.json was not uploaded to release $tag"
+            exit 1
           }
 
           $manifestPath = Join-Path "updater-check" "latest.json"
@@ -197,6 +218,25 @@ jobs:
           Write-Host "latest.json updater manifest validated successfully!"
           $global:LASTEXITCODE = 0
           exit 0
+
+      # 结构校验通过还不够：真正决定「应用内更新能不能装」的是签名密钥是否与
+      # 内置公钥同属一对、以及清单里的 URL 是否真能下载。这里直接复用本地
+      # 自检脚本，把整条链路（公钥解析、私钥一致性、远端清单、资产可达）一次验完。
+      - name: Verify updater chain end to end
+        working-directory: mod_UI
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          for ($i = 1; $i -le 3; $i++) {
+            Write-Host "更新链路自检 第 $i/3 次"
+            node scripts/verify_updater.mjs
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($i -eq 3) { exit $LASTEXITCODE }
+            Write-Host '可能遇到 CDN 缓存延迟，10 秒后重试……'
+            Start-Sleep -Seconds 10
+          }
 
       - name: Preserve Windows installers
         if: always()

@@ -1,5 +1,49 @@
 # CHANGELOG
 
+## [2026-09-20 18:16:00 +08:00] - v0.2.6 在线更新链路根因修复 + 版本号常驻显示
+
+### Fixed
+
+- **在线更新永远跑不通（3 个独立根因，均已修复）**：
+  1. **`bundle.createUpdaterArtifacts` 从未配置过**（全仓库历史检索确认：任何提交中都不存在该字段）。Tauri 只有在它为 `true` 时才产出 `.sig` 签名文件，而 `tauri-action` 依赖 `.sig` 生成 `latest.json`。实测本地 12 个版本的 `target/release/bundle/{nsis,msi}` 里**一个 `.sig` 都没有**，因此所有 Release 都不含更新清单。
+  2. **应用内置的签名公钥是损坏的、根本无法解析**。`plugins.updater.pubkey` 解出的公钥主体里混进了反引号与退格符（PowerShell 会把 `` ` `` 当转义字符，典型的写入事故）。按 `tauri-plugin-updater::verify_signature` 的解码链路复现：`PublicKey::decode` → `base64` 解码失败（`Only base64 data is allowed`），即**即使更新清单存在，任何更新包都无法通过验签**，`downloadAndInstall` 必然失败。已改用 `tauri signer generate` 新生成且校验通过的密钥对（key id `4D8250359656C71F`）。
+  3. **发布工作流把「清单缺失」当成正常情况**：`release.yml` 在下载不到 `latest.json` 时只打印 Notice 并 `exit 0`，因此 12 个版本一路绿灯发布、没有任何人被拦住。同时其预构建步骤 `npm run tauri build` 没有签名环境变量，一旦开启 updater 产物就会因缺少私钥而失败，故改为 `--no-bundle`（该步骤只负责验证编译与测试）。
+- **更新端点 HTTP 404**：`https://github.com/RaInSLc/R_links/releases/latest/download/latest.json` 实测返回 404，这正是前端那条「缺少 latest.json 自动更新清单」提示的来源；根因即上述 1、3。
+
+### Added
+
+- **界面左下角常驻版本号**：新增 `mod_UI/src/SidebarVersion.tsx`，在侧边栏底部显示 `v当前版本`，并用状态点反映上次检查更新的结果（未检查/检查中/发现更新/下载中/安装中/待重启/已是最新/检查失败），失败时直接显示「失败阶段」，点击进入更新设置。
+- **构建期版本注入**：`vite.config.ts` 通过 `define` 注入 `__APP_VERSION__`（取自 `package.json`），`src/utils-update.ts` 的 `resolveAppVersion` 在 `getVersion()` 失败时回退到它，彻底去掉硬编码的版本回退值。
+- **更新失败分阶段诊断**：新增 `src/utils-update.ts`，把失败归类为 `manifest-missing` / `signature` / `permission` / `network` / `unknown`，并给出带**真实生效端点与公钥 ID**的可执行结论（例如「更新源缺少 latest.json 自动更新清单（<端点>）…请到 GitHub Releases 手动下载」）。判定顺序把清单缺失排在网络类之前，避免 404 被误判成断网。
+- **后端自检命令 `inspect_updater_config`**：从 `tauri.conf.json` 读取真正生效的更新端点与公钥 key id，供界面展示与诊断导出复用，避免出现第二份「看起来一样」的配置真相。
+- **`npm run verify:updater`（新增 `scripts/verify_updater.mjs`）**：按 `tauri-plugin-updater` 的真实解码链路校验公钥可解析、`createUpdaterArtifacts` 已开启、本地 `.sig` 与公钥 key id 一致、私钥与公钥同源（有私钥时用 `tauri signer sign` 探针验证）、远端 `latest.json` 存在/结构合法/版本高于本地/指向的资产可下载。缺清单时退出码为 1。`--pre-release` 用于发布前只校验本地链路。
+- **`npm run package:local`（新增 `scripts/build_local.mjs` + `scripts/updater_manifest.mjs`）**：本地打包补齐被 npm 剥离的 `TEMP`/`TMP`/`USERPROFILE`，只在出现网络盘写入竞争特征时重试（真正的编译错误立即失败），按有无签名密钥决定是否产出 updater 产物（无密钥时用 `--config` 关掉 `createUpdaterArtifacts`，否则 CLI 会直接失败），并在有 `.sig` 时生成校验通过的 `release/latest.json`。
+- **诊断导出补充更新链路**：`export_diagnostics` 的 `update_status` 改为结构化对象，并新增 `updater` 块（端点、公钥 key id、公钥是否可解析），`schema_version` 升到 3。
+
+### Changed
+
+- **源码规模门禁改为棘轮基线**：`scripts/check_source_size.mjs` 此前对 21 个历史遗留文件判失败（共 122 行超 200 字符），而 `eslint.config.mjs` 对同样的行只给 `warn`（注释明确写了「既有源码先以 warn 落地，本次新增模块保持 error」）。两者口径不一致会让 `npm run check:size` 在 CI 与发布流程中直接失败、进而阻塞发布。现改为按文件基线棘轮：未列入基线的文件一行都不允许超长，已列入的文件不得比基线更多，低于基线时提示下调。
+- **`cargo fmt --check` 此前不通过**（`commands_cache.rs`、`logic_tests_5.rs`、`storage.rs` 存在格式化漂移，会阻塞 `release.yml` 的发布校验），已执行 `cargo fmt` 对齐。
+- 设置页「应用更新」面板改为多行可读写法（原为单行 3320 字符），并展示当前版本、更新源、内置签名公钥与失败阶段。
+- `AGENTS.md` 新增「自动更新链路（发布前必须逐项确认）」小节，以及版本号注入与规模门禁基线的约定。
+
+### Tests
+
+- **前端**：新增 25 项用例（`SidebarVersion.test.tsx` 6 项、`utils.update.test.ts` 12 项、`SettingsView.test.tsx` 新增 1 项端点/公钥/失败阶段展示、`App.test.tsx` 更新既有 2 项断言以匹配新的诊断文案与 30s 检查超时）。`vitest run` 15 个文件 **213 项全部通过**（原 195 项）；`tsc --noEmit` 退出 0；`eslint` 0 error / 0 warning；`npm run check:size` 退出 0；`npm run build` 退出 0。
+- **Rust**：新增 5 项用例（`updater_config_tests`：随包公钥必须是合法 minisign 公钥、`createUpdaterArtifacts` 必须为 `true`、端点必须为 https、正确取出 key id、损坏公钥必须被拒绝）。这些用例直接读取 `tauri.conf.json`，此前那两个根因只要跑一次测试就会暴露。`cargo test --release` **246 通过 / 0 失败 / 3 忽略**（原 241），0 warning，首次尝试即通过；`cargo fmt -- --check` 退出 0。
+- **更新链路自检**：`node scripts/verify_updater.mjs` 修复后实测——
+  公钥可解析（`4D8250359656C71F`）、`createUpdaterArtifacts = true`、两个安装包的 `.sig` 与公钥 key id 一致、私钥↔公钥探针签名一致、本地 `latest.json` 结构合法；**唯一未通过项为远端端点 HTTP 404**（该版本尚未发布，退出码 1），与「始终跑不通」的现象完全对应。
+- **签名产物实测**：`npm run package:local`（带签名密钥）一次成功，Tauri 首次输出
+  `Finished 2 updater signatures at: ...nsis\R Package Command Center_0.2.6_x64-setup.exe.sig`
+  并生成 `release/latest.json`（`windows-x86_64` → `.../download/v0.2.6/R.Package.Command.Center_0.2.6_x64-setup.exe`）。此前 12 个版本从未出现过 `.sig`。
+- **便携版冒烟**：`release/R_Package_Command_Center_0.2.6_portable.exe` 启动后进程存活（驻留约 30 MB），随后由我主动终止；可执行文件中可检索到本轮前端资源名 `index-Cb41pxlE.js`，确认嵌入的是新构建而非旧产物。
+
+### Follow-up
+
+- **版本号提升到 0.2.6**：`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` 三处同步。签名公钥已更换，且 0.2.5 的安装包已在本地产出，故用新版本号发布，保证已装 0.2.5 及更早版本的用户能看到更新。
+- 需要仓库管理员把新私钥配置为 GitHub Secret `TAURI_SIGNING_PRIVATE_KEY`（内容取 `mod_UI/tauri.key.regenerated`），密码留空；随后打 `v0.2.6` tag 触发发布，闭环即打通。
+- 因旧私钥密码已丢失且内置公钥损坏，**已装 0.2.5 及更早版本的用户需要手动安装一次**新版本；从 0.2.6 起应用内更新才具备可验证的密钥链。
+
 ## [2026-09-20 17:00:00 +08:00]
 
 ### Changed

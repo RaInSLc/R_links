@@ -253,7 +253,9 @@ mod cache_match_tests {
         let item = entry("dplyr", "cran", "1.1.4", "", "dplyr");
         assert!(!matches(&item, "dplyr", "bioc", "1.1.4", "", "dplyr"));
         assert!(!matches(&item, "dplyr", "cran", "1.1.5", "", "dplyr"));
-        assert!(!matches(&item, "dplyr", "cran", "1.1.4", "archive", "dplyr"));
+        assert!(!matches(
+            &item, "dplyr", "cran", "1.1.4", "archive", "dplyr"
+        ));
         assert!(!matches(&item, "dplyr", "cran", "1.1.4", "", "other"));
     }
 }

@@ -30,6 +30,10 @@ fn write_synced_new_file(path: &std::path::Path, content: &str) -> std::io::Resu
     atomic_storage::write_new(path, content)
 }
 
+#[cfg(test)]
+pub(crate) use atomic_storage::{
+    MAX_BACKUPS as MAX_CORRUPT_BACKUPS_PER_FILE, MAX_SCAN as MAX_CORRUPT_BACKUP_SCAN_ENTRIES,
+};
 pub(crate) use cache_storage::{
     cache_entry_matches, clear_cache, clear_invalidated_cache, delete_cache_entry, export_cache,
     import_cache, load_cache, load_dependency_cache, package_cache_key, save_cache,
@@ -39,10 +43,6 @@ pub(crate) use history_storage::{load_history, save_history};
 pub(crate) use settings_storage::{
     data_file, ensure_data_directory, load_existing_settings, load_input_rules, load_settings,
     save_default_input_rules, save_input_rules, save_settings,
-};
-#[cfg(test)]
-pub(crate) use atomic_storage::{
-    MAX_BACKUPS as MAX_CORRUPT_BACKUPS_PER_FILE, MAX_SCAN as MAX_CORRUPT_BACKUP_SCAN_ENTRIES,
 };
 #[cfg(test)]
 pub(crate) const MAX_HISTORY_LOAD_SCAN_RECORDS: usize = crate::models::MAX_HISTORY_RECORDS * 20;

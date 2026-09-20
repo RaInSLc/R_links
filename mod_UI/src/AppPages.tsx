@@ -1,4 +1,5 @@
 import { NavButton } from "./components";
+import { SidebarVersion } from "./SidebarVersion";
 import { WorkspaceView } from "./WorkspaceView";
 import { ReportView } from "./ReportView";
 import { HistoryView } from "./HistoryView";
@@ -37,6 +38,13 @@ export function AppPages(props: AppPagesProps) {
       </nav>
       <div className="sidebar-summary"><span>当前任务</span><strong>{searching ? `检索中 ${foundCount}/${packageCount}（${packageCount > 0 ? Math.round((foundCount / packageCount) * 100) : 0}%）` : `${packageCount} 个输入`}</strong><progress className="summary-track" value={summaryProgress} max={100} aria-label="已验证包比例" /><small>{results.length ? `${foundCount} 条来源记录` : "等待开始"}</small></div>
       <details className="sidebar-shortcuts"><summary>快捷键</summary><div className="shortcut-list"><kbd>Ctrl</kbd>+<kbd>1</kbd>~<kbd>4</kbd> <span>切换视图</span><kbd>Ctrl</kbd>+<kbd>↵</kbd> <span>开始检索</span><kbd>Ctrl</kbd>+<kbd>⇧</kbd>+<kbd>C</kbd> <span>复制脚本</span><kbd>Ctrl</kbd>+<kbd>S</kbd> <span>下载脚本</span><kbd>Ctrl</kbd>+<kbd>⇧</kbd>+<kbd>K</kbd> <span>清空输入</span><kbd>Ctrl</kbd>+<kbd>D</kbd> <span>去重</span><kbd>Ctrl</kbd>+<kbd>F</kbd> <span>搜索</span><kbd>Alt</kbd>+<kbd>1</kbd>/<kbd>2</kbd> <span>切换图/列表</span></div></details>
+      <SidebarVersion
+        appVersion={props.appVersion}
+        updateState={props.updateState}
+        updateStage={props.updateStage}
+        updaterConfig={props.updaterConfig}
+        onOpenUpdateSettings={() => setView("settings")}
+      />
     </aside>
     <main className="main-area"><header className="topbar"><div><span className="eyebrow">R PACKAGE INSTALLATION</span><h1>{view === "workspace" ? "安装命令工作台" : view === "report" ? "多源检索报告" : view === "history" ? "命令历史" : "网络与镜像设置"}</h1></div><div key={status} className={`status-chip status-pulse ${searching ? "active" : ""}`} role="status" aria-live="polite" aria-atomic="true"><i aria-hidden="true" />{status}</div></header>
       <section className="content">{view === "workspace" && <WorkspaceView {...props} onInputChange={props.acceptInputValue} onPaste={props.pasteInput} onClear={() => props.acceptInputValue("", "manual")} onStartSearch={props.handleStartSearch} onCopyScript={props.copyScript} onCleanComments={props.cleanComments} onCleanInput={props.cleanInput} onDownloadScript={props.downloadScript} onDownloadPowerShellScript={() => props.downloadWrapperScript("powershell")} onDownloadBashScript={() => props.downloadWrapperScript("bash")} onDownloadSystemRequirements={props.downloadSystemRequirements} onTempFilter={props.handleTempFilter} isMethodDisabled={props.isMethodDisabled} />}

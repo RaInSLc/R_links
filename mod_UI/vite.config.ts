@@ -1,12 +1,23 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import { readFileSync } from "node:fs";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+// 构建期把 package.json 的版本号注入前端：运行时 getVersion() 万一失败，
+// 界面仍能显示正确版本，而不是退回到某个写死且会过期的字符串。
+const { version: appVersion } = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+) as { version: string };
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
+
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

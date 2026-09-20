@@ -9,9 +9,8 @@ import { useScriptGeneration } from "./useScriptGeneration";
 import { AppPages, type AppPagesProps } from "./AppPages";
 import { useAppActions } from "./useAppActions";
 import { activeInputLineCount, buildInputSmartSuggestions, buildResultSmartSuggestions, classifyInputProfile, countDuplicatePackages, countScriptCommands, formatError, nonEmptyLineBytesExceeds, scriptValueTooLarge, utf8Length, MAX_INPUT_CHARS, MAX_INPUT_LINE_BYTES, MAX_PACKAGE_LINES, type SearchResult } from "./utils";
-import { type Ecosystem, type InputRules, type Method, type Settings, type View, defaultInputRules, defaultSettings } from "./types";
-
-type UpdateState = "idle" | "checking" | "available" | "downloading" | "installing" | "readyToRestart" | "upToDate" | "error";
+import { type Ecosystem, type InputRules, type Method, type Settings, type UpdateFailureStage, type UpdateState, type UpdaterConfigInfo, type View, defaultInputRules, defaultSettings } from "./types";
+import { classifyUpdateFailure, describeUpdateFailureWithRaw, resolveAppVersion } from "./utils-update";
 
 export function AppContent() {
   const [view, setView] = useState<View>("workspace");
@@ -33,9 +32,11 @@ export function AppContent() {
   const [status, setStatus] = useState("就绪");
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
+  const [updateStage, setUpdateStage] = useState<UpdateFailureStage | null>(null);
   const [updateMessage, setUpdateMessage] = useState("");
   const [appVersion, setAppVersion] = useState("");
   const [updateVersion, setUpdateVersion] = useState("");
+  const [updaterConfig, setUpdaterConfig] = useState<UpdaterConfigInfo | null>(null);
   const [inputRules, setInputRules] = useState<InputRules>(defaultInputRules);
   const [inputRulesBusy, setInputRulesBusy] = useState(false);
   const search = useSearch(setStatus);
@@ -75,7 +76,14 @@ export function AppContent() {
     invoke<InputRules>("load_input_rules")
       .then((rules) => setInputRules(sanitizeImportedInputRules(rules, defaultInputRules)))
       .catch(() => {});
-    import("@tauri-apps/api/app").then(({ getVersion }) => getVersion()).then(setAppVersion).catch(() => setAppVersion("0.2.5"));
+    // 版本号与更新端点都取自真实配置/包元数据，不再硬编码，避免界面版本过期。
+    import("@tauri-apps/api/app")
+      .then(({ getVersion }) => getVersion())
+      .then((value) => setAppVersion(resolveAppVersion(value)))
+      .catch(() => setAppVersion(resolveAppVersion("")));
+    invoke<UpdaterConfigInfo>("inspect_updater_config")
+      .then((info) => setUpdaterConfig(info ?? null))
+      .catch(() => setUpdaterConfig(null));
   }, []);
   const initialInput = useRef(input);
   useEffect(() => {
@@ -95,31 +103,53 @@ export function AppContent() {
   useEffect(() => { document.documentElement.setAttribute("data-theme", currentTheme); document.documentElement.setAttribute("data-font", currentFont); document.documentElement.style.fontSize = `${currentFontSize}px`; localStorage.setItem("fontSize", String(currentFontSize)); }, [currentTheme, currentFont, currentFontSize]);
   useEffect(() => { document.title = searching && packageCount > 0 ? `R Package Center — 检索中 ${results.filter((r) => r.found).length}/${packageCount}` : results.length ? `R Package Center — ${new Set(results.filter((r) => r.found).map((r) => r.package)).size}/${packageCount} 已验证` : "R Package Center"; }, [searching, packageCount, results]);
   const update = async () => {
-    setCheckingUpdate(true); setUpdateState("checking"); setUpdateMessage("正在检查更新...");
+    setCheckingUpdate(true); setUpdateState("checking"); setUpdateStage(null); setUpdateMessage("正在检查更新...");
     try {
       const { check } = await import("@tauri-apps/plugin-updater");
-      const found = await check({ timeout: 20000, proxy: settings.proxy.trim() || undefined });
-      if (found) {
-        setUpdateVersion(found.version);
-        setUpdateState("available");
-        setUpdateMessage(`发现新版本 ${found.version}，正在下载并安装...`);
-        await found.downloadAndInstall(() => {}, { timeout: 20000 });
-        setUpdateState("readyToRestart");
-        setUpdateMessage("更新安装成功！请手动关闭并重启应用以生效。");
-      } else {
+      const found = await check({ timeout: 30000, proxy: settings.proxy.trim() || undefined });
+      if (!found) {
         setUpdateState("upToDate");
-        setUpdateMessage("当前已是最新版本");
+        setUpdateMessage(`当前已是最新版本（v${resolveAppVersion(appVersion)}）`);
+        return;
       }
-    } catch (error) {
-      setUpdateState("error");
-      const message = formatError(error);
-      setUpdateMessage(
-        message.includes("valid release JSON")
-          ? "检查更新失败：GitHub Release 缺少 latest.json 自动更新清单；请先使用安装包手动更新，或重新发布包含清单的版本。"
-          : message.includes("error sending request") || message.includes("Network Error") || message.includes("Failed to fetch") || message.includes("timeout")
-            ? "检查更新失败：无法连接 GitHub 更新清单。请确认网络可访问 GitHub，或在网络设置中配置代理后重试；也可以前往 GitHub Releases 手动下载安装包。"
-            : `检查更新失败: ${message}`,
+      setUpdateVersion(found.version);
+      setUpdateState("available");
+      setUpdateMessage(`发现新版本 ${found.version}，正在下载...`);
+      let totalBytes = 0;
+      let receivedBytes = 0;
+      await found.downloadAndInstall(
+        (event) => {
+          if (event.event === "Started") {
+            totalBytes = event.data.contentLength ?? 0;
+            setUpdateState("downloading");
+          } else if (event.event === "Progress") {
+            receivedBytes += event.data.chunkLength;
+            const percent = totalBytes > 0 ? Math.min(100, Math.round((receivedBytes / totalBytes) * 100)) : null;
+            setUpdateMessage(
+              percent === null
+                ? `正在下载 v${found.version}（已接收 ${(receivedBytes / 1048576).toFixed(1)} MB）...`
+                : `正在下载 v${found.version}（${percent}%）...`,
+            );
+          } else {
+            setUpdateState("installing");
+            setUpdateMessage("下载完成，正在安装...");
+          }
+        },
+        // 安装包体积在 4 MB 以上，20 秒的下载超时在慢网络下会必然中断。
+        { timeout: 300000 },
       );
+      setUpdateState("readyToRestart");
+      setUpdateMessage(`已安装 v${found.version}，请关闭并重新打开应用以生效。`);
+    } catch (error) {
+      const message = formatError(error);
+      const stage = classifyUpdateFailure(error);
+      // 端点是定位失败层级的关键信息。挂载时的自检可能还没返回（或已被跳过），
+      // 因此失败时按需补取一次，保证文案里一定带真实生效的更新源。
+      const config = updaterConfig ?? (await invoke<UpdaterConfigInfo>("inspect_updater_config").catch(() => null));
+      setUpdaterConfig(config);
+      setUpdateStage(stage);
+      setUpdateState("error");
+      setUpdateMessage(describeUpdateFailureWithRaw({ stage, rawMessage: message, config }));
     } finally {
       setCheckingUpdate(false);
     }
@@ -138,7 +168,7 @@ export function AppContent() {
     showRemoteVersion, verifyInstall, settings, smartSuggestions, script,
     scriptTooLarge: scriptValueTooLarge(script), scriptCommandCount: countScriptCommands(script), duplicateCount: countDuplicatePackages(input, inputRules),
     paused, openingSearchTabs, logs, dependencyGraph, resultSuggestions, searchDuration, stageTimings, inputRules, inputRulesBusy,
-    tokenConfigured, showToken, settingsBusy, currentTheme, currentFont, currentFontSize, checkingUpdate, updateState, updateMessage, appVersion, updateVersion,
+    tokenConfigured, showToken, settingsBusy, currentTheme, currentFont, currentFontSize, checkingUpdate, updateState, updateStage, updateMessage, appVersion, updateVersion, updaterConfig,
     copyWithLineNumbers, pinnedMethods: settings.pinnedMethods, ...actions, setStatus, cancelSearchPackage, updateAndPersistSettings,
     onInputChange: actions.acceptInputValue, onPaste: actions.pasteInput, onClear: () => actions.acceptInputValue("", "manual"),
     onOpenSearchTabs: () => { void openSearchTabs(input, inputTooLarge, ecosystem, inputRules); },
@@ -176,7 +206,19 @@ export function AppContent() {
     uniqueFoundCount,
     onExportDiagnostics: async () => {
       try {
-        const content = await invoke<string>("export_diagnostics");
+        // 更新链路跨 Release 清单、签名密钥、capabilities 与本地网络四层，
+        // 因此把阶段、端点、公钥与版本一并导出，而不是只留一句状态文案。
+        const content = await invoke<string>("export_diagnostics", {
+          updateStatus: {
+            state: updateState,
+            failureStage: updateStage,
+            message: updateMessage,
+            currentVersion: resolveAppVersion(appVersion),
+            targetVersion: updateVersion || null,
+            endpoints: updaterConfig?.endpoints ?? [],
+            pubkeyKeyId: updaterConfig?.pubkeyKeyId ?? null,
+          },
+        });
         const url = URL.createObjectURL(new Blob([content], { type: "application/json;charset=utf-8" }));
         const anchor = document.createElement("a"); anchor.href = url; anchor.download = "diagnostics.json"; anchor.click(); URL.revokeObjectURL(url);
         setStatus("诊断信息已导出");

@@ -72,6 +72,7 @@ pub fn run() {
             commands_settings::check_system_toolchain,
             commands_settings::execute_r_script,
             commands_diagnostics::fetch_reverse_dependencies,
+            commands_diagnostics::inspect_updater_config,
             commands_cache::load_cached_results,
             commands_cache::rate_cache_result
         ])

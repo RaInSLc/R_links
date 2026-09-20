@@ -33,6 +33,13 @@ describe('App Component Input Validation', () => {
       if (cmd === 'load_input_rules') return { separators: [','], commentChars: ['#'], stripQuotes: true, stripCParens: true, splitSpaces: false };
       if (cmd === 'load_settings') return { proxy: '', githubToken: '', cranMirror: '', fullSearch: false, searchConcurrency: 6, archiveGithubMajorGap: 1, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100, pinnedMethods: ['auto', 'base', 'biocManager', 'github'] };
       if (cmd === 'generate_script') return 'install.packages("ggplot2")';
+      if (cmd === 'inspect_updater_config') {
+        return {
+          endpoints: ['https://github.com/RaInSLc/R_links/releases/latest/download/latest.json'],
+          pubkeyKeyId: '4D8250359656C71F',
+          currentVersion: '0.2.5',
+        };
+      }
       return null;
     });
   });
@@ -222,8 +229,12 @@ describe('App Component Input Validation', () => {
     fireEvent.click(screen.getByText('检查更新'));
 
     await waitFor(() => {
-      expect(screen.getByText(/无法连接 GitHub 更新清单/)).toBeInTheDocument();
+      expect(screen.getByText(/无法连接更新源/)).toBeInTheDocument();
       expect(screen.getByText(/配置代理后重试/)).toBeInTheDocument();
+      // 失败文案必须带上真正生效的更新端点，否则无法定位是哪一层断了。
+      expect(
+        screen.getAllByText(/releases\/latest\/download\/latest\.json/).length,
+      ).toBeGreaterThan(1);
     });
   });
 
@@ -248,7 +259,7 @@ describe('App Component Input Validation', () => {
     await waitFor(() => {
       expect(check).toHaveBeenCalledWith(expect.objectContaining({
         proxy: 'http://127.0.0.1:7890',
-        timeout: 20000,
+        timeout: 30000,
       }));
     });
   });
