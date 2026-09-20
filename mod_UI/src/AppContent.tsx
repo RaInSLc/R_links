@@ -37,9 +37,21 @@ export function AppContent() {
   const [updateVersion, setUpdateVersion] = useState("");
   const [inputRules, setInputRules] = useState<InputRules>(defaultInputRules);
   const [inputRulesBusy, setInputRulesBusy] = useState(false);
-  const search = useSearch(setStatus); const settingsHook = useSettings(setStatus); const historyHook = useHistory(setStatus);
-  const { results, setResults, logs, setLogs, dependencyGraph, searching, openingSearchTabs, searchingRef, hasSearchEvidenceRef, paused, togglePauseSearch, cancelSearchPackage, searchDuration, stageTimings, startSearch, startBinarySearch, startMultiEcosystemSearch, stopSearch, openSearchTabs } = search;
-  const { settings, showToken, setShowToken, tokenConfigured, settingsBusy, updateSettingsFromUser, replaceSettingsFromUser, acceptSettingValue, persistSettings, clearSavedToken } = settingsHook;
+  const search = useSearch(setStatus);
+  const settingsHook = useSettings(setStatus);
+  const historyHook = useHistory(setStatus);
+  const {
+    results, setResults, logs, setLogs, dependencyGraph, searching,
+    openingSearchTabs, searchingRef, hasSearchEvidenceRef, paused,
+    togglePauseSearch, cancelSearchPackage, searchDuration, stageTimings,
+    startSearch, startBinarySearch, startMultiEcosystemSearch, stopSearch,
+    openSearchTabs,
+  } = search;
+  const {
+    settings, showToken, setShowToken, tokenConfigured, settingsBusy,
+    updateSettingsFromUser, replaceSettingsFromUser, acceptSettingValue,
+    persistSettings, clearSavedToken,
+  } = settingsHook;
   const { history, historySearch, setHistorySearch, sanitizeHistoryList, enqueueHistorySave, copyHistoryRecord, deleteHistoryRecord, clearAllHistory } = historyHook;
   const latestInputRef = useRef(localStorage.getItem("rlinks_input") || ""); const copyWithLineNumbersRef = useRef(false);
   useEffect(() => { copyWithLineNumbersRef.current = copyWithLineNumbers; }, [copyWithLineNumbers]);
@@ -49,16 +61,66 @@ export function AppContent() {
   const smartSuggestions = useMemo(() => buildInputSmartSuggestions(input, inputProfile, method, { verifyInstall }), [input, inputProfile, method, verifyInstall]);
   const resultSuggestions = useMemo(() => buildResultSmartSuggestions(results, { fullSearch: settings.fullSearch, searching }), [results, settings.fullSearch, searching]);
   const uniqueFoundCount = useMemo(() => new Set(results.filter((result) => result.found).map((result) => result.package)).size, [results]);
-  const { script, latestScriptRef, requestSeq, setScript } = useScriptGeneration(input, ecosystem, pipIndex, condaChannels, method, conditional, installDependencies, showRemoteVersion, verifyInstall, parallelInstall, settings, rBinaryMirror, results, inputTooLarge, setStatus);
+  const { script, latestScriptRef, requestSeq, setScript } = useScriptGeneration(
+    input, ecosystem, pipIndex, condaChannels, method, conditional,
+    installDependencies, showRemoteVersion, verifyInstall, parallelInstall,
+    settings, rBinaryMirror, results, inputTooLarge, setStatus,
+  );
   const actions = useAppActions({ view, setView, input, setInput, inputProfile, inputRules, inputTooLarge, method, setMethod, ecosystem, pipIndex, rBinaryMirror, conditional, setConditional: (v) => { setConditionalState(v); localStorage.setItem("rlinks_conditional", v ? "1" : "0"); }, installDependencies, setInstallDependencies: (v) => { setInstallDependenciesState(v); localStorage.setItem("rlinks_install_deps", v ? "1" : "0"); }, showRemoteVersion, setShowRemoteVersion: (v) => { setShowRemoteVersionState(v); localStorage.setItem("rlinks_show_remote_version", v ? "1" : "0"); }, verifyInstall, setVerifyInstall: (v) => { setVerifyInstallState(v); localStorage.setItem("rlinks_verify_install", v ? "1" : "0"); }, settings, updateAndPersistSettings: (update) => { let next: Settings | undefined; updateSettingsFromUser((current) => (next = update(current))); if (next) void persistSettings(next); }, searching, searchingRef, hasSearchEvidenceRef, latestInputRef, latestScriptRef, copyWithLineNumbersRef, setLogs, setStatus, requestSeq, setScript, startSearch, startBinarySearch, startMultiEcosystemSearch, stopSearch, sanitizeHistoryList, enqueueHistorySave, copyHistoryRecord, deleteHistoryRecord, clearAllHistory, setInputRulesBusy });
   useEffect(() => { localStorage.setItem("rlinks_input", input); localStorage.setItem("rlinks_method", method); }, [input, method]);
   useEffect(() => { invoke<InputRules>("load_input_rules").then(setInputRules).catch(() => {}); import("@tauri-apps/api/app").then(({ getVersion }) => getVersion()).then(setAppVersion).catch(() => setAppVersion("0.1.9")); }, []);
   const initialInput = useRef(input);
-  useEffect(() => { const requestedInput = initialInput.current; if (!requestedInput.trim()) return; let active = true; invoke<SearchResult[]>("load_cached_results", { input: requestedInput }).then((cached) => { if (active && latestInputRef.current === requestedInput && cached.length > 0) { setResults(cached); hasSearchEvidenceRef.current = true; } }).catch(() => {}); return () => { active = false; }; }, [setResults, hasSearchEvidenceRef]);
+  useEffect(() => {
+    const requestedInput = initialInput.current;
+    if (!requestedInput.trim()) return;
+    let active = true;
+    invoke<SearchResult[]>("load_cached_results", { input: requestedInput })
+      .then((cached) => {
+        if (active && latestInputRef.current === requestedInput && cached.length > 0) {
+          setResults(cached);
+          hasSearchEvidenceRef.current = true;
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [setResults, hasSearchEvidenceRef]);
   useEffect(() => { document.documentElement.setAttribute("data-theme", currentTheme); document.documentElement.setAttribute("data-font", currentFont); document.documentElement.style.fontSize = `${currentFontSize}px`; localStorage.setItem("fontSize", String(currentFontSize)); }, [currentTheme, currentFont, currentFontSize]);
   useEffect(() => { document.title = searching && packageCount > 0 ? `R Package Center — 检索中 ${results.filter((r) => r.found).length}/${packageCount}` : results.length ? `R Package Center — ${new Set(results.filter((r) => r.found).map((r) => r.package)).size}/${packageCount} 已验证` : "R Package Center"; }, [searching, packageCount, results]);
-  const update = async () => { setCheckingUpdate(true); setUpdateState("checking"); setUpdateMessage("正在检查更新..."); try { const { check } = await import("@tauri-apps/plugin-updater"); const found = await check({ timeout: 20000, proxy: settings.proxy.trim() || undefined }); if (found) { setUpdateVersion(found.version); setUpdateState("available"); setUpdateMessage(`发现新版本 ${found.version}，正在下载并安装...`); await found.downloadAndInstall(() => {}, { timeout: 20000 }); setUpdateState("readyToRestart"); setUpdateMessage("更新安装成功！请手动关闭并重启应用以生效。"); } else { setUpdateState("upToDate"); setUpdateMessage("当前已是最新版本"); } } catch (error) { setUpdateState("error"); const message = formatError(error); setUpdateMessage(message.includes("valid release JSON") ? "检查更新失败：GitHub Release 缺少 latest.json 自动更新清单；请先使用安装包手动更新，或重新发布包含清单的版本。" : message.includes("error sending request") || message.includes("Network Error") || message.includes("Failed to fetch") || message.includes("timeout") ? "检查更新失败：无法连接 GitHub 更新清单。请确认网络可访问 GitHub，或在网络设置中配置代理后重试；也可以前往 GitHub Releases 手动下载安装包。" : `检查更新失败: ${message}`); } finally { setCheckingUpdate(false); } };
-  const updateAndPersistSettings = (update: (current: Settings) => Settings) => { let next: Settings | undefined; updateSettingsFromUser((current) => (next = update(current))); if (next) void persistSettings(next); };
+  const update = async () => {
+    setCheckingUpdate(true); setUpdateState("checking"); setUpdateMessage("正在检查更新...");
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const found = await check({ timeout: 20000, proxy: settings.proxy.trim() || undefined });
+      if (found) {
+        setUpdateVersion(found.version);
+        setUpdateState("available");
+        setUpdateMessage(`发现新版本 ${found.version}，正在下载并安装...`);
+        await found.downloadAndInstall(() => {}, { timeout: 20000 });
+        setUpdateState("readyToRestart");
+        setUpdateMessage("更新安装成功！请手动关闭并重启应用以生效。");
+      } else {
+        setUpdateState("upToDate");
+        setUpdateMessage("当前已是最新版本");
+      }
+    } catch (error) {
+      setUpdateState("error");
+      const message = formatError(error);
+      setUpdateMessage(
+        message.includes("valid release JSON")
+          ? "检查更新失败：GitHub Release 缺少 latest.json 自动更新清单；请先使用安装包手动更新，或重新发布包含清单的版本。"
+          : message.includes("error sending request") || message.includes("Network Error") || message.includes("Failed to fetch") || message.includes("timeout")
+            ? "检查更新失败：无法连接 GitHub 更新清单。请确认网络可访问 GitHub，或在网络设置中配置代理后重试；也可以前往 GitHub Releases 手动下载安装包。"
+            : `检查更新失败: ${message}`,
+      );
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+  const updateAndPersistSettings = (update: (current: Settings) => Settings) => {
+    let next: Settings | undefined;
+    updateSettingsFromUser((current) => (next = update(current)));
+    if (next) void persistSettings(next);
+  };
   const checkedProps: AppPagesProps = {
     view, setView, status, searching, packageCount, results, history, historySearch,
     foundCount: uniqueFoundCount,

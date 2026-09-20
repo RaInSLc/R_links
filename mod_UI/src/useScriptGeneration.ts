@@ -3,7 +3,23 @@ import { invoke } from "@tauri-apps/api/core";
 import { generateMultiEcosystemScript, type SearchResult } from "./utils";
 import type { Ecosystem, Method, Settings } from "./types";
 
-export function useScriptGeneration(input: string, ecosystem: Ecosystem, pipIndex: string, condaChannels: string[], method: Method, conditional: boolean, installDependencies: boolean, showRemoteVersion: boolean, verifyInstall: boolean, parallelInstall: boolean, settings: Settings, rBinaryMirror: string, results: SearchResult[], inputTooLarge: boolean, setStatus: (status: string) => void) {
+export function useScriptGeneration(
+  input: string,
+  ecosystem: Ecosystem,
+  pipIndex: string,
+  condaChannels: string[],
+  method: Method,
+  conditional: boolean,
+  installDependencies: boolean,
+  showRemoteVersion: boolean,
+  verifyInstall: boolean,
+  parallelInstall: boolean,
+  settings: Settings,
+  rBinaryMirror: string,
+  results: SearchResult[],
+  inputTooLarge: boolean,
+  setStatus: (status: string) => void,
+) {
   const [script, setScriptState] = useState("等待输入...");
   const latestScriptRef = useRef("等待输入...");
   const requestSeq = useRef(0);
@@ -13,7 +29,13 @@ export function useScriptGeneration(input: string, ecosystem: Ecosystem, pipInde
     setScriptState(next);
   }
 
-  useLayoutEffect(() => { latestScriptRef.current = ""; }, [input, ecosystem, pipIndex, condaChannels, method, conditional, installDependencies, showRemoteVersion, verifyInstall, parallelInstall, settings, rBinaryMirror, results, inputTooLarge]);
+  useLayoutEffect(() => {
+    latestScriptRef.current = "";
+  }, [
+    input, ecosystem, pipIndex, condaChannels, method, conditional,
+    installDependencies, showRemoteVersion, verifyInstall, parallelInstall,
+    settings, rBinaryMirror, results, inputTooLarge,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -26,8 +48,12 @@ export function useScriptGeneration(input: string, ecosystem: Ecosystem, pipInde
         return;
       }
       if (ecosystem === "pip" || ecosystem === "conda") {
-        try { setScript(generateMultiEcosystemScript(input, ecosystem, pipIndex, condaChannels)); }
-        catch (error) { setScript(""); setStatus(`生成失败: ${String(error)}`); }
+        try {
+          setScript(generateMultiEcosystemScript(input, ecosystem, pipIndex, condaChannels));
+        } catch (error) {
+          setScript("");
+          setStatus(`生成失败: ${String(error)}`);
+        }
         return;
       }
       invoke<string>("generate_script", {
@@ -42,7 +68,11 @@ export function useScriptGeneration(input: string, ecosystem: Ecosystem, pipInde
       });
     }, 120);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [input, ecosystem, pipIndex, condaChannels, method, conditional, installDependencies, showRemoteVersion, verifyInstall, parallelInstall, settings, rBinaryMirror, results, inputTooLarge, setStatus]);
+  }, [
+    input, ecosystem, pipIndex, condaChannels, method, conditional,
+    installDependencies, showRemoteVersion, verifyInstall, parallelInstall,
+    settings, rBinaryMirror, results, inputTooLarge, setStatus,
+  ]);
 
   return { script, latestScriptRef, requestSeq, setScript };
 }

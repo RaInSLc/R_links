@@ -25,7 +25,28 @@ interface Props {
   onTestNetwork: () => void;
 }
 
-export function SettingsNetworkPanel({ settings, tokenConfigured, showToken, settingsBusy, speedTesting, speedResults, networkDiagnostics, diagnosticsBusy, onProxyChange, onTokenChange, onTokenToggle, onClearToken, onFullSearchChange, onSearchConcurrencyChange, onCranMirrorChange, onRLibPathChange, onMirrorSelect, onSaveSettings, onTestSpeed, onTestNetwork }: Props) {
+export function SettingsNetworkPanel({
+  settings,
+  tokenConfigured,
+  showToken,
+  settingsBusy,
+  speedTesting,
+  speedResults,
+  networkDiagnostics,
+  diagnosticsBusy,
+  onProxyChange,
+  onTokenChange,
+  onTokenToggle,
+  onClearToken,
+  onFullSearchChange,
+  onSearchConcurrencyChange,
+  onCranMirrorChange,
+  onRLibPathChange,
+  onMirrorSelect,
+  onSaveSettings,
+  onTestSpeed,
+  onTestNetwork,
+}: Props) {
   return <>
     <section className="panel settings-panel">
       <PanelHeader step="网络" title="连接设置" meta="独立配置" />

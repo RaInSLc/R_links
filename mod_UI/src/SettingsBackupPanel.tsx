@@ -2,8 +2,26 @@ import { useRef } from "react";
 import { PanelHeader } from "./components";
 import { defaultInputRules, defaultSettings, type InputRules, type Settings } from "./types";
 import { sanitizeImportedInputRules, sanitizeImportedSettings } from "./settingsSanitize";
-interface Props { settings: Settings; inputRules: InputRules; onReplaceSettings: (value: Settings) => void; onSaveSettings: () => void; onThemeChange: (value: string) => void; onFontChange: (value: string) => void; onFontSizeChange: (value: number) => void; onReplaceInputRules: (value: InputRules) => void; }
-export function SettingsBackupPanel({ settings, inputRules, onReplaceSettings, onSaveSettings, onThemeChange, onFontChange, onFontSizeChange, onReplaceInputRules }: Props) {
+interface Props {
+  settings: Settings;
+  inputRules: InputRules;
+  onReplaceSettings: (value: Settings) => void;
+  onSaveSettings: () => void;
+  onThemeChange: (value: string) => void;
+  onFontChange: (value: string) => void;
+  onFontSizeChange: (value: number) => void;
+  onReplaceInputRules: (value: InputRules) => void;
+}
+export function SettingsBackupPanel({
+  settings,
+  inputRules,
+  onReplaceSettings,
+  onSaveSettings,
+  onThemeChange,
+  onFontChange,
+  onFontSizeChange,
+  onReplaceInputRules,
+}: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const download = (name: string, content: string) => { const url = URL.createObjectURL(new Blob([content], { type: "application/json" })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; document.body.appendChild(anchor); anchor.click(); document.body.removeChild(anchor); URL.revokeObjectURL(url); };
   const exportConfig = () => download(`rlinks_config_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ exportedAt: new Date().toISOString(), settings, inputRules, theme: localStorage.getItem("theme") || "office", fontFamily: localStorage.getItem("fontFamily") || "modern", fontSize: localStorage.getItem("fontSize") || "14" }, null, 2));

@@ -33,7 +33,23 @@ interface CacheSettingsPanelProps {
   onExportDiagnostics: () => Promise<void>;
 }
 
-export function CacheSettingsPanel({ settings, cacheEntries, cacheBusy, toolchainBusy, toolchainChecks, onLoadCache, onClearInvalidated, onExportCache, onImportCache, onDeleteCacheEntry, onCheckToolchain, onUseCacheChange, onMaxCacheEntriesChange, onClearCache, onExportDiagnostics }: CacheSettingsPanelProps) {
+export function CacheSettingsPanel({
+  settings,
+  cacheEntries,
+  cacheBusy,
+  toolchainBusy,
+  toolchainChecks,
+  onLoadCache,
+  onClearInvalidated,
+  onExportCache,
+  onImportCache,
+  onDeleteCacheEntry,
+  onCheckToolchain,
+  onUseCacheChange,
+  onMaxCacheEntriesChange,
+  onClearCache,
+  onExportDiagnostics,
+}: CacheSettingsPanelProps) {
   const fileCacheRef = useRef<HTMLInputElement>(null);
   return (
     <section className="panel settings-panel">

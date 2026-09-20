@@ -11,9 +11,40 @@ import { ReportResultsTable } from "./ReportResultsTable";
 import { invoke } from "@tauri-apps/api/core";
 import { defaultSettings, type Settings } from "./types";
 
-export interface ReportViewProps { results: SearchResult[]; logs: string[]; dependencyGraph: DependencyGraph | null; packageCount: number; uniqueFoundCount: number; smartSuggestions: SmartSuggestion[]; searching: boolean; searchDuration: number | null; stageTimings?: Array<{ stage: string; durationMs: number }>; onClearLogs: () => void; onStatusChange: (status: string) => void; onApplySmartSuggestion: (suggestion: SmartSuggestion) => void; onRetryMissing: (packages: string[]) => void; onCancelPackage?: (packageName: string) => void; }
+export interface ReportViewProps {
+  results: SearchResult[];
+  logs: string[];
+  dependencyGraph: DependencyGraph | null;
+  packageCount: number;
+  uniqueFoundCount: number;
+  smartSuggestions: SmartSuggestion[];
+  searching: boolean;
+  searchDuration: number | null;
+  stageTimings?: Array<{ stage: string; durationMs: number }>;
+  onClearLogs: () => void;
+  onStatusChange: (status: string) => void;
+  onApplySmartSuggestion: (suggestion: SmartSuggestion) => void;
+  onRetryMissing: (packages: string[]) => void;
+  onCancelPackage?: (packageName: string) => void;
+}
 
-export function ReportView({ results: rawResults, logs, dependencyGraph, packageCount, uniqueFoundCount, smartSuggestions, searching, searchDuration, stageTimings = [], onClearLogs, onStatusChange, onApplySmartSuggestion, onRetryMissing, onCancelPackage, settings = defaultSettings }: ReportViewProps & { settings?: Settings }) {
+export function ReportView({
+  results: rawResults,
+  logs,
+  dependencyGraph,
+  packageCount,
+  uniqueFoundCount,
+  smartSuggestions,
+  searching,
+  searchDuration,
+  stageTimings = [],
+  onClearLogs,
+  onStatusChange,
+  onApplySmartSuggestion,
+  onRetryMissing,
+  onCancelPackage,
+  settings = defaultSettings,
+}: ReportViewProps & { settings?: Settings }) {
   const [generatedCommands, setGeneratedCommands] = useState<{ results: SearchResult[]; settings: Settings; commands: string[] } | null>(null);
   useEffect(() => {
     let active = true;

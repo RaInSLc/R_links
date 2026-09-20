@@ -87,7 +87,16 @@ export function ReportResultsTable({ results, searching, resultFilter, setResult
     return () => { region.removeEventListener("keydown", activate); region.removeEventListener("click", handleClick, true); };
   }, [allSortedResults, currentPage, showRepoCol, showVersionCol, onStatusChange]);
   useEffect(() => { lastChecked.current = -1; }, [currentPage, debouncedQuery, resultFilter, sourceFilter, sortKey, sortDir]);
-  const toggleExpanded = (key: string) => { const identity = rowIdentities.get(key); if (!identity) return; setExpandedIdentities((current) => { const next = new Set(current); if (next.has(identity)) next.delete(identity); else next.add(identity); return next; }); };
+  const toggleExpanded = (key: string) => {
+    const identity = rowIdentities.get(key);
+    if (!identity) return;
+    setExpandedIdentities((current) => {
+      const next = new Set(current);
+      if (next.has(identity)) next.delete(identity);
+      else next.add(identity);
+      return next;
+    });
+  };
   const handleCopy = async (result: SearchResult, key: string) => { try { const command = getInstallCommand(result); if (!command) { onStatusChange("安装命令尚未生成，请稍后重试"); return; } await writeText(command); setCopiedKey(key); onStatusChange(result.found ? `已复制 ${result.package} 的安装指令` : `已复制包名 ${result.package}`); window.setTimeout(() => setCopiedKey(null), 1500); } catch (error) { onStatusChange(`复制安装指令失败: ${error instanceof Error ? error.message : String(error)}`); } };
   const handleOpenPage = async (result: SearchResult) => { if (!result.found || !pageSources.has(result.source)) return; try { await invoke("open_package_page", { package: result.realName || result.package, source: result.source, repository: result.repository || "" }); onStatusChange(`已打开 ${result.package} 的来源网页`); } catch (error) { onStatusChange(`打开来源网页失败: ${error instanceof Error ? error.message : String(error)}`); } };
   const handleRateCache = async (result: SearchResult, vote: "up" | "down") => {

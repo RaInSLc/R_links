@@ -1,7 +1,33 @@
 import { PanelHeader } from "./components";
 
-interface Props { currentTheme: string; currentFont: string; currentFontSize: number; checkingUpdate: boolean; updateState: "idle" | "checking" | "available" | "downloading" | "installing" | "readyToRestart" | "upToDate" | "error"; updateMessage: string; appVersion: string; updateVersion: string; onThemeChange: (value: string) => void; onFontChange: (value: string) => void; onFontSizeChange: (value: number) => void; onCheckUpdates: () => void; }
-export function SettingsAppearancePanel({ currentTheme, currentFont, currentFontSize, checkingUpdate, updateState, updateMessage, appVersion, updateVersion, onThemeChange, onFontChange, onFontSizeChange, onCheckUpdates }: Props) {
+interface Props {
+  currentTheme: string;
+  currentFont: string;
+  currentFontSize: number;
+  checkingUpdate: boolean;
+  updateState: "idle" | "checking" | "available" | "downloading" | "installing" | "readyToRestart" | "upToDate" | "error";
+  updateMessage: string;
+  appVersion: string;
+  updateVersion: string;
+  onThemeChange: (value: string) => void;
+  onFontChange: (value: string) => void;
+  onFontSizeChange: (value: number) => void;
+  onCheckUpdates: () => void;
+}
+export function SettingsAppearancePanel({
+  currentTheme,
+  currentFont,
+  currentFontSize,
+  checkingUpdate,
+  updateState,
+  updateMessage,
+  appVersion,
+  updateVersion,
+  onThemeChange,
+  onFontChange,
+  onFontSizeChange,
+  onCheckUpdates,
+}: Props) {
   const themes = ["office", "green", "graphite"] as const;
   const fonts = ["modern", "system", "classic"] as const;
   const status = { idle: "未检查", checking: "检查中", available: "发现更新", downloading: "下载中", installing: "安装中", readyToRestart: "待重启", upToDate: "已是最新", error: "检查失败" }[updateState];

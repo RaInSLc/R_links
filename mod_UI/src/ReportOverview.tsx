@@ -10,7 +10,20 @@ interface Props {
   retryFailureGroup: (label: string, packages: string[]) => void; onApplySmartSuggestion: (suggestion: SmartSuggestion) => void;
 }
 
-export function ReportOverview({ results, packageCount, uniqueFoundCount, searching, searchDuration, stageTimings, smartSuggestions, failureGroups, resultFilter, toggleFilter, retryFailureGroup, onApplySmartSuggestion }: Props) {
+export function ReportOverview({
+  results,
+  packageCount,
+  uniqueFoundCount,
+  searching,
+  searchDuration,
+  stageTimings,
+  smartSuggestions,
+  failureGroups,
+  resultFilter,
+  toggleFilter,
+  retryFailureGroup,
+  onApplySmartSuggestion,
+}: Props) {
   const missingCount = uniquePackages(results.filter(isPlainMissingResult)).length;
   const errorCount = uniquePackages(results.filter(isErrorResult)).length;
   const summary = {

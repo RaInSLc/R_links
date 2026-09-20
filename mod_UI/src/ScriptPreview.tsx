@@ -17,7 +17,20 @@ interface ScriptPreviewProps {
   onCopyScript: () => void;
 }
 
-export function ScriptPreview({ ecosystem, script, scriptTooLarge, scriptCommandCount, copyWithLineNumbers, onCopyWithLineNumbersChange, onCleanComments, onDownloadScript, onDownloadPowerShellScript, onDownloadBashScript, onDownloadSystemRequirements, onCopyScript }: ScriptPreviewProps) {
+export function ScriptPreview({
+  ecosystem,
+  script,
+  scriptTooLarge,
+  scriptCommandCount,
+  copyWithLineNumbers,
+  onCopyWithLineNumbersChange,
+  onCleanComments,
+  onDownloadScript,
+  onDownloadPowerShellScript,
+  onDownloadBashScript,
+  onDownloadSystemRequirements,
+  onCopyScript,
+}: ScriptPreviewProps) {
   const [collapsed, setCollapsed] = useState(false);
   const isR = ecosystem === "r" || ecosystem === "r-binary";
   const fileLabel = isR ? ".R" : ecosystem === "pip" ? ".sh" : "Conda .sh";
@@ -48,7 +61,14 @@ export function ScriptPreview({ ecosystem, script, scriptTooLarge, scriptCommand
 
 function highlightRLine(line: string) {
   if (line.trimStart().startsWith("#")) return <span className="r-comment">{line}</span>;
-  const regex = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(\b(?:if|else|for|while|function|return|TRUE|FALSE|NULL|NA|library|require|cat|message|warning|stop|invisible)\b)|([A-Za-z_][A-Za-z0-9_.]*(?=\s*\())|(\b\d+\.?\d*\b)/g;
+  const stringAlt = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/.source;
+  const keywordAlt = /\b(?:if|else|for|while|function|return|TRUE|FALSE|NULL|NA|library|require|cat|message|warning|stop|invisible)\b/.source;
+  const callAlt = /[A-Za-z_][A-Za-z0-9_.]*(?=\s*\()/.source;
+  const numAlt = /\b\d+\.?\d*\b/.source;
+  const regex = new RegExp(
+    `(${stringAlt})|(${keywordAlt})|(${callAlt})|(${numAlt})`,
+    "g",
+  );
   const tokens: Array<{ text: string; cls: string }> = [];
   let last = 0;
   let match: RegExpExecArray | null;

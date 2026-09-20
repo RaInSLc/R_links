@@ -6,12 +6,31 @@ import { mergeInstallCommands } from "./reportUtils";
 import type { SearchResult } from "./utils";
 import { getInstallCommand, isErrorResult, isPlainMissingResult, sourceCredibility, uniquePackages } from "./reportUtils";
 
-interface Props { results: SearchResult[]; selectedResults: Set<string>; searching: boolean; packageCount: number; uniqueFoundCount: number; searchDuration: number | null; onStatusChange: (status: string) => void; onRetryMissing: (packages: string[]) => void; }
+interface Props {
+  results: SearchResult[];
+  selectedResults: Set<string>;
+  searching: boolean;
+  packageCount: number;
+  uniqueFoundCount: number;
+  searchDuration: number | null;
+  onStatusChange: (status: string) => void;
+  onRetryMissing: (packages: string[]) => void;
+}
 const copy = async (content: string, success: string, onStatusChange: Props["onStatusChange"]) => { if (!content.trim()) { onStatusChange("安装命令尚未生成，请稍后重试"); return; } try { await writeText(content); onStatusChange(success); } catch (error) { onStatusChange(`复制失败: ${error instanceof Error ? error.message : String(error)}`); } };
 const download = (name: string, content: string, type: string, onStatusChange: Props["onStatusChange"]) => { const url = URL.createObjectURL(new Blob([content], { type })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; document.body.appendChild(anchor); anchor.click(); document.body.removeChild(anchor); URL.revokeObjectURL(url); onStatusChange(`已导出 ${name}`); };
 const selectionKey = (result: SearchResult) => `${result.package}\u0001${result.requestedVersion}\u0001${result.source}\u0001${result.repository}\u0001${result.realName}`;
 
-export function ReportActions({ results, selectedResults, searching, packageCount, uniqueFoundCount, searchDuration, onStatusChange, onRetryMissing, settings = defaultSettings }: Props & { settings?: Settings }) {
+export function ReportActions({
+  results,
+  selectedResults,
+  searching,
+  packageCount,
+  uniqueFoundCount,
+  searchDuration,
+  onStatusChange,
+  onRetryMissing,
+  settings = defaultSettings,
+}: Props & { settings?: Settings }) {
   const commandsPending = results.some((result) => result.found && !getInstallCommand(result));
   const found = results.filter((result) => result.found); const selected = results.filter((result) => selectedResults.has(selectionKey(result)));
   const exportCsv = () => { const escape = (value: string | undefined) => { const text = value || ""; return /[,"\n]/.test(text) ? `"${text.replace(/"/g, "\"\"")}"` : text; }; const rows = results.map((r) => [r.package, r.requestedVersion, r.latestVersion, sourceNames[r.source] ?? r.source, sourceCredibility(r.source, r.stage), r.repository, r.found ? "已验证" : r.status || "未找到", r.found ? getInstallCommand(r) : ""].map(escape).join(",")); download("r_package_results.csv", `包名,请求版本,实际版本,来源,可信度,仓库,状态,安装命令\r\n${rows.join("\r\n")}`, "text/csv;charset=utf-8", (message) => onStatusChange(`${message}（${results.length} 条结果）`)); };

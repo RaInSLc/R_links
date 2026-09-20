@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [2026-09-20 11:35:00 +08:00]
+### mod_UI 前端
+- 拆分 17 个文件中 29 处 ESLint max-len 超 200 字符的单行声明
+- 恢复 utils-types.ts 中被误删的 MAX_* 常量和 NetworkDiagnostic/ToolchainCheck/SearchPlanPreview 接口
+- useScriptGeneration.ts 拆分 useLayoutEffect 依赖列表和 try/catch 块
+- utils-input.ts 拆分 splitLine、extractCanonicalInput、parseProjectDependencyFile 等长函数
+- useAppActions.ts 拆分 enqueueHistorySave 回调和 return 对象
+- AppContent.tsx 拆分 update 函数、updateAndPersistSettings、cached_results useEffect
+- ScriptPreview.tsx 正则提取为 new RegExp 拼接
+- SettingsView/SettingsStrategyPanel/SettingsNetworkPanel/SettingsBackupPanel/SettingsAppearancePanel 拆分 Props 接口和函数签名
+- ReportView/ReportActions/ReportOverview/ReportResultsTable/CacheSettingsPanel 拆分 Props 接口和函数签名
+- utils-suggestions.ts 拆分 buildInputSmartSuggestions 和 buildResultSmartSuggestions
+- 验证：lint 0 errors / 0 warnings，179 tests passed，npm run build 通过
+
 ## [2026-09-20 11:30:00 +08:00]
 
 ### Changed

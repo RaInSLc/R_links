@@ -120,7 +120,10 @@ export function useAppActions(context: AppActionContext) {
       const taskRecords = cleanRecords.map((record) => ({ ...record, input, method, conditional, installDependencies, showRemoteVersion, verifyInstall, cranMirror: settings.cranMirror }));
       const text = copyWithLineNumbersRef.current ? snapshot.split("\n").map((line, i) => `${String(i + 1).padStart(3, " ")}  ${line}`).join("\n") : snapshot;
       await writeText(text);
-      await enqueueHistorySave((current) => { const commands = new Set(taskRecords.map((record) => record.command)); return [...taskRecords, ...current.filter((record) => !commands.has(record.command))].slice(0, MAX_HISTORY_RECORDS); });
+      await enqueueHistorySave((current) => {
+        const commands = new Set(taskRecords.map((record) => record.command));
+        return [...taskRecords, ...current.filter((record) => !commands.has(record.command))].slice(0, MAX_HISTORY_RECORDS);
+      });
       setStatus(`已复制脚本并记录 ${cleanRecords.length} 条命令`);
     } catch (error) { setStatus(`复制失败: ${formatError(error)}`); }
   }
@@ -173,5 +176,19 @@ export function useAppActions(context: AppActionContext) {
 
   useEffect(() => { if (inputProfile.total === 0 || methodSupportsInput(method, inputProfile)) return; setMethod(inputProfile.archiveUrls === inputProfile.total ? "remotes" : inputProfile.repositories === inputProfile.total ? "github" : "auto"); }, [inputProfile, method, setMethod]);
   useEffect(() => { if (view !== "workspace") return; const onKeydown = (e: KeyboardEvent) => { if (!(e.ctrlKey || e.metaKey)) return; if (e.key === "Enter") { e.preventDefault(); if (searching) stopSearch(); else if (input.trim() && !inputTooLarge) handleStartSearch(); } else if (e.shiftKey && e.key.toLowerCase() === "c") { e.preventDefault(); void copyScript(); } else if (!e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); downloadScript(); } else if (e.shiftKey && e.key.toLowerCase() === "k") { e.preventDefault(); if (!searching && input.trim()) acceptInputValue("", "manual"); } else if (!e.shiftKey && e.key.toLowerCase() === "d") { e.preventDefault(); if (!searching && input.trim()) acceptInputValue(dedupePackageInput(input), "manual"); } }; window.addEventListener("keydown", onKeydown); return () => window.removeEventListener("keydown", onKeydown); });
-  return { acceptInputValue, pasteInput, handleStartSearch, copyScript, downloadScript, downloadWrapperScript, downloadSystemRequirements, cleanComments, cleanInput, applyHistoryRecord, handleTempFilter, saveInputRules, isMethodDisabled };
+  return {
+    acceptInputValue,
+    pasteInput,
+    handleStartSearch,
+    copyScript,
+    downloadScript,
+    downloadWrapperScript,
+    downloadSystemRequirements,
+    cleanComments,
+    cleanInput,
+    applyHistoryRecord,
+    handleTempFilter,
+    saveInputRules,
+    isMethodDisabled,
+  };
 }
