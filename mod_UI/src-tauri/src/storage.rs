@@ -41,9 +41,9 @@ pub(crate) use settings_storage::{
     save_default_input_rules, save_input_rules, save_settings,
 };
 #[cfg(test)]
-pub(crate) const MAX_CORRUPT_BACKUPS_PER_FILE: usize = 5;
-#[cfg(test)]
-pub(crate) const MAX_CORRUPT_BACKUP_SCAN_ENTRIES: usize = 512;
+pub(crate) use atomic_storage::{
+    MAX_BACKUPS as MAX_CORRUPT_BACKUPS_PER_FILE, MAX_SCAN as MAX_CORRUPT_BACKUP_SCAN_ENTRIES,
+};
 #[cfg(test)]
 pub(crate) const MAX_HISTORY_LOAD_SCAN_RECORDS: usize = crate::models::MAX_HISTORY_RECORDS * 20;
 #[cfg(test)]

@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [2026-09-20 10:30:00 +08:00]
+
+### Fixed
+- **WebView2 InPrivate 持久化失效（P1）**：移除 `mod_UI/src-tauri/tauri.conf.json` 的 `"incognito": true`（原第 25 行），让 WebView2 把 `localStorage` 落盘到 `Local Storage/leveldb/`，重启后 `rlinks_input`、`rlinks_method`、`rlinks_conditional`、`rlinks_install_deps`、`rlinks_show_remote_version`、`rlinks_verify_install`、`rlinks_parallel_install`、`theme`/`fontFamily`/`fontSize` 等键可被恢复。
+- **前后端双存储漂移（localStorage ↔ settings.json）**：`mod_UI/src/AppContent.tsx` 的 `onConditionalChange` / `onInstallDependenciesChange` / `onShowRemoteVersionChange` / `onVerifyInstallChange` / `onParallelInstallChange` 现在统一在更新设置之前先写本地键（`rlinks_conditional` / `rlinks_install_deps` / `rlinks_show_remote_version` / `rlinks_verify_install` / `rlinks_parallel_install`），与原 `useAppActions` 路径一致；`SettingsBackupPanel` 的「恢复默认」分支也补齐了缺失的功能项同步（沿用原 `theme/font/fontSize` 局部同步路径）。
+- **重复统计计算**：把 `mod_UI/src/AppContent.tsx` 重复三处的 `new Set(results.filter((r) => r.found).map((r) => r.package)).size`（`foundCount` / `summaryProgress` / `uniqueFoundCount`）合并为单一 `useMemo(uniqueFoundCount, [results])`，三处复用同一引用。
+- **存储备份常量静默漂移**：把 `mod_UI/src-tauri/src/atomic_storage.rs` 的 `MAX_BACKUPS = 5` 与 `MAX_SCAN = 512` 升级为 `pub(crate)`，`mod_UI/src-tauri/src/storage.rs` 改用 `pub(crate) use atomic_storage::{MAX_BACKUPS as MAX_CORRUPT_BACKUPS_PER_FILE, MAX_SCAN as MAX_CORRUPT_BACKUP_SCAN_ENTRIES}`；测试再无法用独立常量误判通过，生产修改会直接牵动 `storage_tests_2.rs` 中的 `MAX_CORRUPT_BACKUPS_PER_FILE + 2` / `MAX_CORRUPT_BACKUP_SCAN_ENTRIES + 10` 循环断言。
+
+### Added
+- **前端未处理 Promise 拒绝拦截**：`mod_UI/src/main.tsx` 注册 `window.addEventListener("unhandledrejection", ...)`，把 `Error` / `string` / 其它 reason 归一化后 `console.error` 输出（含 `stack`），便于生产期排查 Tauri IPC 链路与脚本生成链路上的悬挂 Promise。
+
+### Tests
+- **前端**：`npm run lint` 0 error / 38 warning（warning 全部为既有 `max-len` 项，留待批次 D 重排），`npm test -- --run` 12 文件 179 项全部通过，`npm run check:size` 退出 0。
+- **Rust**：本轮未触动 `src-tauri/src/` 内业务逻辑（仅调整 `atomic_storage.rs` 的常量可见性与 `storage.rs` 的导入语句），无需新增测试；本机 `cargo test` 仍受 `aws-lc-sys v0.41.0` 构建脚本探测阻塞，未在本机复跑。
+
 ## [2026-09-19 19:30:00 +08:00]
 
 ### Fixed

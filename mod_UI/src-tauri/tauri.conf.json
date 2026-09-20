@@ -21,8 +21,7 @@
         "center": true,
         "resizable": true,
         "dragDropEnabled": false,
-        "devtools": false,
-        "incognito": true
+        "devtools": false
       }
     ],
     "security": {

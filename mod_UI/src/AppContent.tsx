@@ -48,6 +48,7 @@ export function AppContent() {
   const inputTooLarge = utf8Length(input) > MAX_INPUT_CHARS || packageCount > MAX_PACKAGE_LINES || nonEmptyLineBytesExceeds(input, MAX_INPUT_LINE_BYTES);
   const smartSuggestions = useMemo(() => buildInputSmartSuggestions(input, inputProfile, method, { verifyInstall }), [input, inputProfile, method, verifyInstall]);
   const resultSuggestions = useMemo(() => buildResultSmartSuggestions(results, { fullSearch: settings.fullSearch, searching }), [results, settings.fullSearch, searching]);
+  const uniqueFoundCount = useMemo(() => new Set(results.filter((result) => result.found).map((result) => result.package)).size, [results]);
   const { script, latestScriptRef, requestSeq, setScript } = useScriptGeneration(input, ecosystem, pipIndex, condaChannels, method, conditional, installDependencies, showRemoteVersion, verifyInstall, parallelInstall, settings, rBinaryMirror, results, inputTooLarge, setStatus);
   const actions = useAppActions({ view, setView, input, setInput, inputProfile, inputRules, inputTooLarge, method, setMethod, ecosystem, pipIndex, rBinaryMirror, conditional, setConditional: (v) => { setConditionalState(v); localStorage.setItem("rlinks_conditional", v ? "1" : "0"); }, installDependencies, setInstallDependencies: (v) => { setInstallDependenciesState(v); localStorage.setItem("rlinks_install_deps", v ? "1" : "0"); }, showRemoteVersion, setShowRemoteVersion: (v) => { setShowRemoteVersionState(v); localStorage.setItem("rlinks_show_remote_version", v ? "1" : "0"); }, verifyInstall, setVerifyInstall: (v) => { setVerifyInstallState(v); localStorage.setItem("rlinks_verify_install", v ? "1" : "0"); }, settings, updateAndPersistSettings: (update) => { let next: Settings | undefined; updateSettingsFromUser((current) => (next = update(current))); if (next) void persistSettings(next); }, searching, searchingRef, hasSearchEvidenceRef, latestInputRef, latestScriptRef, copyWithLineNumbersRef, setLogs, setStatus, requestSeq, setScript, startSearch, startBinarySearch, startMultiEcosystemSearch, stopSearch, sanitizeHistoryList, enqueueHistorySave, copyHistoryRecord, deleteHistoryRecord, clearAllHistory, setInputRulesBusy });
   useEffect(() => { localStorage.setItem("rlinks_input", input); localStorage.setItem("rlinks_method", method); }, [input, method]);
@@ -60,9 +61,9 @@ export function AppContent() {
   const updateAndPersistSettings = (update: (current: Settings) => Settings) => { let next: Settings | undefined; updateSettingsFromUser((current) => (next = update(current))); if (next) void persistSettings(next); };
   const checkedProps: AppPagesProps = {
     view, setView, status, searching, packageCount, results, history, historySearch,
-    foundCount: new Set(results.filter((result) => result.found).map((result) => result.package)).size,
+    foundCount: uniqueFoundCount,
     onHistorySearchChange: setHistorySearch, onCopyRecord: copyHistoryRecord, onDeleteRecord: deleteHistoryRecord, onClearAll: clearAllHistory,
-    summaryProgress: packageCount ? Math.min(100, new Set(results.filter((result) => result.found).map((result) => result.package)).size / packageCount * 100) : 0,
+    summaryProgress: packageCount ? Math.min(100, uniqueFoundCount / packageCount * 100) : 0,
     input, inputTooLarge, inputProfile, method, conditional, installDependencies, parallelInstall, ecosystem, pipIndex, condaChannels, rBinaryMirror,
     showRemoteVersion, verifyInstall, settings, smartSuggestions, script,
     scriptTooLarge: scriptValueTooLarge(script), scriptCommandCount: countScriptCommands(script), duplicateCount: countDuplicatePackages(input),
@@ -86,11 +87,11 @@ export function AppContent() {
     onUseCacheChange: (value) => updateAndPersistSettings((current) => ({ ...current, useCache: value })),
     onUseFilterChange: (value) => updateAndPersistSettings((current) => ({ ...current, useFilter: value })),
     onMaxCacheEntriesChange: (value) => updateAndPersistSettings((current) => ({ ...current, maxCacheEntries: value })),
-    onConditionalChange: (value) => { setConditionalState(value); updateAndPersistSettings((current) => ({ ...current, conditional: value })); },
-    onInstallDependenciesChange: (value) => { setInstallDependenciesState(value); updateAndPersistSettings((current) => ({ ...current, installDependencies: value })); },
-    onShowRemoteVersionChange: (value) => { setShowRemoteVersionState(value); updateAndPersistSettings((current) => ({ ...current, showRemoteVersion: value })); },
-    onVerifyInstallChange: (value) => { setVerifyInstallState(value); localStorage.setItem("rlinks_verify_install", value ? "1" : "0"); },
-    onParallelInstallChange: (value) => { setParallelInstallState(value); localStorage.setItem("rlinks_parallel_install", value ? "1" : "0"); },
+    onConditionalChange: (value) => { setConditionalState(value); localStorage.setItem("rlinks_conditional", value ? "1" : "0"); updateAndPersistSettings((current) => ({ ...current, conditional: value })); },
+    onInstallDependenciesChange: (value) => { setInstallDependenciesState(value); localStorage.setItem("rlinks_install_deps", value ? "1" : "0"); updateAndPersistSettings((current) => ({ ...current, installDependencies: value })); },
+    onShowRemoteVersionChange: (value) => { setShowRemoteVersionState(value); localStorage.setItem("rlinks_show_remote_version", value ? "1" : "0"); updateAndPersistSettings((current) => ({ ...current, showRemoteVersion: value })); },
+    onVerifyInstallChange: (value) => { setVerifyInstallState(value); localStorage.setItem("rlinks_verify_install", value ? "1" : "0"); updateAndPersistSettings((current) => ({ ...current, verifyInstall: value })); },
+    onParallelInstallChange: (value) => { setParallelInstallState(value); localStorage.setItem("rlinks_parallel_install", value ? "1" : "0"); updateAndPersistSettings((current) => ({ ...current, parallelInstall: value })); },
     onCopyWithLineNumbersChange: setCopyWithLineNumbers,
     onCranMirrorChange: (value) => acceptSettingValue("cranMirror", value), onRLibPathChange: (value) => acceptSettingValue("rLibPath", value),
     onMirrorSelect: (value) => updateAndPersistSettings((current) => ({ ...current, cranMirror: value })),
@@ -102,7 +103,7 @@ export function AppContent() {
     onThemeChange: setCurrentTheme, onFontChange: setCurrentFont, onFontSizeChange: setCurrentFontSize, onCheckUpdates: update,
     onClearCache: async () => { try { await invoke("clear_package_cache"); setStatus("包缓存已清除"); } catch (error) { setStatus(`缓存清除失败: ${formatError(error)}`); } },
     onInputRulesChange: setInputRules, onReplaceInputRules: (next) => { setInputRules(next); void actions.saveInputRules(next); },
-    uniqueFoundCount: new Set(results.filter((result) => result.found).map((result) => result.package)).size,
+    uniqueFoundCount,
     onExportDiagnostics: async () => {
       try {
         const content = await invoke<string>("export_diagnostics");
