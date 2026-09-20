@@ -4,7 +4,9 @@ import { classifyUrlInput, isRecognizedUrlInput } from "./utils-url";
 const DEFAULT_SEPARATORS = [",", ";"];
 const URL_RE = /^https?:\/\//i;
 const splitLine = (line: string, separators: string[] = DEFAULT_SEPARATORS) => {
-  const t = line.replace(/[，、；]/g, (v) => v === "；" ? ";" : ",").trim();
+  // 全角标点统一归一化为半角；`；` 的处理与 Rust `input.rs::split_by_separators`
+  // 保持一致——`，`、`、`、`；` 三者都映射为 `,`，而不是把全角分号映射为 `;`。
+  const t = line.replace(/[，、；]/g, ",").trim();
   if (!t || t.startsWith("#")) return [];
   const match = t.match(/^(?:c|list)\((.+)\)$/s);
   const content = match ? match[1] : t;
@@ -23,7 +25,7 @@ export const cleanPackageInput = (value: string) => {
   const normalized = normalizePackageInputDisplay(value);
   const lines = normalized
     .split(/\r?\n/)
-    .map((line) => line.replace(/[，、；]/g, (separator) => (separator === "；" ? ";" : ",")).trim())
+    .map((line) => line.replace(/[，、；]/g, ",").trim())
     .filter(Boolean);
   return trimTrailingBlankLines(lines.join("\n"));
 };

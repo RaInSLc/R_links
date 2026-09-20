@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## [2026-09-20 14:31:00 +08:00] - v0.2.5
+
+### Fixed
+
+- **「保存设置」按钮必然失败（P0）**：`mod_UI/src/SettingsNetworkPanel.tsx` 的保存按钮由 `onClick={onSaveSettings}` 改为 `onClick={() => onSaveSettings()}`。该 prop 经 `SettingsView` → `AppPages` 透传到 `useSettings::persistSettings(overrides?)`，直接绑定会把 React 合成事件当作 `overrides` 传入；展开事件对象后再序列化会因循环引用抛错，导致设置永远无法保存。同步在 `SettingsView.test.tsx` 增加 `toHaveBeenCalledWith()` 断言（原用例用 `vi.fn()` 吞掉了实参，故未能暴露）。
+- **「保存过滤规则」按钮必然失败（P0）**：`mod_UI/src/InputRulesPanel.tsx` 同样改为显式无参调用 `onSaveInputRules()`。原写法把 MouseEvent 当作 `InputRules` 发给 `save_input_rules`，后端反序列化必然失败，且形参默认值 `inputRules` 永不生效。
+- **CRAN 来源网页打不开（P1）**：`mod_UI/src-tauri/src/url_validation.rs` 的 `build_package_page_url` 生成 `https://cran.r-project.org/package={pkg}`，而 `is_allowed_package_page_url` 只接受 `/package/{pkg}` 形式，二者互不匹配导致 `open_package_page` 对 CRAN 结果恒返回「包页面 URL 不在允许范围内」；实测 `/package/{pkg}` 在 CRAN 上返回 404，`/package={pkg}` 为 302 快捷写法。现统一为 CRAN 规范页面 `/web/packages/{pkg}/index.html`，构建器与校验器同步收紧，并新增 3 项回归测试（含"每个来源生成的 URL 必须通过自身校验"的闭环用例）。
+- **前端/后端 http(s) 协议大小写割裂（P2）**：`mod_UI/src-tauri/src/input.rs` 与 `script_generation.rs` 改用新的 `starts_with_http_scheme`（按字节 `eq_ignore_ascii_case` 比较）。此前后端对 `HTTPS://github.com/o/r` 整批报错，而前端 `/^https?:\/\//i` 会将其计为合法 URL 并把安装方式切到 GitHub，造成预览与实际解析割裂；新增 3 项回归测试覆盖 GitHub / 归档 URL / 未知协议。
+- **缓存反馈校验形同虚设（P3）**：`mod_UI/src-tauri/src/commands_cache.rs::matches` 原先把 `entry.package_name` 当作期望包名传下去，`rate_cache_result` 收到的 `package` 参数从未参与比较。现改为透传调用方包名，并新增 2 项回归测试。
+- **报告页 pip / conda 安装命令渲染期抛错（P2）**：`mod_UI/src/reportUtils.ts::getInstallCommand` 为 pip/conda 分支加兜底 `try/catch`。该函数在 `ReportActions`、`ReportResultsTable` 渲染期被调用，pip 索引或 conda 渠道配置非法时原会直接抛出并把整页交给错误边界；现返回空串以复用既有「安装命令尚未生成」提示。新增 `reportUtils.test.ts`（3 项）。
+- **「复制选中(N)」计数偏大（P3）**：`mod_UI/src/ReportActions.tsx` 改用已按 `results` 过滤后的 `selected.length`，不再使用可能残留陈旧 key 的 `selectedResults.size`。
+- **输入框 Enter 被拒时光标错位（P3）**：`mod_UI/src/PackageInputEditor.tsx` 的 Enter 分支改为与 Tab 分支一致，仅在未被拒绝时移动光标。
+- **全角标点前后端不一致（P3）**：`mod_UI/src/utils-input.ts` 的 `splitLine` 与 `cleanPackageInput` 把 `；` 也归一化为 `,`，与 Rust `input.rs::split_by_separators` 的 `replace(['，','、','；'], ",")` 对齐；新增 2 项回归测试。
+- **缓存运维操作静默失败（P3）**：`mod_UI/src/SettingsView.tsx` 的删除/清理/导出缓存补上 `catch`，失败时给出可见反馈（原实现只有 `try/finally`，rejection 被全局 `unhandledrejection` 处理器吞掉）。
+- **版本回退值过期（P3）**：`mod_UI/src/AppContent.tsx` 的 `getVersion()` 失败回退值由 `0.1.9` 修正为当前版本。
+
+### Changed
+
+- **版本提升至 0.2.5**：同步 `mod_UI/package.json`、`mod_UI/src-tauri/Cargo.toml`、`mod_UI/src-tauri/tauri.conf.json`，避免与既有 0.2.4 安装包同版本覆盖安装。
+- **构建环境说明**：`Z:` 为 SMB 网络盘（`\\10.0.0.163\pythonProject`），rustc/cargo 在其中并发写入 `target/` 会间歇性返回 `os error 5（拒绝访问）`。本轮改用「失败即重试」的循环构建脚本（见 `报告/ai_codes/`），利用 cargo 增量缓存逐次推进完成构建。
+
+### Tests
+
+- **前端**：`npm run lint` 退出 0（0 error / 0 warning）；`npm test -- --run` 13 个文件 184 项全部通过（较原 179 项新增 5 项回归）；`npm run build`（`tsc && vite build`）退出 0；`npm run check:size` 未产生新的超长行违规（ReportActions 15→8、SettingsView 11→9，其余持平）。
+- **Rust**：新增 8 项回归测试（CRAN 页面 URL 闭环 3 项、协议大小写 3 项、缓存匹配 2 项）。
+
 ## [2026-09-20 11:35:00 +08:00]
 ### mod_UI 前端
 - 拆分 17 个文件中 29 处 ESLint max-len 超 200 字符的单行声明

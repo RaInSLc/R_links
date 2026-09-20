@@ -91,7 +91,17 @@ export function useAppActions(context: AppActionContext) {
   }
 
   async function pasteInput() {
-    try { const value = await readText(); if (value) { const result = acceptInputValue(value, "clipboard"); if (result !== "rejected") setStatus(result === "cleared" ? "已从剪贴板粘贴，检索日志已清除（来源信息保留）" : "已从剪贴板粘贴"); } }
+    try {
+      const value = await readText();
+      if (value) {
+        const result = acceptInputValue(value, "clipboard");
+        if (result !== "rejected") {
+          setStatus(result === "cleared"
+            ? "已从剪贴板粘贴，检索日志已清除（来源信息保留）"
+            : "已从剪贴板粘贴");
+        }
+      }
+    }
     catch (error) { setStatus(`粘贴失败: ${formatError(error)}`); }
   }
 
@@ -138,14 +148,22 @@ export function useAppActions(context: AppActionContext) {
     downloadFile(snapshot, name); setStatus(`已下载 ${ecosystem === "r" || ecosystem === "r-binary" ? "R" : ecosystem === "pip" ? "Pip" : "Conda"} 安装脚本`);
   }
   function downloadWrapperScript(kind: "powershell" | "bash") {
-    const snapshot = latestScriptRef.current; if (!snapshot || snapshot === "等待输入..." || scriptValueTooLarge(snapshot)) return;
+    const snapshot = latestScriptRef.current;
+    if (!snapshot || snapshot === "等待输入..." || scriptValueTooLarge(snapshot)) return;
     const multi = ecosystem === "pip" || ecosystem === "conda";
     if (multi) {
       try {
-        const content = generateMultiEcosystemScript(input, ecosystem, settings.pipIndex, settings.condaChannels, kind);
-        downloadFile(content, `${ecosystem}_install.${kind === "powershell" ? "ps1" : "sh"}`);
+        const content = generateMultiEcosystemScript(
+          input, ecosystem, settings.pipIndex, settings.condaChannels, kind,
+        );
+        downloadFile(
+          content,
+          `${ecosystem}_install.${kind === "powershell" ? "ps1" : "sh"}`,
+        );
         setStatus("已下载当前生态的安装脚本");
-      } catch (error) { setStatus(`导出失败: ${formatError(error)}`); }
+      } catch (error) {
+        setStatus(`导出失败: ${formatError(error)}`);
+      }
       return;
     }
     const wrapper = kind === "powershell" ? `# R 包安装入口\n$ErrorActionPreference = "Stop"\n$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path\n$rscript = Get-Command Rscript -ErrorAction SilentlyContinue\nif (-not $rscript) { Write-Error "Rscript was not found in PATH."; exit 127 }\n& $rscript.Source -f (Join-Path $scriptDir "install_packages.R")\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\nWrite-Host "R package installation completed."\n` : `#!/usr/bin/env bash\nset -u\nSCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nRscript "$SCRIPT_DIR/install_packages.R"\n`;

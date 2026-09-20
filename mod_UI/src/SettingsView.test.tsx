@@ -86,7 +86,7 @@ describe('SettingsView Component', () => {
     inputRulesBusy: false,
   });
 
-  it('点击“保存过滤规则”按钮时，应触发 onSaveInputRules 回调', () => {
+  it('点击“保存过滤规则”按钮时，应以无参方式触发 onSaveInputRules 回调', () => {
     const props = createProps();
     render(<SettingsView {...props} />);
     fireEvent.click(screen.getByText('输入过滤'));
@@ -94,6 +94,9 @@ describe('SettingsView Component', () => {
     expect(saveRulesBtn).toBeInTheDocument();
     fireEvent.click(saveRulesBtn);
     expect(props.onSaveInputRules).toHaveBeenCalledTimes(1);
+    // 回归：若 onClick 直接绑定带参实现，React 会把 MouseEvent 当作 rules 传入，
+    // 后端会因缺少必需字段反序列化失败，且默认值 inputRules 永不生效。
+    expect(props.onSaveInputRules).toHaveBeenCalledWith();
   });
 
   it('编辑排除正则时应保留换行位置', () => {
@@ -123,7 +126,7 @@ describe('SettingsView Component', () => {
     expect(props.onInputRulesChange).toHaveBeenNthCalledWith(3, expect.objectContaining({ excludeKeywords: ['library', ''] }));
   });
 
-  it('点击“保存设置”按钮时，应触发 onSaveSettings 回调', () => {
+  it('点击“保存设置”按钮时，应以无参方式触发 onSaveSettings 回调', () => {
     const props = createProps();
     render(<SettingsView {...props} />);
     fireEvent.click(screen.getByText('网络连接'));
@@ -131,6 +134,9 @@ describe('SettingsView Component', () => {
     expect(saveSettingsBtn).toBeInTheDocument();
     fireEvent.click(saveSettingsBtn);
     expect(props.onSaveSettings).toHaveBeenCalledTimes(1);
+    // 回归：onClick 直接绑定 persistSettings 时，overrides 会变成 MouseEvent，
+    // 展开事件对象后再序列化会因循环引用抛错，导致保存必然失败。
+    expect(props.onSaveSettings).toHaveBeenCalledWith();
   });
 
   it('应展示当前版本和更新状态', () => {

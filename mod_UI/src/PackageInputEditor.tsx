@@ -111,7 +111,8 @@ export const PackageInputEditor = forwardRef<PackageInputEditorHandle, PackageIn
       event.preventDefault();
       const start = event.currentTarget.selectionStart;
       const end = event.currentTarget.selectionEnd;
-      onInputChange(input.slice(0, start) + "\n" + input.slice(end), "manual");
+      // 被拒绝时输入未变更，此时不得移动光标，否则光标会与文本错位。
+      if (onInputChange(input.slice(0, start) + "\n" + input.slice(end), "manual") === "rejected") return;
       requestAnimationFrame(() => {
         if (textareaRef.current) textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + 1;
       });

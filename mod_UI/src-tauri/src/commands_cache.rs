@@ -160,12 +160,13 @@ pub(crate) fn delete_package_cache_entry(
 }
 fn matches(
     e: &crate::models::PackageCacheEntry,
+    package: &str,
     source: &str,
     version: &str,
     repository: &str,
     real_name: &str,
 ) -> bool {
-    storage::cache_entry_matches(e, &e.package_name, source, version, repository, real_name)
+    storage::cache_entry_matches(e, package, source, version, repository, real_name)
 }
 #[tauri::command]
 pub(crate) fn rate_cache_result(
@@ -188,7 +189,7 @@ pub(crate) fn rate_cache_result(
     let Some(entry) = cache.get_mut(&key) else {
         return Err("没有找到可反馈的缓存记录".to_string());
     };
-    if !matches(entry, &source, &version, &repository, &real_name) {
+    if !matches(entry, &package, &source, &version, &repository, &real_name) {
         return Err("当前结果与缓存记录不一致，已跳过反馈".to_string());
     }
     let message = if vote == "up" {
@@ -210,4 +211,49 @@ pub(crate) fn rate_cache_result(
     };
     storage::save_cache(&app, &cache)?;
     Ok(message.to_string())
+}
+
+#[cfg(test)]
+mod cache_match_tests {
+    use super::matches;
+    use crate::models::PackageCacheEntry;
+
+    fn entry(
+        package_name: &str,
+        source: &str,
+        version: &str,
+        repository: &str,
+        real_name: &str,
+    ) -> PackageCacheEntry {
+        PackageCacheEntry {
+            package_name: package_name.to_string(),
+            source: source.to_string(),
+            version: version.to_string(),
+            repository: repository.to_string(),
+            real_name: real_name.to_string(),
+            cached_at: "2026-01-01T00:00:00Z".to_string(),
+            verified_count: 0,
+            up_votes: 0,
+            down_votes: 0,
+            invalidated: false,
+        }
+    }
+
+    #[test]
+    fn rejects_package_name_mismatch() {
+        let item = entry("dplyr", "cran", "1.1.4", "", "dplyr");
+        assert!(matches(&item, "dplyr", "cran", "1.1.4", "", "dplyr"));
+        // 回归：历史上这里把 entry.package_name 当成期望包名传下去，
+        // 调用方传入的包名从未参与比较，任何包名都能通过这一段校验。
+        assert!(!matches(&item, "ggplot2", "cran", "1.1.4", "", "dplyr"));
+    }
+
+    #[test]
+    fn still_compares_source_version_repository_and_real_name() {
+        let item = entry("dplyr", "cran", "1.1.4", "", "dplyr");
+        assert!(!matches(&item, "dplyr", "bioc", "1.1.4", "", "dplyr"));
+        assert!(!matches(&item, "dplyr", "cran", "1.1.5", "", "dplyr"));
+        assert!(!matches(&item, "dplyr", "cran", "1.1.4", "archive", "dplyr"));
+        assert!(!matches(&item, "dplyr", "cran", "1.1.4", "", "other"));
+    }
 }

@@ -23,6 +23,19 @@ fn local_archive_regex() -> &'static Regex {
     })
 }
 
+/// 判断一行是否以 `http://` / `https://` 开头。
+///
+/// 协议名按大小写不敏感匹配：`Url::parse` 本身会把协议名归一化为小写，
+/// 前端 `utils-url.ts` 也用 `/^https?:\/\//i` 判定，因此这里必须同样宽松，
+/// 否则 `HTTPS://github.com/o/r` 这类输入会出现"前端算作合法 URL、后端整批拒绝"的割裂。
+pub(crate) fn starts_with_http_scheme(value: &str) -> bool {
+    fn prefix_eq(bytes: &[u8], prefix: &[u8]) -> bool {
+        bytes.len() >= prefix.len() && bytes[..prefix.len()].eq_ignore_ascii_case(prefix)
+    }
+    let bytes = value.as_bytes();
+    prefix_eq(bytes, b"http://") || prefix_eq(bytes, b"https://")
+}
+
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn parse_inputs(input: &str) -> Result<Vec<PackageInput>, String> {
     parse_inputs_filtered(input, &InputRules::default())
@@ -76,7 +89,7 @@ pub fn parse_inputs_filtered(input: &str, rules: &InputRules) -> Result<Vec<Pack
         }
         let line_num = line_idx + 1;
 
-        if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        if starts_with_http_scheme(trimmed) {
             if let Some(pkg) = parse_input_line(trimmed) {
                 packages.push(pkg);
             } else {
@@ -242,11 +255,11 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
         return None;
     }
 
-    if raw.contains("://") && !raw.starts_with("http://") && !raw.starts_with("https://") {
+    if raw.contains("://") && !starts_with_http_scheme(raw) {
         return None;
     }
 
-    if raw.starts_with("http://") || raw.starts_with("https://") {
+    if starts_with_http_scheme(raw) {
         if let Some(repository) = normalize_github_repository(raw) {
             return Some(PackageInput {
                 raw: raw.to_string(),
@@ -348,7 +361,7 @@ pub fn parse_input_line(line: &str) -> Option<PackageInput> {
 
 pub fn extract_package_name(input: &str) -> String {
     let value = input.trim().trim_matches(['"', '\'']);
-    if value.starts_with("http://") || value.starts_with("https://") {
+    if starts_with_http_scheme(value) {
         if let Some(repository) = normalize_github_repository(value) {
             return repository
                 .rsplit('/')

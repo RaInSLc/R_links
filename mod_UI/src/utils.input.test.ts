@@ -254,3 +254,20 @@ describe("collectBrowserSearchNames", () => {
     expect(collectBrowserSearchNames("tidyverse/dplyr", 10).names).toEqual(["dplyr"]);
   });
 });
+
+describe("全角标点归一化（与 Rust split_by_separators 对齐）", () => {
+  it("全角分号与全角逗号、顿号一样映射为半角逗号", () => {
+    // Rust `input.rs::split_by_separators` 用 replace(['，','、','；'], ",")，
+    // 前端若把 `；` 映射为 `;`，在用户只把 `,` 配成分隔符时两侧包数会对不上。
+    expect(classifyInputProfile("dplyr；ggplot2", [","])).toEqual({
+      total: 2,
+      archiveUrls: 0,
+      repositories: 0,
+    });
+    expect(classifyInputProfile("dplyr、ggplot2，tidyr", [","]).total).toBe(3);
+  });
+
+  it("显式清理与显示规范化对全角标点保持同一口径", () => {
+    expect(cleanPackageInput("dplyr；ggplot2")).toBe("dplyr,ggplot2");
+  });
+});

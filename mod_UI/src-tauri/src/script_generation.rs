@@ -102,8 +102,7 @@ pub(crate) fn generate_script_inner(
     }
     for package in packages {
         let mut is_cran_archive = false;
-        let is_archive_url = (package.raw.starts_with("http://")
-            || package.raw.starts_with("https://"))
+        let is_archive_url = starts_with_http_scheme(&package.raw)
             && normalize_github_repository(&package.raw).is_none();
         let is_local_archive = package.source_hint.as_deref() == Some("local");
         if is_archive_url && !matches!(requested_method, "auto" | "devtools" | "remotes") {

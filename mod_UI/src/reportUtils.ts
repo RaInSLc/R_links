@@ -61,15 +61,22 @@ export function getInstallCommand(result: SearchResult): string {
   if (result.source === "pip" || result.source === "conda") {
     const version = result.requestedVersion || result.latestVersion;
     const requirement = `${result.package}${version ? /^[=!<>~]/.test(version) ? version : `==${version}` : ""}`;
-    return generateMultiEcosystemScript(
-      requirement,
-      result.source,
-      result.source === "pip" ? result.repository : "",
-      result.source === "conda" ? [result.repository || "conda-forge"] : [],
-    )
-      .split("\n")
-      .filter((line) => line && !line.startsWith("#") && line !== "set -e")
-      .join("\n");
+    // 生成器会校验 pip 索引地址与 conda 渠道名，配置非法时会抛错；本函数在渲染期
+    // 被调用，因此必须在此兜底，否则整张报告页会被错误边界接管。
+    // 返回空串会让「安装命令尚未生成」的既有提示生效。
+    try {
+      return generateMultiEcosystemScript(
+        requirement,
+        result.source,
+        result.source === "pip" ? result.repository : "",
+        result.source === "conda" ? [result.repository || "conda-forge"] : [],
+      )
+        .split("\n")
+        .filter((line) => line && !line.startsWith("#") && line !== "set -e")
+        .join("\n");
+    } catch {
+      return "";
+    }
   }
   if (result.source === "cran" && /\/Archive\//.test(result.repository)) return `remotes::install_url(${JSON.stringify(result.repository)}, upgrade = "never")`;
   if (result.source === "cran") return result.requestedVersion ? `remotes::install_version("${result.package}", version = "${result.requestedVersion}", repos = "https://cloud.r-project.org", upgrade = "never")` : `install.packages("${result.package}")`;

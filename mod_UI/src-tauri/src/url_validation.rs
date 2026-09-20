@@ -278,7 +278,9 @@ pub fn build_package_page_url(
             if !is_valid_package_name(package) {
                 return Err(format!("无效的 CRAN 包名: {package}"));
             }
-            Ok(format!("https://cran.r-project.org/package={package}"))
+            Ok(format!(
+                "https://cran.r-project.org/web/packages/{package}/index.html"
+            ))
         }
         "bioc" => {
             if !is_valid_package_name(package) {
@@ -340,8 +342,15 @@ pub fn is_allowed_package_page_url(value: &str) -> bool {
     let path = url.path();
     match host {
         Some("cran.r-project.org") => {
+            // 与 build_package_page_url 生成的形式严格对齐：CRAN 的规范包页面是
+            // `/web/packages/{pkg}/index.html`。`/package={pkg}` 只是会 302 跳转的
+            // 快捷写法，而 `/package/{pkg}` 在 CRAN 上实际返回 404，均不接受。
             let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-            segs.len() == 2 && segs[0] == "package" && is_valid_package_name(segs[1])
+            segs.len() == 4
+                && segs[0] == "web"
+                && segs[1] == "packages"
+                && is_valid_package_name(segs[2])
+                && segs[3] == "index.html"
         }
         Some("bioconductor.org") => {
             let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();

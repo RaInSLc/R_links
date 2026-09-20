@@ -57,10 +57,8 @@ pub(crate) async fn test_mirror_speed(
         Duration::from_secs(8),
         true,
     )?;
-    let tasks = mirrors.iter().map(|(m, l)| {
+    let tasks = mirrors.into_iter().map(|(m, l)| {
         let c = c.clone();
-        let m = m.clone();
-        let l = l.clone();
         async move {
             let start = Instant::now();
             let r = c
