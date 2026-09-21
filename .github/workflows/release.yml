@@ -129,15 +129,15 @@ jobs:
         run: |
           Copy-Item -LiteralPath "mod_UI\src-tauri\target\release\mod_ui.exe" -Destination "mod_UI\src-tauri\target\release\R_Package_Command_Center_Portable.exe" -Force
 
-      - name: Upload additional release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ env.RELEASE_TAG }}
-          target_commitish: ${{ env.RELEASE_TAG }}
-          draft: false
-          files: |
-            mod_UI/src-tauri/target/release/R_Package_Command_Center_Portable.exe
+      - name: Upload portable release asset
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload $env:RELEASE_TAG "mod_UI\src-tauri\target\release\R_Package_Command_Center_Portable.exe" --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $global:LASTEXITCODE = 0
+          exit 0
 
       - name: Validate updater manifest
         shell: pwsh

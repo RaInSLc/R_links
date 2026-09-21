@@ -12,7 +12,7 @@
 - 发布工作流的本地预构建命令改为直接调用 Tauri CLI，避免 `npm run` 剥离 Windows 临时目录环境变量而导致链接阶段失败。
 - Release 工作流不再执行依赖本地 HTTP fixture 的忽略集成基准；该 fixture 的显式端口会被当前 URL 安全策略拒绝，基准保留为按需运行，主测试、格式与 Clippy 门禁保持不变。
 - 发布 Runner 的更新链路自检使用 `--pre-release` 模式，避免将当前发布版本与远端同版本清单进行“必须更高版本”的旧客户端比较而误判失败。
-- 便携版资产上传显式绑定发布标签，避免手动触发工作流时将 `main` 误作 Release 目标而被 GitHub Actions Token 拒绝。
+- 便携版资产上传改用 GitHub CLI 直接写入指定标签，避免手动触发工作流时第三方 action 将 `main` 误作 Release 目标而被 GitHub Actions Token 拒绝。
 
 ## [2026-09-20 18:16:00 +08:00] - v0.2.6 在线更新链路根因修复 + 版本号常驻显示
 
