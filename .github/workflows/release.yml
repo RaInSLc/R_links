@@ -229,7 +229,7 @@ jobs:
         run: |
           for ($i = 1; $i -le 3; $i++) {
             Write-Host "更新链路自检 第 $i/3 次"
-            node scripts/verify_updater.mjs
+            node scripts/verify_updater.mjs --pre-release
             if ($LASTEXITCODE -eq 0) { break }
             if ($i -eq 3) { exit $LASTEXITCODE }
             Write-Host '可能遇到 CDN 缓存延迟，10 秒后重试……'
