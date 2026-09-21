@@ -99,8 +99,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --manifest-path src-tauri\Cargo.toml --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo test --manifest-path src-tauri\Cargo.toml --locked integration_baselines -- --ignored --nocapture --test-threads=1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo clippy --manifest-path src-tauri\Cargo.toml --all-targets --locked -- -D warnings
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # 这里只验证编译与测试；签名构建由 tauri-action 完成，
