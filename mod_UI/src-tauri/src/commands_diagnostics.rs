@@ -257,7 +257,7 @@ fn redact_proxy_url(proxy: &str) -> String {
 /// 解码链路与 `tauri-plugin-updater::verify_signature` 完全一致：base64 解出
 /// 文本 → 取第二行（公钥主体）→ base64 解出 42 字节 → `Ed` + 8 字节 key id
 /// + 32 字节公钥。返回 `None` 表示这个公钥无法解析，即**任何更新包都无法通过
-/// 验签**；而构建、打包、发布都不会因此报错，只能靠这里的显式校验暴露。
+///   验签**；而构建、打包、发布都不会因此报错，只能靠这里的显式校验暴露。
 pub(crate) fn minisign_public_key_id(pubkey: &str) -> Option<String> {
     let engine = base64::engine::general_purpose::STANDARD;
     let text = String::from_utf8(engine.decode(pubkey.trim()).ok()?).ok()?;

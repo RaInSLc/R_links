@@ -105,7 +105,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # 这里只验证编译与测试；签名构建由 tauri-action 完成，
           # 若在此处直接 build 会因缺少签名环境变量而失败。
-          npm run tauri build -- --no-bundle
+          node .\node_modules\@tauri-apps\cli\tauri.js build --no-bundle
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $global:LASTEXITCODE = 0
           exit 0
