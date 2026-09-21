@@ -134,6 +134,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ env.RELEASE_TAG }}
           draft: false
           files: |
             mod_UI/src-tauri/target/release/R_Package_Command_Center_Portable.exe
