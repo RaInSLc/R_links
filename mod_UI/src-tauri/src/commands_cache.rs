@@ -83,7 +83,8 @@ pub(crate) fn build_offline_results(
                     let repository = if source == "github" {
                         HISTORY_EXTRACT_RE
                             .get_or_init(|| {
-                                Regex::new(r#"(?:install_github|install_url)\("([^\"]+)"#).unwrap()
+                                Regex::new(r#"(?:install_github|install_url)\("([^\"]+)"#)
+                                    .expect("固定 install_github/install_url 历史命令正则必须有效")
                             })
                             .captures(&record.command)
                             .and_then(|c| c.get(1))

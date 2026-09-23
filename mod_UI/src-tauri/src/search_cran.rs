@@ -84,17 +84,14 @@ pub(crate) async fn search_cran(
             }
 
             let target_version = if !package.version.is_empty() {
-                if versions
+                // 单次遍历完成判定与取值；不使用 unwrap，避免依赖
+                // 「判定谓词与查找谓词完全一致」这一隐含前提。
+                match versions
                     .iter()
-                    .any(|v| version_compatible(v, &package.version))
+                    .find(|v| version_compatible(v, &package.version))
                 {
-                    let matched = versions
-                        .iter()
-                        .find(|v| version_compatible(v, &package.version))
-                        .unwrap();
-                    matched.clone()
-                } else {
-                    return Ok(None);
+                    Some(matched) => matched.clone(),
+                    None => return Ok(None),
                 }
             } else {
                 latest_version

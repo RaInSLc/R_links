@@ -1,5 +1,8 @@
 import { renderHook, act } from '@testing-library/react';
-import { useSettings } from './useSettings';
+import { useSettings, settingsFromPublicSettings } from './useSettings';
+import type { Settings } from './types';
+import { defaultSettings } from './types';
+import type { PublicSettings } from './utils';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as tauriCore from '@tauri-apps/api/core';
 
@@ -159,5 +162,87 @@ describe('useSettings', () => {
     resolveFirst?.(saved);
     await act(async () => { await first; await new Promise((resolve) => setTimeout(resolve, 0)); });
     expect(vi.mocked(tauriCore.invoke).mock.calls.filter(([cmd]) => cmd === 'save_settings')).toHaveLength(2);
+  });
+});
+
+describe('settingsFromPublicSettings 字段映射完备性', () => {
+  // 字段齐全、取值互不相同的 PublicSettings，标注为 PublicSettings 类型：
+  // 一旦该接口新增字段而此处未同步补齐，TypeScript 编译会直接失败；
+  // 下面基于 Object.keys 的逐字段断言则保证“新增字段但漏加映射”被运行时捕获。
+  const publicSettings: PublicSettings = {
+    proxy: 'http://127.0.0.1:7890',
+    githubTokenConfigured: true,
+    cranMirror: 'https://cloud.r-project.org/',
+    rLibPath: 'D:/R/library-42',
+    fullSearch: true,
+    searchConcurrency: 7,
+    archiveGithubMajorGap: 3,
+    conditional: false,
+    installDependencies: false,
+    showRemoteVersion: false,
+    useCache: false,
+    maxCacheEntries: 4321,
+    useFilter: false,
+    resolveDependencies: false,
+    maxDependencyDepth: 5,
+    includeLightDependencies: true,
+    maxDependencyNodes: 321,
+    pinnedMethods: ['biocManager', 'github'],
+    pipIndex: 'https://pypi.org/simple',
+    condaChannels: ['conda-forge', 'bioconda'],
+  };
+
+  it('把 PublicSettings 的每个字段都映射进 Settings，且取值一一对应', () => {
+    const mapped = settingsFromPublicSettings(publicSettings);
+    type StringKeyed = Record<string, unknown>;
+
+    // PublicSettings 除 githubTokenConfigured 外的每个字段都应原样进入 Settings。
+    (Object.keys(publicSettings) as Array<keyof PublicSettings>).forEach((key) => {
+      if (key === 'githubTokenConfigured') return;
+      expect((mapped as unknown as StringKeyed)[key]).toStrictEqual(
+        (publicSettings as unknown as StringKeyed)[key],
+      );
+    });
+
+    // githubToken 是只写字段：后端不下发明文 token，映射后恒为空字符串。
+    expect(mapped.githubToken).toBe('');
+    expect(publicSettings.githubTokenConfigured).toBe(true);
+  });
+
+  it('映射结果恰好覆盖 Settings 的全部字段，不遗漏也不多余', () => {
+    const mapped = settingsFromPublicSettings(publicSettings);
+
+    expect(Object.keys(mapped).sort()).toEqual(Object.keys(defaultSettings).sort());
+    Object.keys(defaultSettings).forEach((key) => {
+      // 任一字段若因漏加映射而缺失或为 undefined，这里立刻失败。
+      expect(mapped[key as keyof Settings]).not.toBeUndefined();
+    });
+  });
+
+  it('加载路径会用磁盘值填充所有被映射的字段', async () => {
+    vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
+      if (cmd === 'load_settings') return publicSettings;
+      return null;
+    });
+
+    const { result } = renderHook(() => useSettings(vi.fn()));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    expect(result.current.settings.proxy).toBe(publicSettings.proxy);
+    expect(result.current.settings.cranMirror).toBe(publicSettings.cranMirror);
+    expect(result.current.settings.rLibPath).toBe(publicSettings.rLibPath);
+    expect(result.current.settings.fullSearch).toBe(publicSettings.fullSearch);
+    expect(result.current.settings.searchConcurrency).toBe(publicSettings.searchConcurrency);
+    expect(result.current.settings.archiveGithubMajorGap).toBe(publicSettings.archiveGithubMajorGap);
+    expect(result.current.settings.maxCacheEntries).toBe(publicSettings.maxCacheEntries);
+    expect(result.current.settings.resolveDependencies).toBe(publicSettings.resolveDependencies);
+    expect(result.current.settings.maxDependencyDepth).toBe(publicSettings.maxDependencyDepth);
+    expect(result.current.settings.includeLightDependencies).toBe(publicSettings.includeLightDependencies);
+    expect(result.current.settings.maxDependencyNodes).toBe(publicSettings.maxDependencyNodes);
+    expect(result.current.settings.pinnedMethods).toStrictEqual(publicSettings.pinnedMethods);
+    expect(result.current.settings.pipIndex).toBe(publicSettings.pipIndex);
+    expect(result.current.settings.condaChannels).toStrictEqual(publicSettings.condaChannels);
   });
 });

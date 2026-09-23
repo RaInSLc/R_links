@@ -29,6 +29,42 @@ type SettingsPersistOverrides = Partial<
 
 type SetStatus = (s: string) => void;
 
+/**
+ * 把后端返回的 {@link PublicSettings} 映射为前端的 {@link Settings}。
+ *
+ * 这是 `PublicSettings → Settings` 的唯一字段映射来源。`load_settings`、
+ * `save_settings` 与 `clear_github_token` 三条成功回填路径曾经各自完整手写一遍
+ * 同样的字段列表，任何新增设置项只要漏改其中一处，该字段就会在那条路径上静默
+ * 回落到默认值，且现有测试不会报警。集中到此函数后，新增字段只需改这里一处。
+ *
+ * 说明：`githubToken` 是只写字段，后端从不下发明文 token，因此这里恒为空字符串；
+ * “是否已配置 token”由 `PublicSettings.githubTokenConfigured` 单独表达。
+ */
+export function settingsFromPublicSettings(publicSettings: PublicSettings): Settings {
+  return {
+    proxy: publicSettings.proxy,
+    githubToken: "",
+    cranMirror: publicSettings.cranMirror,
+    rLibPath: publicSettings.rLibPath,
+    fullSearch: publicSettings.fullSearch,
+    searchConcurrency: publicSettings.searchConcurrency,
+    archiveGithubMajorGap: publicSettings.archiveGithubMajorGap,
+    conditional: publicSettings.conditional,
+    installDependencies: publicSettings.installDependencies,
+    showRemoteVersion: publicSettings.showRemoteVersion,
+    useCache: publicSettings.useCache,
+    maxCacheEntries: publicSettings.maxCacheEntries,
+    useFilter: publicSettings.useFilter,
+    resolveDependencies: publicSettings.resolveDependencies,
+    maxDependencyDepth: publicSettings.maxDependencyDepth,
+    includeLightDependencies: publicSettings.includeLightDependencies,
+    maxDependencyNodes: publicSettings.maxDependencyNodes,
+    pinnedMethods: publicSettings.pinnedMethods,
+    pipIndex: publicSettings.pipIndex,
+    condaChannels: publicSettings.condaChannels,
+  };
+}
+
 export function useSettings(setStatus: SetStatus) {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [showToken, setShowToken] = useState(false);
@@ -66,26 +102,7 @@ export function useSettings(setStatus: SetStatus) {
         // 不再因为"加载期间发生过用户改动"就整份丢弃磁盘配置：只有用户显式改过的
         // 字段覆盖磁盘值，其余字段采用磁盘值，避免把用户其余已保存设置静默重置为默认值。
         applySettings({
-          proxy: clean.proxy,
-          githubToken: "",
-           cranMirror: clean.cranMirror,
-           rLibPath: clean.rLibPath,
-          fullSearch: clean.fullSearch,
-          searchConcurrency: clean.searchConcurrency,
-          archiveGithubMajorGap: clean.archiveGithubMajorGap,
-          conditional: clean.conditional,
-          installDependencies: clean.installDependencies,
-          showRemoteVersion: clean.showRemoteVersion,
-          useCache: clean.useCache,
-          maxCacheEntries: clean.maxCacheEntries,
-          useFilter: clean.useFilter,
-          resolveDependencies: clean.resolveDependencies,
-          maxDependencyDepth: clean.maxDependencyDepth,
-          includeLightDependencies: clean.includeLightDependencies,
-          maxDependencyNodes: clean.maxDependencyNodes,
-          pinnedMethods: clean.pinnedMethods,
-          pipIndex: clean.pipIndex,
-          condaChannels: clean.condaChannels,
+          ...settingsFromPublicSettings(clean),
           ...userOverridesRef.current,
         });
         setTokenConfigured(clean.githubTokenConfigured);
@@ -174,28 +191,7 @@ export function useSettings(setStatus: SetStatus) {
         setStatus("设置已保存；检测到新的界面修改，请再次保存");
         return;
       }
-      applySettings({
-        proxy: publicSettings.proxy,
-        githubToken: "",
-         cranMirror: publicSettings.cranMirror,
-         rLibPath: publicSettings.rLibPath,
-        fullSearch: publicSettings.fullSearch,
-        searchConcurrency: publicSettings.searchConcurrency,
-        archiveGithubMajorGap: publicSettings.archiveGithubMajorGap,
-        conditional: publicSettings.conditional,
-        installDependencies: publicSettings.installDependencies,
-        showRemoteVersion: publicSettings.showRemoteVersion,
-        useCache: publicSettings.useCache,
-        maxCacheEntries: publicSettings.maxCacheEntries,
-        useFilter: publicSettings.useFilter,
-        resolveDependencies: publicSettings.resolveDependencies,
-        maxDependencyDepth: publicSettings.maxDependencyDepth,
-        includeLightDependencies: publicSettings.includeLightDependencies,
-        maxDependencyNodes: publicSettings.maxDependencyNodes,
-        pinnedMethods: publicSettings.pinnedMethods,
-        pipIndex: publicSettings.pipIndex,
-        condaChannels: publicSettings.condaChannels,
-      });
+      applySettings(settingsFromPublicSettings(publicSettings));
       setShowToken(false);
       setStatus("设置已保存并立即生效");
     } catch (error) {
@@ -227,26 +223,7 @@ export function useSettings(setStatus: SetStatus) {
       }
       applySettings({
         ...latestSettingsRef.current,
-        proxy: publicSettings.proxy,
-        githubToken: "",
-         cranMirror: publicSettings.cranMirror,
-         rLibPath: publicSettings.rLibPath,
-        fullSearch: publicSettings.fullSearch,
-        searchConcurrency: publicSettings.searchConcurrency,
-        archiveGithubMajorGap: publicSettings.archiveGithubMajorGap,
-        conditional: publicSettings.conditional,
-        installDependencies: publicSettings.installDependencies,
-        showRemoteVersion: publicSettings.showRemoteVersion,
-        useCache: publicSettings.useCache,
-        maxCacheEntries: publicSettings.maxCacheEntries,
-        useFilter: publicSettings.useFilter,
-        resolveDependencies: publicSettings.resolveDependencies,
-        maxDependencyDepth: publicSettings.maxDependencyDepth,
-        includeLightDependencies: publicSettings.includeLightDependencies,
-        maxDependencyNodes: publicSettings.maxDependencyNodes,
-        pinnedMethods: publicSettings.pinnedMethods,
-        pipIndex: publicSettings.pipIndex,
-        condaChannels: publicSettings.condaChannels,
+        ...settingsFromPublicSettings(publicSettings),
       });
       setShowToken(false);
       setStatus("已清除保存的 GitHub Token");

@@ -97,3 +97,6 @@ codex安装.md
 
 # Rust build artifacts (alternate target)
 target_build/
+
+# WorkBuddy 工具状态目录
+.workbuddy*/
