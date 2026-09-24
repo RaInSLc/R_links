@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import {
   buildUpdaterManifest,
+  bundleDirs,
   collectUpdaterArtifacts,
   projectRoot,
   readTauriConfig,
@@ -134,7 +135,18 @@ async function main() {
   fs.mkdirSync(releaseDir, { recursive: true });
   const release = path.join(projectRoot, "src-tauri", "target", "release");
   const portable = path.join(release, "mod_ui.exe");
-  const artifacts = collectUpdaterArtifacts();
+  const installerDirs = bundleDirs();
+  const installerNames = [installerDirs.nsis, installerDirs.msi].flatMap((directory) => (
+    fs.existsSync(directory)
+      ? fs.readdirSync(directory).filter((name) => (
+        name.includes(`_${config.version}_`) && (name.endsWith(".exe") || name.endsWith(".msi"))
+      )).map((name) => path.join(directory, name))
+      : []
+  ));
+  // target 目录会保留历史签名包；仅允许当前版本参与更新清单生成。
+  const artifacts = collectUpdaterArtifacts().filter(
+    (artifact) => path.basename(artifact.installer).includes(`_${config.version}_`),
+  );
   const copied = [];
   const copy = (from, to) => {
     if (!fs.existsSync(from)) return;
@@ -142,14 +154,17 @@ async function main() {
     copied.push(path.basename(to));
   };
   copy(portable, path.join(releaseDir, `R_Package_Command_Center_${config.version}_portable.exe`));
+  for (const installer of installerNames) {
+    copy(installer, path.join(releaseDir, releaseAssetName(path.basename(installer))));
+  }
   for (const artifact of artifacts) {
     const base = path.basename(artifact.installer);
-    copy(artifact.installer, path.join(releaseDir, releaseAssetName(base)));
     copy(artifact.signature, path.join(releaseDir, `${releaseAssetName(base)}.sig`));
   }
 
   // 生成并校验 latest.json
   if (artifacts.length === 0) {
+    fs.rmSync(path.join(releaseDir, "latest.json"), { force: true });
     console.log("\n未发现 .sig 签名产物，跳过 latest.json 生成（未签名构建属预期）。");
   } else {
     const preferred = artifacts.find((item) => item.kind === "nsis") ?? artifacts[0];
