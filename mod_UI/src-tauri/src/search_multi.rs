@@ -187,6 +187,7 @@ pub async fn search(
         ),
     );
 
+    let cache_revision = storage::cache_revision();
     let cache = if settings.use_cache {
         match storage::load_cache(app) {
             Ok(cache) => cache,
@@ -389,7 +390,7 @@ pub async fn search(
     }
 
     if settings.use_cache {
-        if let Err(error) = storage::save_cache(app, &cache) {
+        if let Err(error) = storage::save_search_cache(app, &cache, cache_revision) {
             emit_log(app, run_id, &mut logs, &format!("缓存保存失败: {error}"));
         }
     }

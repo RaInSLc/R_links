@@ -81,4 +81,4 @@ jobs:
 
       - name: Tauri build (no bundle)
         working-directory: mod_UI
-        run: npm run tauri build -- --no-bundle
+        run: node node_modules/@tauri-apps/cli/tauri.js build --no-bundle

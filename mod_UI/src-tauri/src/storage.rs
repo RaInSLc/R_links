@@ -35,9 +35,9 @@ pub(crate) use atomic_storage::{
     MAX_BACKUPS as MAX_CORRUPT_BACKUPS_PER_FILE, MAX_SCAN as MAX_CORRUPT_BACKUP_SCAN_ENTRIES,
 };
 pub(crate) use cache_storage::{
-    cache_entry_matches, clear_cache, clear_invalidated_cache, delete_cache_entry, export_cache,
-    import_cache, load_cache, load_dependency_cache, package_cache_key, save_cache,
-    save_dependency_cache, DependencyCacheEntry,
+    cache_entry_matches, cache_revision, clear_cache, clear_invalidated_cache, delete_cache_entry,
+    export_cache, import_cache, load_cache, load_dependency_cache, lock_cache, package_cache_key,
+    save_cache, save_dependency_cache, save_search_cache, DependencyCacheEntry,
 };
 pub(crate) use history_storage::{load_history, save_history};
 pub(crate) use settings_storage::{

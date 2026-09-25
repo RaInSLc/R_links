@@ -8,6 +8,7 @@ import {
   projectRoot,
   readTauriConfig,
   validateUpdaterManifest,
+  verifyArtifactSignature,
 } from "./updater_manifest.mjs";
 
 const argv = process.argv.slice(2);
@@ -51,6 +52,7 @@ function verifyLocalArtifacts(config, keyId) {
   for (const artifact of artifacts) {
     const name = path.basename(artifact.installer);
     try {
+      verifyArtifactSignature(artifact, config.pubkey);
       const sigKeyId = minisignKeyId(fs.readFileSync(artifact.signature, "utf8"), `${name} 的签名`);
       record(
         !keyId || sigKeyId === keyId,

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, act } from "@testing-library/react";
 import { WorkspaceView } from "./WorkspaceView";
 import { defaultInputRules, defaultSettings, type Method } from "./types";
 
@@ -68,6 +68,42 @@ describe("WorkspaceView", () => {
     render(<WorkspaceView {...defaultProps} />);
     const textarea = screen.getByRole("textbox", { name: "R 包输入列表" });
     expect(textarea).toHaveValue("dplyr\ntidyr");
+  });
+
+  it("手动输入和粘贴交给父级，受控回写保留尾部换行", () => {
+    const onInputChange = vi.fn(() => "accepted");
+    const view = render(<WorkspaceView {...defaultProps} input="" onInputChange={onInputChange} />);
+    const editor = screen.getByRole("textbox", { name: "R 包输入列表" });
+    fireEvent.change(editor, { target: { value: "dplyr\n" } });
+    expect(onInputChange).toHaveBeenCalledWith("dplyr\n", "manual");
+    fireEvent.paste(editor, { clipboardData: { getData: () => 'install.packages("tidyr")' } });
+    expect(onInputChange).toHaveBeenCalledWith("tidyr", "clipboard");
+    view.rerender(<WorkspaceView {...defaultProps} input={"dplyr\n"} onInputChange={onInputChange} />);
+    expect(editor).toHaveValue("dplyr\n");
+  });
+
+  it("导入拒绝不显示成功，超大文件不读取", async () => {
+    const onInputChange = vi.fn(() => "rejected");
+    const { container } = render(<WorkspaceView {...defaultProps} onInputChange={onInputChange} />);
+    const picker = container.querySelector('input[type="file"]')!;
+    const text = vi.fn(async () => "dplyr");
+    await act(async () => fireEvent.change(picker, { target: { files: [{ name: "a.txt", size: 5, text }] } }));
+    expect(screen.getByText("文件输入未通过校验，未导入")).toBeInTheDocument();
+    text.mockClear();
+    await act(async () => fireEvent.change(picker, { target: { files: [{ name: "a.txt", size: 1e9, text }] } }));
+    expect(text).not.toHaveBeenCalled();
+  });
+
+  it("较早文件迟到时不会覆盖较新的导入", async () => {
+    const onInputChange = vi.fn(() => "accepted");
+    let finish!: (value: string) => void;
+    const { container } = render(<WorkspaceView {...defaultProps} onInputChange={onInputChange} />);
+    const picker = container.querySelector('input[type="file"]')!;
+    fireEvent.change(picker, { target: { files: [{ name: "old.txt", size: 5, text: () => new Promise<string>(r => { finish = r; }) }] } });
+    await act(async () => fireEvent.change(picker, { target: { files: [{ name: "new.txt", size: 5, text: async () => "tidyr" }] } }));
+    await act(async () => finish("dplyr"));
+    expect(onInputChange).toHaveBeenCalledTimes(1);
+    expect(onInputChange).toHaveBeenCalledWith("tidyr", "clipboard");
   });
 
   it("preserves multiline input when Enter is pressed", () => {

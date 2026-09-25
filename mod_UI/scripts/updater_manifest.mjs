@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -85,6 +86,26 @@ export function collectUpdaterArtifacts() {
 /** GitHub 上的资产名把空格换成点（历史发布的实际命名）。 */
 export function releaseAssetName(fileName) {
   return fileName.replace(/ /g, ".");
+}
+
+/** 验证安装包实际字节，拒绝同版本重建后残留的旧签名。 */
+export function verifyArtifactSignature(artifact, pubkey) {
+  const body = (encoded) => Buffer.from(Buffer.from(encoded.trim(), "base64")
+    .toString("utf8").split(/\r?\n/).find((line) => line && !line.startsWith("untrusted comment")), "base64");
+  const key = body(pubkey);
+  const signature = body(fs.readFileSync(artifact.signature, "utf8"));
+  if (key.length !== 42 || signature.length !== 74 || !key.subarray(2, 10).equals(signature.subarray(2, 10))) {
+    throw new Error("安装包签名与公钥不匹配");
+  }
+  const algorithm = signature.subarray(0, 2).toString("ascii");
+  if (algorithm !== "Ed" && algorithm !== "ED") throw new Error("不支持的签名算法");
+  const content = fs.readFileSync(artifact.installer);
+  const message = algorithm === "ED" ? createHash("blake2b512").update(content).digest() : content;
+  const publicKey = createPublicKey({
+    key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), key.subarray(10)]),
+    format: "der", type: "spki",
+  });
+  if (!verify(null, message, publicKey, signature.subarray(10))) throw new Error("安装包内容签名校验失败");
 }
 
 export function buildUpdaterManifest({ version, tag, owner, repo, artifact, notes, pubDate }) {

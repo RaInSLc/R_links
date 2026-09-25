@@ -69,8 +69,46 @@ pub(crate) fn build_dependency_urls(
         ));
     }
 
-    urls.retain(|(url, _)| validate_search_request_url_with_mirror(url, Some(mirror)).is_ok());
+    urls.retain(|(url, _)| {
+        #[cfg(test)]
+        if test_fixture_url(url, mirror) {
+            return true;
+        }
+        validate_search_request_url_with_mirror(url, Some(mirror)).is_ok()
+    });
     urls
+}
+
+// 仅测试构建允许同源回环 fixture，生产二进制不包含此通道。
+#[cfg(test)]
+fn test_fixture_url(value: &str, mirror: &str) -> bool {
+    let (Ok(url), Ok(base)) = (url::Url::parse(value), url::Url::parse(mirror)) else {
+        return false;
+    };
+    base.scheme() == "http"
+        && base.host_str() == Some("127.0.0.1")
+        && base.port().is_some()
+        && url.origin() == base.origin()
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.query().is_none()
+        && url.fragment().is_none()
+        && url.path().starts_with("/web/packages/")
+        && url.path().ends_with("/DESCRIPTION")
+}
+
+#[cfg(test)]
+#[test]
+fn fixture通道仅允许同源回环地址且生产校验仍拒绝() {
+    let mirror = "http://127.0.0.1:34567";
+    let value = "http://127.0.0.1:34567/web/packages/test/DESCRIPTION";
+    assert!(test_fixture_url(value, mirror));
+    assert!(validate_search_request_url_with_mirror(value, Some(mirror)).is_err());
+    assert!(!test_fixture_url(value, "http://127.0.0.1:34568"));
+    assert!(!test_fixture_url(
+        "http://example.org:34567/web/packages/test/DESCRIPTION",
+        mirror
+    ));
 }
 
 /// 发送请求获取包的 DESCRIPTION 文本

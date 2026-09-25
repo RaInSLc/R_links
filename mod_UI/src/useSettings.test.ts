@@ -77,7 +77,7 @@ describe('useSettings', () => {
     });
   });
 
-  it('should refresh dependency settings after clearing saved token', async () => {
+  it('清除 Token 不覆盖其他界面设置', async () => {
     const publicSettings = { proxy: '', githubTokenConfigured: false, cranMirror: 'https://cloud.r-project.org/', fullSearch: false, searchConcurrency: 8, archiveGithubMajorGap: 2, conditional: true, installDependencies: true, showRemoteVersion: true, useCache: true, maxCacheEntries: 1000, useFilter: true, resolveDependencies: false, maxDependencyDepth: 4, includeLightDependencies: true, maxDependencyNodes: 250, pinnedMethods: ['auto', 'base', 'biocManager', 'github'] };
     vi.mocked(tauriCore.invoke).mockImplementation(async (cmd) => {
       if (cmd === 'load_settings') return { ...publicSettings, resolveDependencies: true, maxDependencyDepth: 2, includeLightDependencies: false, maxDependencyNodes: 100 };
@@ -94,12 +94,31 @@ describe('useSettings', () => {
       await result.current.clearSavedToken();
     });
 
-    expect(result.current.settings.resolveDependencies).toBe(false);
+    expect(result.current.settings.resolveDependencies).toBe(true);
     expect(result.current.settings.searchConcurrency).toBe(8);
     expect(result.current.settings.archiveGithubMajorGap).toBe(2);
-    expect(result.current.settings.maxDependencyDepth).toBe(4);
-    expect(result.current.settings.includeLightDependencies).toBe(true);
-    expect(result.current.settings.maxDependencyNodes).toBe(250);
+    expect(result.current.settings.maxDependencyDepth).toBe(2);
+    expect(result.current.settings.includeLightDependencies).toBe(false);
+    expect(result.current.settings.maxDependencyNodes).toBe(100);
+  });
+
+  it('清除 Token 期间排队的保存会使用最新设置执行', async () => {
+    let finishClear!: (value: unknown) => void;
+    vi.mocked(tauriCore.invoke).mockImplementation(async (cmd, args) => {
+      if (cmd === 'clear_github_token') return new Promise(resolve => { finishClear = resolve; });
+      if (cmd === 'save_settings') return { ...(args as any).settings, githubTokenConfigured: false };
+      return { ...defaultSettings, githubTokenConfigured: true };
+    });
+    const { result } = renderHook(() => useSettings(vi.fn()));
+    await act(async () => {});
+    let clearing!: Promise<void>;
+    act(() => { clearing = result.current.clearSavedToken(); });
+    act(() => result.current.updateSettingsFromUser(current => ({ ...current, searchConcurrency: 7 })));
+    await act(async () => { await result.current.persistSettings(); });
+    await act(async () => { finishClear({}); await clearing; });
+    expect(tauriCore.invoke).toHaveBeenCalledWith('save_settings', {
+      settings: expect.objectContaining({ searchConcurrency: 7 }),
+    });
   });
 
   it('磁盘配置迟到返回时，只让用户改动过的字段覆盖磁盘值', async () => {

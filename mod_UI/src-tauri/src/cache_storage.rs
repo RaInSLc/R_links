@@ -81,6 +81,38 @@ fn limit(app: &AppHandle) -> usize {
         .map(|s| s.max_cache_entries)
         .unwrap_or(1000)
 }
+static CACHE_REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static CACHE_TRANSACTION: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+pub(crate) fn cache_revision() -> u64 {
+    CACHE_REVISION.load(std::sync::atomic::Ordering::SeqCst)
+}
+pub(crate) fn lock_cache() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    CACHE_TRANSACTION
+        .lock()
+        .map_err(|_| "缓存事务锁已损坏".to_string())
+}
+
+#[cfg(test)]
+#[test]
+fn 缓存事务变更使旧检索修订失效() {
+    let _guard = lock_cache().unwrap();
+    let revision = cache_revision();
+    CACHE_REVISION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    assert_ne!(revision, cache_revision());
+    assert!(CACHE_TRANSACTION.try_lock().is_err());
+}
+pub(crate) fn save_search_cache(
+    app: &AppHandle,
+    cache: &HashMap<String, PackageCacheEntry>,
+    revision: u64,
+) -> Result<(), String> {
+    let _guard = lock_cache()?;
+    if revision != cache_revision() {
+        return Ok(()); // 用户已变更缓存，旧检索快照不得覆盖新状态。
+    }
+    save_cache(app, cache)
+}
 pub(crate) fn load_cache(app: &AppHandle) -> Result<HashMap<String, PackageCacheEntry>, String> {
     let mut cache = load_raw_cache(app)?;
     let now = SystemTime::now()
@@ -142,13 +174,16 @@ pub(crate) fn save_cache(
     cache: &HashMap<String, PackageCacheEntry>,
 ) -> Result<(), String> {
     let c = serialize_package_cache(cache, limit(app))?;
-    atomic_write(&data_file(app, CACHE_FILE_NAME)?, &c)
+    atomic_write(&data_file(app, CACHE_FILE_NAME)?, &c)?;
+    CACHE_REVISION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
 }
 pub(crate) fn export_cache(app: &AppHandle) -> Result<String, String> {
     serde_json::to_string_pretty(&sorted_cache_entries(&load_cache(app)?, usize::MAX))
         .map_err(|e| format!("缓存导出失败: {e}"))
 }
 pub(crate) fn import_cache(app: &AppHandle, content: &str) -> Result<usize, String> {
+    let _guard = lock_cache()?;
     if content.len() > MAX_CACHE_IMPORT_BYTES {
         return Err("缓存文件超过 8 MB 导入限制".to_string());
     }
@@ -198,10 +233,13 @@ pub(crate) fn sorted_cache_entries(
     v.into_iter().map(|x| x.2).collect()
 }
 pub(crate) fn clear_cache(app: &AppHandle) -> Result<(), String> {
+    let _guard = lock_cache()?;
     atomic_write(&data_file(app, CACHE_FILE_NAME)?, "[]")?;
+    CACHE_REVISION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     atomic_write(&data_file(app, DEP_CACHE_FILE_NAME)?, "{}")
 }
 pub(crate) fn clear_invalidated_cache(app: &AppHandle) -> Result<usize, String> {
+    let _guard = lock_cache()?;
     let mut c = load_raw_cache(app)?;
     let n = c.len();
     c.retain(|_, e| !e.invalidated);
@@ -236,6 +274,7 @@ pub(crate) fn delete_cache_entry(
     if package.trim().is_empty() || source.trim().is_empty() {
         return Err("缓存删除参数无效".to_string());
     }
+    let _guard = lock_cache()?;
     let mut c = load_cache(app)?;
     let n = c.len();
     c.retain(|_, e| !cache_entry_matches(e, package, source, version, repository, real_name));

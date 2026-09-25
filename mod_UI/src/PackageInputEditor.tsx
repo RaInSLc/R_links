@@ -34,6 +34,7 @@ export const PackageInputEditor = forwardRef<PackageInputEditorHandle, PackageIn
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lineGutterRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importSequence = useRef(0);
 
   useImperativeHandle(ref, () => ({ openFilePicker: () => fileInputRef.current?.click() }), []);
 
@@ -42,13 +43,25 @@ export const PackageInputEditor = forwardRef<PackageInputEditorHandle, PackageIn
   }, []);
 
   async function loadFile(file: File) {
-    const text = await file.text();
-    if (!text) return;
-    const parsed = parseProjectDependencyFile(file.name, text) ?? text;
-    const systemRequirements = extractSystemRequirements(file.name, text);
-    onInputChange(parsed, "clipboard");
-    setFileLoadHint(`已加载文件: ${file.name} (${parsed.split(/\r?\n/).filter(Boolean).length} 项)${systemRequirements ? `；系统依赖：${systemRequirements}` : ""}`);
-    setTimeout(() => setFileLoadHint(null), 4000);
+    const sequence = ++importSequence.current;
+    if (file.size > MAX_INPUT_CHARS) {
+      setFileLoadHint("文件超过输入大小限制，未读取");
+      return;
+    }
+    try {
+      const text = await file.text();
+      if (sequence !== importSequence.current) return;
+      if (!text) { setFileLoadHint("文件为空，未导入"); return; }
+      const parsed = parseProjectDependencyFile(file.name, text) ?? text;
+      if (onInputChange(parsed, "clipboard") === "rejected") {
+        setFileLoadHint("文件输入未通过校验，未导入");
+        return;
+      }
+      const requirements = extractSystemRequirements(file.name, text);
+      setFileLoadHint(`已加载文件: ${file.name}${requirements ? `；系统依赖：${requirements}` : ""}`);
+    } catch (error) {
+      if (sequence === importSequence.current) setFileLoadHint(`文件导入失败: ${String(error)}`);
+    }
   }
 
   async function handleFileDrop(event: React.DragEvent) {
@@ -155,7 +168,7 @@ export const PackageInputEditor = forwardRef<PackageInputEditorHandle, PackageIn
       </div>
       {rScriptHint && <div className="r-script-hint-bar"><span>{rScriptHint}</span></div>}
       {fileLoadHint && <div className="r-script-hint-bar"><span>{fileLoadHint}</span></div>}
-      <input ref={fileInputRef} type="file" accept=".txt,.csv,.r" onChange={handleFilePick} style={{ display: "none" }} />
+      <input ref={fileInputRef} type="file" accept=".txt,.csv,.r,.lock,DESCRIPTION" onChange={handleFilePick} style={{ display: "none" }} />
     </>
   );
 });

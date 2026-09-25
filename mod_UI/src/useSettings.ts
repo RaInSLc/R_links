@@ -150,6 +150,10 @@ export function useSettings(setStatus: SetStatus) {
   function endSettingsOperation() {
     settingsBusyRef.current = false;
     setSettingsBusy(false);
+    if (pendingSettingsSaveRef.current) {
+      pendingSettingsSaveRef.current = false;
+      void persistSettings();
+    }
   }
 
   function acceptSettingValue(
@@ -201,10 +205,7 @@ export function useSettings(setStatus: SetStatus) {
           : `先前设置保存失败，当前修改尚未保存: ${formatError(error)}`,
       );
     } finally {
-      const shouldFlush = pendingSettingsSaveRef.current;
-      pendingSettingsSaveRef.current = false;
       endSettingsOperation();
-      if (shouldFlush) void persistSettings();
     }
   }
 
@@ -213,9 +214,7 @@ export function useSettings(setStatus: SetStatus) {
     const actionSeq = settingsActionSeq.current + 1;
     settingsActionSeq.current = actionSeq;
     try {
-      const publicSettings = sanitizePublicSettings(
-        await invoke<PublicSettings>("clear_github_token"),
-      );
+      await invoke<PublicSettings>("clear_github_token");
       setTokenConfigured(false);
       if (actionSeq !== settingsActionSeq.current) {
         setStatus("已清除保存的 GitHub Token；界面保留了新的修改");
@@ -223,7 +222,7 @@ export function useSettings(setStatus: SetStatus) {
       }
       applySettings({
         ...latestSettingsRef.current,
-        ...settingsFromPublicSettings(publicSettings),
+        githubToken: "",
       });
       setShowToken(false);
       setStatus("已清除保存的 GitHub Token");

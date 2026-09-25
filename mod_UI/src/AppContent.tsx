@@ -74,8 +74,9 @@ export function AppContent() {
     // 后端返回的过滤规则必须先在边界处补齐并校验：缺字段的对象会被后续预览逻辑读取，
     // 直接使用会让整个界面落入错误边界（此前只读 separators 才没暴露）。
     invoke<InputRules>("load_input_rules")
-      .then((rules) => setInputRules(sanitizeImportedInputRules(rules, defaultInputRules)))
-      .catch(() => {});
+      .then((rules) => setInputRules((current) => current === defaultInputRules
+        ? sanitizeImportedInputRules(rules, defaultInputRules) : current))
+      .catch((error) => setStatus(`过滤规则加载失败: ${formatError(error)}`));
     // 版本号与更新端点都取自真实配置/包元数据，不再硬编码，避免界面版本过期。
     import("@tauri-apps/api/app")
       .then(({ getVersion }) => getVersion())

@@ -98,6 +98,7 @@ pub(crate) async fn resolve_dependencies_inner(
     let mut nodes_map: HashMap<String, DependencyNode> = HashMap::new();
     let mut edges: Vec<DependencyEdge> = Vec::new();
 
+    let dependency_revision = storage::cache_revision();
     let mut dep_cache = if settings.use_cache {
         app.and_then(|app| storage::load_dependency_cache(app).ok())
             .unwrap_or_default()
@@ -387,9 +388,34 @@ pub(crate) async fn resolve_dependencies_inner(
             for (k, v) in new_cache_entries {
                 dep_cache.insert(k, v);
             }
-            if let Some(app) = app {
+        }
+    }
+
+    if settings.use_cache {
+        if let Some(app) = app {
+            let _guard = storage::lock_cache()?;
+            if dependency_revision == storage::cache_revision() {
                 storage::save_dependency_cache(app, &dep_cache)?;
             }
+        }
+    }
+
+    // 在图构建结束后传播所有根归属，覆盖晚到共享根及环图。
+    loop {
+        let mut changed = false;
+        for edge in &edges {
+            let roots = nodes_map
+                .get(&edge.from)
+                .map(|node| node.root_packages.clone())
+                .unwrap_or_default();
+            if let Some(node) = nodes_map.get_mut(&edge.to) {
+                let before = node.root_packages.len();
+                merge_roots(&mut node.root_packages, roots);
+                changed |= before != node.root_packages.len();
+            }
+        }
+        if !changed {
+            break;
         }
     }
 

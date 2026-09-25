@@ -72,7 +72,11 @@ pub(crate) fn build_offline_results(
             }
             history
                 .iter()
-                .find(|r| r.package_name.eq_ignore_ascii_case(&pkg.name))
+                .find(|r| {
+                    r.package_name == pkg.name
+                        && (pkg.version.is_empty()
+                            || crate::search::version_compatible(&r.version, &pkg.version))
+                })
                 .map(|record| {
                     let source = match record.tool_name.as_str() {
                         "Bioconductor" => "bioc",
@@ -182,6 +186,7 @@ pub(crate) fn rate_cache_result(
     let _guard = CACHE_FEEDBACK_LOCK
         .lock()
         .map_err(|_| "缓存反馈锁已损坏".to_string())?;
+    let _transaction = storage::lock_cache()?;
     if package.trim().is_empty() || !matches!(vote.as_str(), "up" | "down") {
         return Err("缓存反馈参数无效".to_string());
     }

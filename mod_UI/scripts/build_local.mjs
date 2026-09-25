@@ -11,6 +11,7 @@ import {
   releaseAssetName,
   repoFromEndpoint,
   validateUpdaterManifest,
+  verifyArtifactSignature,
 } from "./updater_manifest.mjs";
 
 const argv = process.argv.slice(2);
@@ -144,9 +145,12 @@ async function main() {
       : []
   ));
   // target 目录会保留历史签名包；仅允许当前版本参与更新清单生成。
-  const artifacts = collectUpdaterArtifacts().filter(
+  const artifacts = hasSigningKey || hasFlag("--skip-build") ? collectUpdaterArtifacts().filter(
     (artifact) => path.basename(artifact.installer).includes(`_${config.version}_`),
-  );
+  ) : [];
+  for (const artifact of artifacts) verifyArtifactSignature(artifact, config.pubkey);
+  if (!fs.existsSync(portable) || installerNames.length === 0) throw new Error("当前版本构建产物不完整");
+  if (hasSigningKey && artifacts.length !== installerNames.length) throw new Error("当前版本签名产物不完整");
   const copied = [];
   const copy = (from, to) => {
     if (!fs.existsSync(from)) return;
@@ -156,6 +160,9 @@ async function main() {
   copy(portable, path.join(releaseDir, `R_Package_Command_Center_${config.version}_portable.exe`));
   for (const installer of installerNames) {
     copy(installer, path.join(releaseDir, releaseAssetName(path.basename(installer))));
+    if (!artifacts.some((artifact) => artifact.installer === installer)) {
+      fs.rmSync(path.join(releaseDir, `${releaseAssetName(path.basename(installer))}.sig`), { force: true });
+    }
   }
   for (const artifact of artifacts) {
     const base = path.basename(artifact.installer);
@@ -198,7 +205,7 @@ async function main() {
   }
 
   console.log(`\n已归档到 release/：${copied.join("、") || "（无）"}`);
-  console.log("发布时把 release/latest.json 与安装包一起上传到同名 tag 的 Release 即可。");
+  console.log(artifacts.length ? "签名产物已通过内容校验。" : "本次产物仅供手动安装，未生成自动更新清单。");
 }
 
 main().catch((error) => {

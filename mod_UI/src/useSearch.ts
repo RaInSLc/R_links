@@ -191,6 +191,7 @@ export function useSearch(setStatus: SetStatus) {
     const runId = nextSearchRunId();
     searchingRef.current = true;
     activeSearchRunId.current = runId;
+    hasSearchEvidenceRef.current = false;
     try { await listenerReadyRef.current; }
     catch (error) { activeSearchRunId.current = 0; searchingRef.current = false; setStatus(`检索监听初始化失败: ${formatError(error)}`); return; }
     searchingRef.current = true;
@@ -201,6 +202,7 @@ export function useSearch(setStatus: SetStatus) {
       const response = await invoke<SearchResponse>("start_binary_search", { runId, input, settings, mirror });
       const clean = sanitizeSearchResponse(response);
       if (clean.runId !== activeSearchRunId.current) return;
+      hasSearchEvidenceRef.current = clean.results.length > 0 || clean.logs.length > 0;
       setResults(clean.results); setLogs(clean.logs); setDependencyGraph(null); setStatus(clean.stopped ? "检索任务已停止" : "R 二进制包检索完成");
     } catch (error) {
       if (runId === activeSearchRunId.current) setStatus(`R 二进制包检索失败: ${formatError(error)}`);
@@ -226,6 +228,7 @@ export function useSearch(setStatus: SetStatus) {
     const runId = nextSearchRunId();
     searchingRef.current = true;
     activeSearchRunId.current = runId;
+    hasSearchEvidenceRef.current = false;
     try {
       await listenerReadyRef.current;
     } catch (error) {
@@ -250,6 +253,7 @@ export function useSearch(setStatus: SetStatus) {
       const clean = sanitizeSearchResponse(response);
       if (clean.runId !== activeSearchRunId.current) return;
       setResults(clean.results);
+      hasSearchEvidenceRef.current = clean.results.length > 0 || clean.logs.length > 0;
       setLogs(clean.logs);
       setDependencyGraph(null);
       setStatus(clean.stopped ? "检索任务已停止" : (ecosystem === "pip" ? "Python 包检索完成" : "Conda 包检索完成"));
@@ -314,7 +318,8 @@ export function useSearch(setStatus: SetStatus) {
         runId,
         package: packageName,
       });
-      if (accepted) setStatus(`已取消包 ${packageName} 的检索`);
+      if (runId !== activeSearchRunId.current) return false;
+      if (accepted) setStatus(`已取消包 ${packageName} 的结果提交；在途请求结束后丢弃结果`);
       return accepted;
     } catch (error) {
       setStatus(`取消包检索失败: ${formatError(error)}`);

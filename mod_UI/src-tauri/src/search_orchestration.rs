@@ -45,6 +45,7 @@ pub async fn search_packages(
     let mut cache_update: HashMap<String, PackageCacheEntry> = HashMap::new();
     let cache_stage_start = Instant::now();
 
+    let cache_revision = storage::cache_revision();
     let cache = if settings.use_cache {
         match storage::load_cache(app) {
             Ok(cache) => cache,
@@ -227,6 +228,9 @@ pub async fn search_packages(
                         github_rate_limited: false,
                     };
                     search_one_package(&mut context, &mut task_results, &pkg, index, total).await;
+                    if state.is_package_cancelled(run_id, &pkg.name) {
+                        task_results.clear();
+                    }
                     (task_results, task_logs)
                 }
             })
@@ -294,7 +298,7 @@ pub async fn search_packages(
     log(app, run_id, &mut logs, final_message);
 
     if settings.use_cache {
-        if let Err(error) = storage::save_cache(app, &cache) {
+        if let Err(error) = storage::save_search_cache(app, &cache, cache_revision) {
             log(app, run_id, &mut logs, &format!("缓存保存失败: {error}"));
         }
     }
