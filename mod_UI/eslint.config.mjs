@@ -43,7 +43,7 @@ export default [
   },
   {
     // 本次新增模块必须保持严格行宽。
-    files: ["src/utils-url.ts"],
+    files: ["src/utils-url.ts", "src/useScriptGeneration.ts"],
     rules: {
       "max-len": [
         "error",

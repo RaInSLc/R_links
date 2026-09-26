@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
-  appendBounded, asRecord, collectBrowserSearchNames, formatError,
+  asRecord, collectBrowserSearchNames, formatError,
   nextSearchRunId, safeRunId, safeStatusText, sanitizeSearchResponse,
   sanitizeSearchResult, resultIdentityKey,
   BROWSER_SEARCH_CONFIRM_THRESHOLD, MAX_SEARCH_LOGS, MAX_SEARCH_RESULTS, MAX_SEARCH_TABS,
@@ -26,13 +26,8 @@ function mergeSearchResults(current: SearchResult[], incoming: SearchResult[]) {
 
 export function mergeSearchLogs(current: string[], incoming: string[]) {
   if (incoming.length === 0) return current;
-  let next = current;
-  const streamed = current.length;
-  const tail = incoming.slice(streamed);
-  for (const msg of tail) {
-    next = appendBounded(next, msg, MAX_SEARCH_LOGS);
-  }
-  return next;
+  const tail = incoming.slice(current.length, MAX_SEARCH_LOGS);
+  return tail.length ? [...current, ...tail].slice(0, MAX_SEARCH_LOGS) : current;
 }
 
 export function useSearch(setStatus: SetStatus) {
@@ -64,7 +59,10 @@ export function useSearch(setStatus: SetStatus) {
     let pendingResults: SearchResult[] = [];
     let pendingLogs: string[] = [];
     let pendingRunId = 0;
+    let timer: number | undefined;
     const flush = () => {
+      window.clearTimeout(timer);
+      timer = undefined;
       if (pendingRunId === activeSearchRunId.current && active) {
         const incomingResults = pendingResults;
         const incomingLogs = pendingLogs;
@@ -73,7 +71,10 @@ export function useSearch(setStatus: SetStatus) {
       }
       pendingResults = []; pendingLogs = [];
     };
-    const timer = window.setInterval(flush, 32);
+    // 有事件才安排一次刷新，空闲时不再周期唤醒。
+    const scheduleFlush = () => {
+      if (timer === undefined) timer = window.setTimeout(flush, 32);
+    };
     flushEventsRef.current = flush;
     const prepareBatch = (runId: number) => {
       if (pendingRunId !== runId) { pendingResults = []; pendingLogs = []; pendingRunId = runId; }
@@ -87,6 +88,7 @@ export function useSearch(setStatus: SetStatus) {
         const messages = Array.isArray(payload.messages) ? payload.messages.map(m => safeStatusText(String(m))) : [];
         prepareBatch(activeSearchRunId.current);
         pendingLogs = [...pendingLogs, ...messages].slice(0, MAX_SEARCH_LOGS);
+        if (pendingLogs.length) scheduleFlush();
       },
     ).catch((error) => {
       if (active) setStatus(`检索日志监听失败: ${formatError(error)}`);
@@ -101,6 +103,7 @@ export function useSearch(setStatus: SetStatus) {
         prepareBatch(activeSearchRunId.current);
         const incoming = Array.isArray(payload.results) ? payload.results.slice(0, 32) : [payload.result];
         for (const result of incoming) if (pendingResults.length < MAX_SEARCH_RESULTS) pendingResults.push(sanitizeSearchResult(result));
+        if (pendingResults.length) scheduleFlush();
       },
     ).catch((error) => {
       if (active) setStatus(`检索进度监听失败: ${formatError(error)}`);
@@ -109,7 +112,7 @@ export function useSearch(setStatus: SetStatus) {
     listenerReadyRef.current = Promise.all([unlistenLog, unlistenProgress]).then(() => undefined);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
       void unlistenLog.then((u) => u());
       void unlistenProgress.then((u) => u());
     };

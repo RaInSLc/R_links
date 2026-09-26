@@ -3,6 +3,8 @@ import { mergeSearchLogs, useSearch } from './useSearch';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as tauriCore from '@tauri-apps/api/core';
 import * as tauriEvent from '@tauri-apps/api/event';
+import { useScriptGeneration } from './useScriptGeneration';
+import { defaultSettings } from './types';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -13,6 +15,54 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 describe('useSearch Hook', () => {
+  it('空闲期间无周期定时器，事件突发仅安排一次刷新', async () => {
+    vi.useFakeTimers();
+    const status = vi.fn();
+    let finish!: (value: unknown) => void;
+    let runId = 0;
+    vi.mocked(tauriCore.invoke).mockImplementation(async (_command, args) => {
+      runId = (args as any).runId;
+      return new Promise(resolve => { finish = resolve; });
+    });
+    const hook = renderHook(() => useSearch(status));
+    try {
+      expect(vi.getTimerCount()).toBe(0);
+      let task!: Promise<void>;
+      await act(async () => { task = hook.result.current.startSearch('a', defaultSettings, false, vi.fn(), vi.fn()); });
+      act(() => {
+        for (let i = 0; i < 20; i++) logCallback({ payload: { runId, messages: [`日志${i}`] } });
+      });
+      expect(vi.getTimerCount()).toBe(1);
+      act(() => vi.advanceTimersByTime(32));
+      expect(hook.result.current.logs).toHaveLength(20);
+      expect(vi.getTimerCount()).toBe(0);
+      await act(async () => { finish({ runId, results: [], logs: [], stopped: false }); await task; });
+    } finally { hook.unmount(); vi.useRealTimers(); }
+  });
+
+  it('无关设置不重算脚本，库路径变化立即使旧脚本失效', async () => {
+    vi.useFakeTimers();
+    vi.mocked(tauriCore.invoke).mockResolvedValue('新脚本');
+    const status = vi.fn();
+    const results: any[] = [];
+    const channels: string[] = [];
+    const hook = renderHook(({ settings }) => useScriptGeneration(
+      'dplyr', 'r', '', channels, 'auto', false, false, true, false, false,
+      settings, '', results, false, status,
+    ), { initialProps: { settings: defaultSettings } });
+    try {
+      await act(async () => vi.advanceTimersByTimeAsync(120));
+      expect(tauriCore.invoke).toHaveBeenCalledTimes(1);
+      hook.rerender({ settings: { ...defaultSettings, searchConcurrency: 8 } });
+      expect(hook.result.current.latestScriptRef.current).toBe('新脚本');
+      await act(async () => vi.advanceTimersByTimeAsync(500));
+      expect(tauriCore.invoke).toHaveBeenCalledTimes(1);
+      hook.rerender({ settings: { ...defaultSettings, rLibPath: 'D:/R/library' } });
+      expect(hook.result.current.latestScriptRef.current).toBe('');
+      await act(async () => vi.advanceTimersByTimeAsync(120));
+      expect(tauriCore.invoke).toHaveBeenCalledTimes(2);
+    } finally { hook.unmount(); vi.useRealTimers(); }
+  });
   it('兼容批量进度并忽略其他任务的结果', async () => {
     let progress: (event: any) => void = () => {};
     let finish: () => void = () => {};

@@ -45,7 +45,6 @@ const MAX_LINE_CHAR_BASELINE = {
   "src/WorkspaceStrategyPanel.tsx": 3,
   "src/reportUtils.ts": 2,
   "src/useAppActions.ts": 8,
-  "src/useScriptGeneration.ts": 1,
   "src/utils-input.ts": 4,
 };
 

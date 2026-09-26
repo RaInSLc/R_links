@@ -23,6 +23,7 @@ export function useScriptGeneration(
   const [script, setScriptState] = useState("等待输入...");
   const latestScriptRef = useRef("等待输入...");
   const requestSeq = useRef(0);
+  const { cranMirror, rLibPath, archiveGithubMajorGap } = settings;
 
   function setScript(next: string) {
     latestScriptRef.current = next;
@@ -34,7 +35,7 @@ export function useScriptGeneration(
   }, [
     input, ecosystem, pipIndex, condaChannels, method, conditional,
     installDependencies, showRemoteVersion, verifyInstall, parallelInstall,
-    settings, rBinaryMirror, results, inputTooLarge,
+    cranMirror, rLibPath, archiveGithubMajorGap, rBinaryMirror, results, inputTooLarge,
   ]);
 
   useEffect(() => {
@@ -58,7 +59,11 @@ export function useScriptGeneration(
       }
       invoke<string>("generate_script", {
         input,
-        options: { method, conditional, installDependencies, mirror: ecosystem === "r-binary" ? rBinaryMirror : settings.cranMirror, rLibPath: settings.rLibPath, archiveGithubMajorGap: settings.archiveGithubMajorGap, appendVerify: verifyInstall, parallelInstall },
+        options: {
+          method, conditional, installDependencies,
+          mirror: ecosystem === "r-binary" ? rBinaryMirror : cranMirror,
+          rLibPath, archiveGithubMajorGap, appendVerify: verifyInstall, parallelInstall,
+        },
         results,
         showRemoteVersion,
       }).then((next) => {
@@ -71,7 +76,7 @@ export function useScriptGeneration(
   }, [
     input, ecosystem, pipIndex, condaChannels, method, conditional,
     installDependencies, showRemoteVersion, verifyInstall, parallelInstall,
-    settings, rBinaryMirror, results, inputTooLarge, setStatus,
+    cranMirror, rLibPath, archiveGithubMajorGap, rBinaryMirror, results, inputTooLarge, setStatus,
   ]);
 
   return { script, latestScriptRef, requestSeq, setScript };
